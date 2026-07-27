@@ -44,7 +44,7 @@ const RenameInput = ({ initialValue, onCommit, onCancel }) => {
 };
 
 // ── Toolbar bar ───────────────────────────────────────────────────────────────
-const Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, itemCount, selectedCount }) => {
+const Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, itemCount, selectedCount, onCrumbsDragOver, onCrumbsDragLeave, onCrumbsDrop }) => {
   const crumbs = [];
   if (rootPath && currentPath) {
     const rootName = rootPath.split(/[\\/]/).filter(Boolean).pop();
@@ -62,7 +62,11 @@ const Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, o
           <React.Fragment key={c.path}>
             {i > 0 && <span className="pw-breadcrumb__sep">›</span>}
             <span className={`pw-breadcrumb__item${i === crumbs.length - 1 ? " pw-breadcrumb__item--active" : ""}`}
-              onClick={() => i < crumbs.length - 1 && onNavigate(c.path)} title={c.path}>{c.label}</span>
+              onClick={() => i < crumbs.length - 1 && onNavigate(c.path)} title={c.path}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; onCrumbsDragOver?.(c.path); }}
+              onDragLeave={(e) => { e.stopPropagation(); onCrumbsDragLeave?.(c.path); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onCrumbsDrop?.(e, c.path); }}
+            >{c.label}</span>
           </React.Fragment>
         ))}
       </div>
@@ -94,6 +98,8 @@ const ContentArea = ({
   onNavigate, onItemsLoaded, itemCount,
   clipboard, onClipboardChange,
   invalidateCache,
+  pushUndo, performUndo, performRedo,
+  zoom,
 }) => {
   const [entries,     setEntries]     = useState([]);
   const [loading,     setLoading]     = useState(false);
@@ -108,6 +114,7 @@ const ContentArea = ({
   const gridRef    = useRef(null);
   const contentRef = useRef(null);
   const bandOrigin = useRef(null);
+  const bandMoved  = useRef(false);
   const itemRefs   = useRef({});
   const anchorRef  = useRef(null);
 
@@ -116,14 +123,26 @@ const ContentArea = ({
   const clipboardRef      = useRef(clipboard);
   const currentPathRef    = useRef(currentPath);
   const visibleRef        = useRef([]);
+  const pushUndoRef       = useRef(pushUndo);
+  const performUndoRef    = useRef(performUndo);
+  const performRedoRef    = useRef(performRedo);
 
   useEffect(() => { selectedItemsRef.current = selectedItems; }, [selectedItems]);
   useEffect(() => { clipboardRef.current     = clipboard; },     [clipboard]);
   useEffect(() => { currentPathRef.current   = currentPath; },   [currentPath]);
+  useEffect(() => { pushUndoRef.current      = pushUndo; },      [pushUndo]);
+  useEffect(() => { performUndoRef.current   = performUndo; },   [performUndo]);
+  useEffect(() => { performRedoRef.current   = performRedo; },   [performRedo]);
 
   const [settings] = useSettings();
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  // ── Zoom-based sizing ────────────────────────────────────────────────────
+  const iconSize   = Math.round(zoom * 0.48);
+  const isListView = zoom < 60;
+  const itemW      = isListView ? 0 : Math.round(zoom * 0.76);
+  const itemP      = isListView ? "2px 6px" : `${Math.round(zoom * 0.06)}px ${Math.round(zoom * 0.04)}px ${Math.round(zoom * 0.04)}px`;
 
   // ── Load entries ─────────────────────────────────────────────────────────
   const loadEntries = useCallback(() => {
@@ -173,7 +192,8 @@ const ContentArea = ({
       case "newFolder": {
         const n = await ask("Folder name:", "New Folder");
         if (n) {
-          await window.electronAPI.newFolder(dir, n);
+          const created = await window.electronAPI.newFolder(dir, n);
+          if (created) pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: n, isDir: true });
           loadEntries();
         }
         return;
@@ -181,7 +201,8 @@ const ContentArea = ({
       case "newFile": {
         const n = await ask("File name:", "New File.txt");
         if (n) {
-          await window.electronAPI.newFile(dir, n);
+          const created = await window.electronAPI.newFile(dir, n);
+          if (created) pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: n, isDir: false });
           loadEntries();
         }
         return;
@@ -200,6 +221,7 @@ const ContentArea = ({
         const ok = await window.electronAPI.confirmDialog(label);
         if (!ok) return;
         for (const p of targetPaths) await window.electronAPI.deleteItem(p, true);
+        pushUndoRef.current?.({ type: "delete", paths: targetPaths, parentDir: dir });
         onSetSelectedItems(new Set());
         invalidateCache(dir);
         return;
@@ -219,11 +241,23 @@ const ContentArea = ({
         return;
       case "paste": {
         if (!clip?.paths?.length) return;
+        const sourceParents = new Set();
+        const pairs = [];
         for (const src of clip.paths) {
-          if (clip.mode === "copy") await window.electronAPI.copyItem(src, dir);
-          else                      await window.electronAPI.moveItem(src, dir);
+          if (clip.mode === "copy") {
+            await window.electronAPI.copyItem(src, dir);
+          } else {
+            const srcParent = src.replace(/[\\/][^\\/]+$/, "") || src;
+            sourceParents.add(srcParent);
+            const dest = await window.electronAPI.moveItem(src, dir);
+            if (dest) pairs.push({ from: src, to: dest });
+          }
         }
-        if (clip.mode === "cut") onClipboardChange(null);
+        if (clip.mode === "cut") {
+          if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+          onClipboardChange(null);
+        }
+        for (const p of sourceParents) invalidateCache(p);
         invalidateCache(dir);
         return;
       }
@@ -246,8 +280,12 @@ const ContentArea = ({
   // ── Rename commit ─────────────────────────────────────────────────────────
   const handleRenameCommit = useCallback(async (oldPath, newName) => {
     setRenamingPath(null);
+    if (!oldPath || !newName) return;
     const parentDir = oldPath.replace(/[\\/][^\\/]+$/, "") || oldPath;
+    const oldName = oldPath.split(/[\\/]/).pop();
     await window.electronAPI.rename(oldPath, newName);
+    const newPath = parentDir + "/" + newName;
+    pushUndoRef.current?.({ type: "rename", oldPath, oldName, newPath, newName, parentDir });
     invalidateCache(parentDir);
   }, [invalidateCache]);
 
@@ -294,6 +332,16 @@ const ContentArea = ({
     if ((e.ctrlKey || e.metaKey) && e.key === "a") {
       e.preventDefault();
       onSetSelectedItems(new Set(vis.map((v) => v.path)));
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+      e.preventDefault();
+      performUndoRef.current?.();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "y" || ((e.shiftKey || e.metaKey) && e.key === "z"))) {
+      e.preventDefault();
+      performRedoRef.current?.();
       return;
     }
     if (e.key === "Enter" && paths.length) {
@@ -360,8 +408,10 @@ const ContentArea = ({
     if (!e.ctrlKey && !e.metaKey) { onSetSelectedItems(new Set()); anchorRef.current = null; }
 
     const origSel = new Set(selectedItemsRef.current);
+    bandMoved.current = false;
     const onMove = (mv) => {
       if (!bandOrigin.current) return;
+      bandMoved.current = true;
       const cx = mv.clientX - rect.left;
       const cy = mv.clientY - rect.top + contentRef.current.scrollTop;
       const ox = bandOrigin.current.x, oy = bandOrigin.current.y;
@@ -377,22 +427,147 @@ const ContentArea = ({
       onSetSelectedItems(next);
     };
     const onUp = () => {
-      setBand(null); bandOrigin.current = null;
+      const moved = bandMoved.current;
+      setBand(null); bandOrigin.current = null; bandMoved.current = false;
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup",   onUp);
+      // If mouse actually moved (rubber band drag), suppress the upcoming click
+      if (moved) {
+        const handler = (ce) => { ce.stopPropagation(); document.removeEventListener("click", handler, true); };
+        document.addEventListener("click", handler, true);
+      }
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup",   onUp);
   }, [renamingPath, onSetSelectedItems]);
 
   // ── Drag — read selection from ref so it's never stale ───────────────────
+  const dragImageRef = useRef(null);
+
   const handleDragStart = useCallback((e, entry) => {
     if (renamingPath) { e.preventDefault(); return; }
     const sel    = selectedItemsRef.current;
     const toDrag = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("application/ppoo-paths", JSON.stringify(toDrag));
+
+    if (toDrag.length > 1) {
+      const el = document.createElement("div");
+      el.textContent = String(toDrag.length);
+      el.style.cssText = "position:fixed;top:-100px;left:0;background:#5a9fd4;color:#fff;" +
+        "font:bold 12px sans-serif;width:24px;height:24px;border-radius:12px;" +
+        "display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999";
+      document.body.appendChild(el);
+      e.dataTransfer.setDragImage(el, 28, 28);
+      dragImageRef.current = el;
+    }
   }, [renamingPath]);
+
+  const handleDragEnd = useCallback(() => {
+    if (dragImageRef.current) {
+      dragImageRef.current.remove();
+      dragImageRef.current = null;
+    }
+  }, []);
+
+  // ── Breadcrumb drop targets ─────────────────────────────────────────────
+  const crumbsTimerRef = useRef(null);
+  const crumbsHoverRef = useRef(null);
+
+  const handleCrumbsDragOver = useCallback((path) => {
+    if (crumbsHoverRef.current !== path) {
+      crumbsHoverRef.current = path;
+      if (crumbsTimerRef.current) clearTimeout(crumbsTimerRef.current);
+      crumbsTimerRef.current = setTimeout(() => {
+        onNavigate(path);
+      }, 2000);
+    }
+  }, [onNavigate]);
+
+  const handleCrumbsDragLeave = useCallback((path) => {
+    if (crumbsHoverRef.current === path) {
+      crumbsHoverRef.current = null;
+      if (crumbsTimerRef.current) { clearTimeout(crumbsTimerRef.current); crumbsTimerRef.current = null; }
+    }
+  }, []);
+
+  const handleCrumbsDrop = useCallback(async (e, path) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (crumbsTimerRef.current) { clearTimeout(crumbsTimerRef.current); crumbsTimerRef.current = null; }
+    crumbsHoverRef.current = null;
+    try {
+      const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+      if (!paths?.length) return;
+      const pairs = [];
+      const sourceParents = new Set();
+      for (const src of paths) {
+        if (src === path) continue;
+        const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+        sourceParents.add(parentDir);
+        const dest = await window.electronAPI.moveItem(src, path);
+        if (dest) pairs.push({ from: src, to: dest });
+      }
+      if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+      for (const p of sourceParents) invalidateCache(p);
+      invalidateCache(path);
+      onSetSelectedItems(new Set());
+      onNavigate(path);
+    } catch {}
+  }, [invalidateCache, onNavigate, onSetSelectedItems]);
+
+  // ── Content-area drop target (folder items) ──────────────────────────────
+  const [dropTargetPath, setDropTargetPath] = useState(null);
+  const expandTimerRef = useRef(null);
+  const expandHoverRef = useRef(null);
+
+  const handleDragOver = useCallback((e, entry) => {
+    if (!entry.isDir) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetPath(entry.path);
+
+    if (expandHoverRef.current !== entry.path) {
+      expandHoverRef.current = entry.path;
+      if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = setTimeout(() => {
+        onNavigate(entry.path);
+      }, 2000);
+    }
+  }, [onNavigate]);
+
+  const handleDragLeave = useCallback((e, entry) => {
+    e.stopPropagation();
+    setDropTargetPath((p) => p === entry.path ? null : p);
+    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
+  }, []);
+
+  const handleContentDrop = useCallback(async (e, entry) => {
+    if (!entry.isDir) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTargetPath(null);
+    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
+    try {
+      const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+      if (!paths?.length) return;
+      const pairs = [];
+      const sourceParents = new Set();
+      for (const src of paths) {
+        if (src === entry.path) continue;
+        const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+        sourceParents.add(parentDir);
+        const dest = await window.electronAPI.moveItem(src, entry.path);
+        if (dest) pairs.push({ from: src, to: dest });
+      }
+      if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+      for (const p of sourceParents) invalidateCache(p);
+      invalidateCache(entry.path);
+      onSetSelectedItems(new Set());
+      onNavigate(entry.path);
+    } catch {}
+  }, [invalidateCache, onNavigate, onSetSelectedItems]);
 
   // ── Context menus ─────────────────────────────────────────────────────────
   const handleBlankContextMenu = useCallback(async (e) => {
@@ -436,7 +611,10 @@ const ContentArea = ({
         query={query} onQuery={setQuery}
         showFolders={showFolders} onToggleFolders={() => setShowFolders((v) => !v)}
         showFiles={showFiles}    onToggleFiles={() => setShowFiles((v) => !v)}
-        itemCount={itemCount}    selectedCount={selectedItems.size} />
+        itemCount={itemCount}    selectedCount={selectedItems.size}
+        onCrumbsDragOver={handleCrumbsDragOver}
+        onCrumbsDragLeave={handleCrumbsDragLeave}
+        onCrumbsDrop={handleCrumbsDrop} />
 
       <div className="pw-content" ref={contentRef}
         onMouseDown={handleMouseDown}
@@ -450,7 +628,7 @@ const ContentArea = ({
           </div>
         )}
         {!loading && visible.length > 0 && (
-          <div className="pw-grid" ref={gridRef} role="list">
+          <div className={`pw-grid${isListView ? " pw-grid--list" : ""}`} ref={gridRef} role="list" style={isListView ? undefined : { gap: `${Math.round(zoom * 0.02)}px` }}>
             {visible.map((entry) => {
               const isRenaming = renamingPath === entry.path;
               return (
@@ -458,14 +636,19 @@ const ContentArea = ({
                   key={entry.path}
                   ref={(el) => { if (el) itemRefs.current[entry.path] = el; else delete itemRefs.current[entry.path]; }}
                   className={[
-                    "pw-item",
-                    selectedItems.has(entry.path) ? "pw-item--selected" : "",
-                    cutPaths.has(entry.path)      ? "pw-item--cut"      : "",
+                    isListView ? "pw-item-list" : "pw-item",
+                    selectedItems.has(entry.path)  ? (isListView ? "pw-item-list--selected" : "pw-item--selected") : "",
+                    cutPaths.has(entry.path)       ? (isListView ? "pw-item-list--cut" : "pw-item--cut") : "",
+                    !isListView && dropTargetPath === entry.path  ? "pw-item--drop-target" : "",
                   ].filter(Boolean).join(" ")}
                   role="listitem"
                   title={isRenaming ? undefined : entry.name}
                   draggable={!isRenaming}
                   onDragStart={(e) => handleDragStart(e, entry)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, entry)}
+                  onDragLeave={(e) => handleDragLeave(e, entry)}
+                  onDrop={(e) => handleContentDrop(e, entry)}
                   onClick={(e) => handleItemClick(e, entry)}
                   onDoubleClick={() => {
                     if (isRenaming) return;
@@ -473,18 +656,38 @@ const ContentArea = ({
                     else window.electronAPI.openFile(entry.path, settingsRef.current.defaultEditor ?? "system");
                   }}
                   onContextMenu={(e) => handleContextMenu(e, entry)}
+                  style={!isListView ? { width: `${itemW}px` } : undefined}
                 >
-                  <div className="pw-item__icon-wrap">
-                    <VscodeIcon name={entry.name} isDir={entry.isDir} size={48}/>
-                  </div>
-                  {isRenaming ? (
-                    <RenameInput
-                      initialValue={entry.name}
-                      onCommit={(newName) => handleRenameCommit(entry.path, newName)}
-                      onCancel={() => setRenamingPath(null)}
-                    />
+                  {isListView ? (
+                    <>
+                      <span className="pw-item-list__icon">
+                        <VscodeIcon name={entry.name} isDir={entry.isDir} size={iconSize}/>
+                      </span>
+                      {isRenaming ? (
+                        <RenameInput
+                          initialValue={entry.name}
+                          onCommit={(newName) => handleRenameCommit(entry.path, newName)}
+                          onCancel={() => setRenamingPath(null)}
+                        />
+                      ) : (
+                        <span className="pw-item-list__label">{entry.name}</span>
+                      )}
+                    </>
                   ) : (
-                    <span className="pw-item__label">{entry.name}</span>
+                    <>
+                      <div className="pw-item__icon-wrap" style={{ width: `${iconSize}px`, height: `${iconSize}px` }}>
+                        <VscodeIcon name={entry.name} isDir={entry.isDir} size={iconSize}/>
+                      </div>
+                      {isRenaming ? (
+                        <RenameInput
+                          initialValue={entry.name}
+                          onCommit={(newName) => handleRenameCommit(entry.path, newName)}
+                          onCancel={() => setRenamingPath(null)}
+                        />
+                      ) : (
+                        <span className="pw-item__label">{entry.name}</span>
+                      )}
+                    </>
                   )}
                 </div>
               );

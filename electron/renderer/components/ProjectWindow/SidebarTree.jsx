@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import VscodeIcon from "../shared/VscodeIcon.jsx";
 import { useInputDialog } from "../shared/InputDialog.jsx";
 
@@ -54,6 +54,8 @@ const FolderNode = ({
   const children   = childCache.get(entry.path) ?? null;
   const hasLoaded  = childCache.has(entry.path);
   const [loading, setLoading] = useState(false);
+  const expandTimerRef = useRef(null);
+  const expandHoverRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && !hasLoaded) {
@@ -64,10 +66,25 @@ const FolderNode = ({
 
   const hasChildren = !hasLoaded || (children && children.length > 0);
 
-  const handleDragOver  = useCallback((e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setDropTarget(entry.path); }, [entry.path, setDropTarget]);
-  const handleDragLeave = useCallback((e) => { e.stopPropagation(); setDropTarget((p) => p === entry.path ? null : p); }, [entry.path, setDropTarget]);
+  const handleDragOver  = useCallback((e) => {
+    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setDropTarget(entry.path);
+    if (expandHoverRef.current !== entry.path) {
+      expandHoverRef.current = entry.path;
+      if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
+      expandTimerRef.current = setTimeout(() => {
+        if (!isOpen) onToggle(entry.path);
+      }, 2000);
+    }
+  }, [entry.path, setDropTarget, isOpen, onToggle]);
+  const handleDragLeave = useCallback((e) => {
+    e.stopPropagation(); setDropTarget((p) => p === entry.path ? null : p);
+    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
+    expandHoverRef.current = null;
+  }, [entry.path, setDropTarget]);
   const handleDrop      = useCallback((e) => {
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
+    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
+    expandHoverRef.current = null;
     try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(entry.path, paths); } catch {}
   }, [entry.path, onDrop, setDropTarget]);
   const handleCtxMenu   = useCallback((e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(entry.path); }, [entry.path, onContextMenu]);
@@ -123,6 +140,7 @@ const SidebarTree = ({
   const [dropTarget,   setDropTarget]   = useState(null);
   // Bump this to force a re-fetch of rootChildren after mutations
   const [localRefresh, setLocalRefresh] = useState(0);
+  const { dialog: inputDialog, ask }    = useInputDialog();
 
   // Reload root children whenever rootPath changes OR a mutation triggers localRefresh
   useEffect(() => {
@@ -164,20 +182,20 @@ const SidebarTree = ({
 
     switch (result.action) {
       case "newFolder": {
-        const n = window.prompt("Folder name:", "New Folder");
-        if (n?.trim()) { await window.electronAPI.newFolder(folderPath, n.trim()); refresh(); }
+        const n = await ask("Folder name:", "New Folder");
+        if (n) { await window.electronAPI.newFolder(folderPath, n); refresh(); }
         break;
       }
       case "newFile": {
-        const n = window.prompt("File name:", "New File.txt");
-        if (n?.trim()) { await window.electronAPI.newFile(folderPath, n.trim()); refresh(); }
+        const n = await ask("File name:", "New File.txt");
+        if (n) { await window.electronAPI.newFile(folderPath, n); refresh(); }
         break;
       }
       case "rename": {
         const oldName = folderPath.replace(/.*[\\/]/, "");
-        const n = window.prompt("Rename to:", oldName);
-        if (n?.trim() && n.trim() !== oldName) {
-          await window.electronAPI.rename(folderPath, n.trim());
+        const n = await ask("Rename to:", oldName);
+        if (n && n !== oldName) {
+          await window.electronAPI.rename(folderPath, n);
           invalidateCache(parentDir);
           setLocalRefresh((k) => k + 1);
         }
@@ -185,7 +203,8 @@ const SidebarTree = ({
       }
       case "delete": {
         const name = folderPath.replace(/.*[\\/]/, "");
-        if (window.confirm(`Delete "${name}"?`)) {
+        const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
+        if (ok) {
           await window.electronAPI.deleteItem(folderPath, true);
           invalidateCache(parentDir);
           setLocalRefresh((k) => k + 1);
@@ -198,7 +217,7 @@ const SidebarTree = ({
         setLocalRefresh((k) => k + 1);
         break;
       }
-      case "copy":     if (clipboard !== undefined) { /* handled by parent via onClipboardChange — skip for now */ } break;
+      case "copy":     break;
       case "reveal":   window.electronAPI.revealInExplorer(folderPath); break;
       case "copyPath": navigator.clipboard.writeText(folderPath); break;
       case "refresh":  refresh(); break;
@@ -206,7 +225,9 @@ const SidebarTree = ({
   }, [selectedPath, onSelect, clipboard, invalidateCache]);
 
   return (
-    <div className="pw-sidebar__scroll" role="tree" aria-label="Project tree">
+    <>
+      {inputDialog}
+      <div className="pw-sidebar__scroll" role="tree" aria-label="Project tree">
       {rootPath && (
         <>
           <div className="pw-section">
@@ -247,6 +268,7 @@ const SidebarTree = ({
         </>
       )}
     </div>
+    </>
   );
 };
 

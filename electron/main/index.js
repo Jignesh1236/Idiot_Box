@@ -320,6 +320,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, "../preload/index.js"), contextIsolation: true, nodeIntegration: false },
   });
   win.loadFile(path.join(__dirname, "../renderer/index.html"));
+  win.webContents.openDevTools();
 }
 
 app.whenReady().then(() => { Menu.setApplicationMenu(buildMenu()); createWindow(); });

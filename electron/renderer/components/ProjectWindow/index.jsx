@@ -8,6 +8,8 @@ const SIDEBAR_MIN     = 120;
 const SIDEBAR_MAX     = 400;
 const SIDEBAR_DEFAULT = 180;
 
+const ZOOM_DEFAULT    = 100;
+
 const ProjectWindow = () => {
   const [rootPath,      setRootPath]      = useState(null);
   const [currentPath,   setCurrentPath]   = useState(null);
@@ -19,9 +21,28 @@ const ProjectWindow = () => {
   const [sidebarWidth,  setSidebarWidth]  = useState(SIDEBAR_DEFAULT);
   const [clipboard,     setClipboard]     = useState(null);
   const [refreshToken,  setRefreshToken]  = useState(0);
+  const [zoom,          setZoom]          = useState(ZOOM_DEFAULT);
   const draggingRef = useRef(false);
   const startXRef   = useRef(0);
   const startWRef   = useRef(SIDEBAR_DEFAULT);
+
+  // ── Persist zoom to settings ─────────────────────────────────────────────
+  useEffect(() => {
+    window.electronAPI.readSettings().then((s) => {
+      if (s.zoom) setZoom(s.zoom);
+    });
+  }, []);
+
+  const handleZoom = useCallback((val) => {
+    setZoom(val);
+    window.electronAPI.readSettings().then((s) => {
+      window.electronAPI.writeSettings({ ...s, zoom: val });
+    });
+  }, []);
+
+  // ── Undo / Redo stacks ───────────────────────────────────────────────────
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
 
   // ── Sidebar resize ───────────────────────────────────────────────────────
   const onResizeStart = useCallback((e) => {
@@ -54,14 +75,104 @@ const ProjectWindow = () => {
     setChildCache((prev) => { const n = new Map(prev); n.delete(dirPath); return n; });
   }, []);
 
+  const refreshAll = useCallback((dirs) => {
+    for (const d of dirs) invalidateCache(d);
+    setRefreshToken((t) => t + 1);
+  }, [invalidateCache]);
+
+  // ── Push undo operation ──────────────────────────────────────────────────
+  const pushUndo = useCallback((op) => {
+    undoStackRef.current.push(op);
+    redoStackRef.current = [];
+  }, []);
+
+  // ── Undo ─────────────────────────────────────────────────────────────────
+  const performUndo = useCallback(async () => {
+    const stack = undoStackRef.current;
+    if (!stack.length) return;
+    const op = stack.pop();
+    const affected = new Set();
+
+    try {
+      switch (op.type) {
+        case "move": {
+          for (const { from, to } of op.pairs) {
+            const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
+            const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
+            await window.electronAPI.moveItem(to, srcParent);
+            affected.add(srcParent);
+            affected.add(destParent);
+          }
+          break;
+        }
+        case "create": {
+          await window.electronAPI.deleteItem(op.path, false);
+          affected.add(op.parentDir);
+          break;
+        }
+        case "rename": {
+          await window.electronAPI.rename(op.newPath, op.oldName);
+          affected.add(op.parentDir);
+          break;
+        }
+        case "delete": {
+          break;
+        }
+      }
+      redoStackRef.current.push(op);
+      refreshAll([...affected]);
+    } catch (err) {
+      console.warn("Undo failed:", err);
+    }
+  }, [refreshAll]);
+
+  // ── Redo ─────────────────────────────────────────────────────────────────
+  const performRedo = useCallback(async () => {
+    const stack = redoStackRef.current;
+    if (!stack.length) return;
+    const op = stack.pop();
+    const affected = new Set();
+
+    try {
+      switch (op.type) {
+        case "move": {
+          for (const { from, to } of op.pairs) {
+            const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
+            const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
+            await window.electronAPI.moveItem(from, to);
+            affected.add(srcParent);
+            affected.add(destParent);
+          }
+          break;
+        }
+        case "create": {
+          if (op.isDir) await window.electronAPI.newFolder(op.parentDir, op.name);
+          else          await window.electronAPI.newFile(op.parentDir, op.name);
+          affected.add(op.parentDir);
+          break;
+        }
+        case "rename": {
+          await window.electronAPI.rename(op.oldPath, op.newName);
+          affected.add(op.parentDir);
+          break;
+        }
+        case "delete": {
+          break;
+        }
+      }
+      undoStackRef.current.push(op);
+      refreshAll([...affected]);
+    } catch (err) {
+      console.warn("Redo failed:", err);
+    }
+  }, [refreshAll]);
+
   // ── Chokidar watcher ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!rootPath) return;
     window.electronAPI.watchDir(rootPath);
     const unsub = window.electronAPI.onFsChange((affectedDir) => {
       invalidateCache(affectedDir);
-      // If the currently-viewed folder is the one that changed, bump the token
-      // so ContentArea re-fetches even though currentPath string didn't change
       setCurrentPath((p) => {
         if (p === affectedDir) setRefreshToken((t) => t + 1);
         return p;
@@ -81,12 +192,16 @@ const ProjectWindow = () => {
     setItemCount(null);
     setClipboard(null);
     setRefreshToken(0);
+    undoStackRef.current = [];
+    redoStackRef.current = [];
   }, []);
 
   const closeProject = useCallback(() => {
     setRootPath(null); setCurrentPath(null); setSelectedPath(null);
     setSelectedItems(new Set()); setExpandedSet(new Set());
     setChildCache(new Map()); setItemCount(null); setClipboard(null);
+    undoStackRef.current = [];
+    redoStackRef.current = [];
   }, []);
 
   useEffect(() => {
@@ -114,12 +229,21 @@ const ProjectWindow = () => {
   const handleItemsLoaded      = useCallback((count)   => setItemCount(count),       []);
 
   const handleSidebarDrop = useCallback(async (targetFolderPath, draggedPaths) => {
+    const pairs = [];
+    const sourceParents = new Set();
     for (const src of draggedPaths) {
       if (src === targetFolderPath) continue;
-      await window.electronAPI.moveItem(src, targetFolderPath);
+      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+      sourceParents.add(parentDir);
+      const dest = await window.electronAPI.moveItem(src, targetFolderPath);
+      if (dest) pairs.push({ from: src, to: dest });
     }
+    if (pairs.length) pushUndo({ type: "move", pairs });
+    for (const p of sourceParents) invalidateCache(p);
+    invalidateCache(targetFolderPath);
     setSelectedItems(new Set());
-  }, []);
+    setRefreshToken((t) => t + 1);
+  }, [invalidateCache, pushUndo]);
 
   // ── Empty state ──────────────────────────────────────────────────────────
   if (!rootPath) {
@@ -167,12 +291,18 @@ const ProjectWindow = () => {
           clipboard={clipboard}
           onClipboardChange={setClipboard}
           invalidateCache={invalidateCache}
+          pushUndo={pushUndo}
+          performUndo={performUndo}
+          performRedo={performRedo}
+          zoom={zoom}
         />
       </div>
       <StatusBar
         selectedCount={selectedItems.size}
         selectedPath={selectedItems.size === 1 ? [...selectedItems][0] : currentPath}
         itemCount={itemCount}
+        zoom={zoom}
+        onZoom={handleZoom}
       />
     </div>
   );

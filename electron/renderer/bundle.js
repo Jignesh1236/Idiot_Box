@@ -1329,7 +1329,7 @@
           return dispatcher;
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React11 = require_react(), Internals = {
+        var React12 = require_react(), Internals = {
           d: {
             f: noop,
             r: function() {
@@ -1347,7 +1347,7 @@
           },
           p: 0,
           findDOMNode: null
-        }, REACT_PORTAL_TYPE = Symbol.for("react.portal"), ReactSharedInternals = React11.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+        }, REACT_PORTAL_TYPE = Symbol.for("react.portal"), ReactSharedInternals = React12.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
         "function" === typeof Map && null != Map.prototype && "function" === typeof Map.prototype.forEach && "function" === typeof Set && null != Set.prototype && "function" === typeof Set.prototype.clear && "function" === typeof Set.prototype.forEach || console.error(
           "React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills"
         );
@@ -2882,7 +2882,7 @@
           "number" === type && getActiveElement(node.ownerDocument) === node || node.defaultValue === "" + value || (node.defaultValue = "" + value);
         }
         function validateOptionProps(element, props) {
-          null == props.value && ("object" === typeof props.children && null !== props.children ? React11.Children.forEach(props.children, function(child) {
+          null == props.value && ("object" === typeof props.children && null !== props.children ? React12.Children.forEach(props.children, function(child) {
             null == child || "string" === typeof child || "number" === typeof child || "bigint" === typeof child || didWarnInvalidChild || (didWarnInvalidChild = true, console.error(
               "Cannot infer the option value of complex children. Pass a `value` prop or use a plain string as children to <option>."
             ));
@@ -18514,14 +18514,14 @@
           ));
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var Scheduler = require_scheduler(), React11 = require_react(), ReactDOM2 = require_react_dom(), assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy");
+        var Scheduler = require_scheduler(), React12 = require_react(), ReactDOM2 = require_react_dom(), assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy");
         Symbol.for("react.scope");
         var REACT_ACTIVITY_TYPE = Symbol.for("react.activity");
         Symbol.for("react.legacy_hidden");
         Symbol.for("react.tracing_marker");
         var REACT_MEMO_CACHE_SENTINEL = Symbol.for("react.memo_cache_sentinel");
         Symbol.for("react.view_transition");
-        var MAYBE_ITERATOR_SYMBOL = Symbol.iterator, REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), isArrayImpl = Array.isArray, ReactSharedInternals = React11.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, NotPending = Object.freeze({
+        var MAYBE_ITERATOR_SYMBOL = Symbol.iterator, REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), isArrayImpl = Array.isArray, ReactSharedInternals = React12.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, NotPending = Object.freeze({
           pending: false,
           data: null,
           method: null,
@@ -21309,7 +21309,7 @@
           }
         };
         (function() {
-          var isomorphicReactPackageVersion = React11.version;
+          var isomorphicReactPackageVersion = React12.version;
           if ("19.2.8" !== isomorphicReactPackageVersion)
             throw Error(
               'Incompatible React versions: The "react" and "react-dom" packages must have the exact same version. Instead got:\n  - react:      ' + (isomorphicReactPackageVersion + "\n  - react-dom:  19.2.8\nLearn more: https://react.dev/warnings/version-mismatch")
@@ -21663,18 +21663,18 @@
         function isValidElement(object) {
           return "object" === typeof object && null !== object && object.$$typeof === REACT_ELEMENT_TYPE;
         }
-        var React11 = require_react(), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = Symbol.for("react.activity"), REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), ReactSharedInternals = React11.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, hasOwnProperty = Object.prototype.hasOwnProperty, isArrayImpl = Array.isArray, createTask = console.createTask ? console.createTask : function() {
+        var React12 = require_react(), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = Symbol.for("react.activity"), REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), ReactSharedInternals = React12.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, hasOwnProperty = Object.prototype.hasOwnProperty, isArrayImpl = Array.isArray, createTask = console.createTask ? console.createTask : function() {
           return null;
         };
-        React11 = {
+        React12 = {
           react_stack_bottom_frame: function(callStackForError) {
             return callStackForError();
           }
         };
         var specialPropKeyWarningShown;
         var didWarnAboutElementRef = {};
-        var unknownOwnerDebugStack = React11.react_stack_bottom_frame.bind(
-          React11,
+        var unknownOwnerDebugStack = React12.react_stack_bottom_frame.bind(
+          React12,
           UnknownOwner
         )();
         var unknownOwnerDebugTask = createTask(getTaskName(UnknownOwner));
@@ -21719,7 +21719,7 @@
   });
 
   // electron/renderer/index.jsx
-  var import_react10 = __toESM(require_react());
+  var import_react11 = __toESM(require_react());
   var import_client2 = __toESM(require_client());
 
   // node_modules/flexlayout-react/dist/index.js
@@ -28135,13 +28135,13 @@
   var Panel3_default = Panel3;
 
   // electron/renderer/components/Panel4.jsx
-  var import_react9 = __toESM(require_react());
+  var import_react10 = __toESM(require_react());
 
   // electron/renderer/components/ProjectWindow/index.jsx
-  var import_react8 = __toESM(require_react());
+  var import_react9 = __toESM(require_react());
 
   // electron/renderer/components/ProjectWindow/SidebarTree.jsx
-  var import_react4 = __toESM(require_react());
+  var import_react5 = __toESM(require_react());
 
   // electron/renderer/components/shared/VscodeIcon.jsx
   var import_react3 = __toESM(require_react());
@@ -28183,8 +28183,60 @@
   };
   var VscodeIcon_default = VscodeIcon;
 
+  // electron/renderer/components/shared/InputDialog.jsx
+  var import_react4 = __toESM(require_react());
+  var InputDialog = ({ state }) => {
+    const [val, setVal] = (0, import_react4.useState)("");
+    const inputRef = (0, import_react4.useRef)(null);
+    (0, import_react4.useEffect)(() => {
+      if (state.open) {
+        setVal(state.defaultValue ?? "");
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        });
+      }
+    }, [state.open, state.defaultValue]);
+    if (!state.open) return null;
+    const commit = () => {
+      const v = val.trim();
+      state.resolve(v || null);
+    };
+    const cancel = () => state.resolve(null);
+    return /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-overlay", onMouseDown: cancel }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-box", onMouseDown: (e) => e.stopPropagation() }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-label" }, state.label), /* @__PURE__ */ import_react4.default.createElement(
+      "input",
+      {
+        ref: inputRef,
+        className: "id-input",
+        value: val,
+        onChange: (e) => setVal(e.target.value),
+        onKeyDown: (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            cancel();
+          }
+        }
+      }
+    ), /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-actions" }, /* @__PURE__ */ import_react4.default.createElement("button", { className: "id-btn id-btn--cancel", onClick: cancel }, "Cancel"), /* @__PURE__ */ import_react4.default.createElement("button", { className: "id-btn id-btn--ok", onClick: commit }, "OK"))));
+  };
+  var useInputDialog = () => {
+    const [state, setState] = (0, import_react4.useState)({ open: false, label: "", defaultValue: "", resolve: null });
+    const ask = (label, defaultValue = "") => new Promise((resolve) => {
+      setState({ open: true, label, defaultValue, resolve: (v) => {
+        setState((s) => ({ ...s, open: false }));
+        resolve(v);
+      } });
+    });
+    const dialog = /* @__PURE__ */ import_react4.default.createElement(InputDialog, { state });
+    return { dialog, ask };
+  };
+
   // electron/renderer/components/ProjectWindow/SidebarTree.jsx
-  var ArrowSvg = () => /* @__PURE__ */ import_react4.default.createElement("svg", { width: "8", height: "8", viewBox: "0 0 8 8", fill: "currentColor" }, /* @__PURE__ */ import_react4.default.createElement("path", { d: "M2 1l4 3-4 3V1z" }));
+  var ArrowSvg = () => /* @__PURE__ */ import_react5.default.createElement("svg", { width: "8", height: "8", viewBox: "0 0 8 8", fill: "currentColor" }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M2 1l4 3-4 3V1z" }));
   var TreeRow = ({
     label,
     iconEl,
@@ -28199,7 +28251,7 @@
     onDragLeave,
     onDrop,
     onContextMenu
-  }) => /* @__PURE__ */ import_react4.default.createElement(
+  }) => /* @__PURE__ */ import_react5.default.createElement(
     "div",
     {
       className: [
@@ -28217,7 +28269,7 @@
       "aria-expanded": hasChildren ? isOpen : void 0,
       "aria-selected": isSelected
     },
-    /* @__PURE__ */ import_react4.default.createElement(
+    /* @__PURE__ */ import_react5.default.createElement(
       "span",
       {
         className: `pw-tree-row__arrow${hasChildren ? isOpen ? " pw-tree-row__arrow--open" : "" : " pw-tree-row__arrow--hidden"}`,
@@ -28227,10 +28279,10 @@
         } : void 0,
         "aria-hidden": "true"
       },
-      /* @__PURE__ */ import_react4.default.createElement(ArrowSvg, null)
+      /* @__PURE__ */ import_react5.default.createElement(ArrowSvg, null)
     ),
-    /* @__PURE__ */ import_react4.default.createElement("span", { className: "pw-tree-row__icon", "aria-hidden": "true" }, iconEl),
-    /* @__PURE__ */ import_react4.default.createElement("span", { className: "pw-tree-row__label", title: label }, label)
+    /* @__PURE__ */ import_react5.default.createElement("span", { className: "pw-tree-row__icon", "aria-hidden": "true" }, iconEl),
+    /* @__PURE__ */ import_react5.default.createElement("span", { className: "pw-tree-row__label", title: label }, label)
   );
   var FolderNode = ({
     entry,
@@ -28250,44 +28302,66 @@
     const isSelected = selectedPath === entry.path;
     const children = childCache.get(entry.path) ?? null;
     const hasLoaded = childCache.has(entry.path);
-    const [loading, setLoading] = (0, import_react4.useState)(false);
-    (0, import_react4.useEffect)(() => {
+    const [loading, setLoading] = (0, import_react5.useState)(false);
+    const expandTimerRef = (0, import_react5.useRef)(null);
+    const expandHoverRef = (0, import_react5.useRef)(null);
+    (0, import_react5.useEffect)(() => {
       if (isOpen && !hasLoaded) {
         setLoading(true);
         loadChildren(entry.path).finally(() => setLoading(false));
       }
     }, [isOpen, hasLoaded, entry.path, loadChildren]);
     const hasChildren = !hasLoaded || children && children.length > 0;
-    const handleDragOver = (0, import_react4.useCallback)((e) => {
+    const handleDragOver = (0, import_react5.useCallback)((e) => {
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = "move";
       setDropTarget(entry.path);
-    }, [entry.path, setDropTarget]);
-    const handleDragLeave = (0, import_react4.useCallback)((e) => {
+      if (expandHoverRef.current !== entry.path) {
+        expandHoverRef.current = entry.path;
+        if (expandTimerRef.current) {
+          clearTimeout(expandTimerRef.current);
+          expandTimerRef.current = null;
+        }
+        expandTimerRef.current = setTimeout(() => {
+          if (!isOpen) onToggle(entry.path);
+        }, 2e3);
+      }
+    }, [entry.path, setDropTarget, isOpen, onToggle]);
+    const handleDragLeave = (0, import_react5.useCallback)((e) => {
       e.stopPropagation();
       setDropTarget((p) => p === entry.path ? null : p);
+      if (expandTimerRef.current) {
+        clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+      expandHoverRef.current = null;
     }, [entry.path, setDropTarget]);
-    const handleDrop = (0, import_react4.useCallback)((e) => {
+    const handleDrop = (0, import_react5.useCallback)((e) => {
       e.preventDefault();
       e.stopPropagation();
       setDropTarget(null);
+      if (expandTimerRef.current) {
+        clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+      expandHoverRef.current = null;
       try {
         const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
         if (paths?.length) onDrop(entry.path, paths);
       } catch {
       }
     }, [entry.path, onDrop, setDropTarget]);
-    const handleCtxMenu = (0, import_react4.useCallback)((e) => {
+    const handleCtxMenu = (0, import_react5.useCallback)((e) => {
       e.preventDefault();
       e.stopPropagation();
       onContextMenu(entry.path);
     }, [entry.path, onContextMenu]);
-    return /* @__PURE__ */ import_react4.default.createElement(import_react4.default.Fragment, null, /* @__PURE__ */ import_react4.default.createElement(
+    return /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement(
       TreeRow,
       {
         label: entry.name,
-        iconEl: /* @__PURE__ */ import_react4.default.createElement(VscodeIcon_default, { name: entry.name, isDir: true, isOpen, size: 16 }),
+        iconEl: /* @__PURE__ */ import_react5.default.createElement(VscodeIcon_default, { name: entry.name, isDir: true, isOpen, size: 16 }),
         depth,
         hasChildren,
         isOpen,
@@ -28300,7 +28374,7 @@
         onDrop: handleDrop,
         onContextMenu: handleCtxMenu
       }
-    ), isOpen && hasLoaded && children && children.map((child) => /* @__PURE__ */ import_react4.default.createElement(
+    ), isOpen && hasLoaded && children && children.map((child) => /* @__PURE__ */ import_react5.default.createElement(
       FolderNode,
       {
         key: child.path,
@@ -28317,7 +28391,7 @@
         setDropTarget,
         onContextMenu
       }
-    )), isOpen && loading && /* @__PURE__ */ import_react4.default.createElement("div", { style: { paddingLeft: `${6 + (depth + 1) * 14 + 14}px`, color: "#555", fontSize: 11, height: 20, lineHeight: "20px" } }, "..."));
+    )), isOpen && loading && /* @__PURE__ */ import_react5.default.createElement("div", { style: { paddingLeft: `${6 + (depth + 1) * 14 + 14}px`, color: "#555", fontSize: 11, height: 20, lineHeight: "20px" } }, "..."));
   };
   var SidebarTree = ({
     rootPath,
@@ -28331,17 +28405,18 @@
     clipboard,
     invalidateCache
   }) => {
-    const [rootChildren, setRootChildren] = (0, import_react4.useState)(null);
-    const [dropTarget, setDropTarget] = (0, import_react4.useState)(null);
-    const [localRefresh, setLocalRefresh] = (0, import_react4.useState)(0);
-    (0, import_react4.useEffect)(() => {
+    const [rootChildren, setRootChildren] = (0, import_react5.useState)(null);
+    const [dropTarget, setDropTarget] = (0, import_react5.useState)(null);
+    const [localRefresh, setLocalRefresh] = (0, import_react5.useState)(0);
+    const { dialog: inputDialog, ask } = useInputDialog();
+    (0, import_react5.useEffect)(() => {
       if (!rootPath) {
         setRootChildren(null);
         return;
       }
       window.electronAPI.readDir(rootPath).then(setRootChildren);
     }, [rootPath, localRefresh]);
-    (0, import_react4.useEffect)(() => {
+    (0, import_react5.useEffect)(() => {
       if (!rootPath || childCache.has(rootPath)) return;
       window.electronAPI.readDir(rootPath).then(setRootChildren);
     }, [rootPath, childCache]);
@@ -28361,7 +28436,7 @@
       } catch {
       }
     };
-    const handleContextMenu = (0, import_react4.useCallback)(async (folderPath) => {
+    const handleContextMenu = (0, import_react5.useCallback)(async (folderPath) => {
       if (folderPath !== selectedPath) onSelect(folderPath);
       const parentDir = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
       const result = await window.electronAPI.showContextMenu(
@@ -28377,26 +28452,26 @@
       };
       switch (result.action) {
         case "newFolder": {
-          const n = window.prompt("Folder name:", "New Folder");
-          if (n?.trim()) {
-            await window.electronAPI.newFolder(folderPath, n.trim());
+          const n = await ask("Folder name:", "New Folder");
+          if (n) {
+            await window.electronAPI.newFolder(folderPath, n);
             refresh();
           }
           break;
         }
         case "newFile": {
-          const n = window.prompt("File name:", "New File.txt");
-          if (n?.trim()) {
-            await window.electronAPI.newFile(folderPath, n.trim());
+          const n = await ask("File name:", "New File.txt");
+          if (n) {
+            await window.electronAPI.newFile(folderPath, n);
             refresh();
           }
           break;
         }
         case "rename": {
           const oldName = folderPath.replace(/.*[\\/]/, "");
-          const n = window.prompt("Rename to:", oldName);
-          if (n?.trim() && n.trim() !== oldName) {
-            await window.electronAPI.rename(folderPath, n.trim());
+          const n = await ask("Rename to:", oldName);
+          if (n && n !== oldName) {
+            await window.electronAPI.rename(folderPath, n);
             invalidateCache(parentDir);
             setLocalRefresh((k) => k + 1);
           }
@@ -28404,7 +28479,8 @@
         }
         case "delete": {
           const name = folderPath.replace(/.*[\\/]/, "");
-          if (window.confirm(`Delete "${name}"?`)) {
+          const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
+          if (ok) {
             await window.electronAPI.deleteItem(folderPath, true);
             invalidateCache(parentDir);
             setLocalRefresh((k) => k + 1);
@@ -28418,8 +28494,6 @@
           break;
         }
         case "copy":
-          if (clipboard !== void 0) {
-          }
           break;
         case "reveal":
           window.electronAPI.revealInExplorer(folderPath);
@@ -28432,11 +28506,11 @@
           break;
       }
     }, [selectedPath, onSelect, clipboard, invalidateCache]);
-    return /* @__PURE__ */ import_react4.default.createElement("div", { className: "pw-sidebar__scroll", role: "tree", "aria-label": "Project tree" }, rootPath && /* @__PURE__ */ import_react4.default.createElement(import_react4.default.Fragment, null, /* @__PURE__ */ import_react4.default.createElement("div", { className: "pw-section" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "pw-section__label" }, "Assets")), /* @__PURE__ */ import_react4.default.createElement(
+    return /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, inputDialog, /* @__PURE__ */ import_react5.default.createElement("div", { className: "pw-sidebar__scroll", role: "tree", "aria-label": "Project tree" }, rootPath && /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("div", { className: "pw-section" }, /* @__PURE__ */ import_react5.default.createElement("span", { className: "pw-section__label" }, "Assets")), /* @__PURE__ */ import_react5.default.createElement(
       TreeRow,
       {
         label: rootName,
-        iconEl: /* @__PURE__ */ import_react4.default.createElement(VscodeIcon_default, { name: rootName, isDir: true, isOpen: expandedSet.has(rootPath), size: 16 }),
+        iconEl: /* @__PURE__ */ import_react5.default.createElement(VscodeIcon_default, { name: rootName, isDir: true, isOpen: expandedSet.has(rootPath), size: 16 }),
         depth: 0,
         hasChildren: rootChildren === null || rootChildren && rootChildren.length > 0,
         isOpen: expandedSet.has(rootPath),
@@ -28449,7 +28523,7 @@
         onDrop: handleRootDrop,
         onContextMenu: () => handleContextMenu(rootPath)
       }
-    ), expandedSet.has(rootPath) && rootChildren && rootChildren.map((entry) => /* @__PURE__ */ import_react4.default.createElement(
+    ), expandedSet.has(rootPath) && rootChildren && rootChildren.map((entry) => /* @__PURE__ */ import_react5.default.createElement(
       FolderNode,
       {
         key: entry.path,
@@ -28466,25 +28540,25 @@
         setDropTarget,
         onContextMenu: handleContextMenu
       }
-    ))));
+    )))));
   };
   var SidebarTree_default = SidebarTree;
 
   // electron/renderer/components/ProjectWindow/ContentArea.jsx
-  var import_react6 = __toESM(require_react());
+  var import_react7 = __toESM(require_react());
 
   // electron/renderer/components/shared/useSettings.jsx
-  var import_react5 = __toESM(require_react());
+  var import_react6 = __toESM(require_react());
   var useSettings = () => {
-    const [settings, setSettings] = (0, import_react5.useState)({});
-    const [loading, setLoading] = (0, import_react5.useState)(true);
-    (0, import_react5.useEffect)(() => {
+    const [settings, setSettings] = (0, import_react6.useState)({});
+    const [loading, setLoading] = (0, import_react6.useState)(true);
+    (0, import_react6.useEffect)(() => {
       window.electronAPI.readSettings().then((data) => {
         setSettings(data ?? {});
         setLoading(false);
       });
     }, []);
-    const updateSettings = (0, import_react5.useCallback)(async (patch) => {
+    const updateSettings = (0, import_react6.useCallback)(async (patch) => {
       const next = { ...settings, ...patch };
       setSettings(next);
       await window.electronAPI.writeSettings(next);
@@ -28495,14 +28569,14 @@
   var useSettings_default = useSettings;
 
   // electron/renderer/components/ProjectWindow/ContentArea.jsx
-  var IcoFolder = () => /* @__PURE__ */ import_react6.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z" }));
-  var IcoFile = () => /* @__PURE__ */ import_react6.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4Zm5.5 1.5v3A1.5 1.5 0 0 0 11 6h3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5Z" }));
-  var IcoEye = () => /* @__PURE__ */ import_react6.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z" }), /* @__PURE__ */ import_react6.default.createElement("path", { d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" }));
-  var IconBtn = ({ title, active, onClick, children }) => /* @__PURE__ */ import_react6.default.createElement("button", { className: `pw-bar-btn${active ? " pw-bar-btn--active" : ""}`, title, onClick }, children);
+  var IcoFolder = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z" }));
+  var IcoFile = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4Zm5.5 1.5v3A1.5 1.5 0 0 0 11 6h3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5Z" }));
+  var IcoEye = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z" }), /* @__PURE__ */ import_react7.default.createElement("path", { d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" }));
+  var IconBtn = ({ title, active, onClick, children }) => /* @__PURE__ */ import_react7.default.createElement("button", { className: `pw-bar-btn${active ? " pw-bar-btn--active" : ""}`, title, onClick }, children);
   var RenameInput = ({ initialValue, onCommit, onCancel }) => {
-    const [val, setVal] = (0, import_react6.useState)(initialValue);
-    const ref = (0, import_react6.useRef)(null);
-    (0, import_react6.useEffect)(() => {
+    const [val, setVal] = (0, import_react7.useState)(initialValue);
+    const ref = (0, import_react7.useRef)(null);
+    (0, import_react7.useEffect)(() => {
       ref.current?.focus();
       ref.current?.select();
     }, []);
@@ -28511,7 +28585,7 @@
       if (v && v !== initialValue) onCommit(v);
       else onCancel();
     };
-    return /* @__PURE__ */ import_react6.default.createElement(
+    return /* @__PURE__ */ import_react7.default.createElement(
       "input",
       {
         ref,
@@ -28528,7 +28602,7 @@
       }
     );
   };
-  var Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, itemCount, selectedCount }) => {
+  var Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, itemCount, selectedCount, onCrumbsDragOver, onCrumbsDragLeave, onCrumbsDrop }) => {
     const crumbs = [];
     if (rootPath && currentPath) {
       const rootName = rootPath.split(/[\\/]/).filter(Boolean).pop();
@@ -28542,15 +28616,30 @@
       }
     }
     const eyeLabel = selectedCount > 0 ? `${selectedCount} selected` : itemCount != null ? `${itemCount} items` : "";
-    return /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar" }, /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__crumbs" }, crumbs.map((c, i) => /* @__PURE__ */ import_react6.default.createElement(import_react6.default.Fragment, { key: c.path }, i > 0 && /* @__PURE__ */ import_react6.default.createElement("span", { className: "pw-breadcrumb__sep" }, "\u203A"), /* @__PURE__ */ import_react6.default.createElement(
+    return /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar" }, /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar__crumbs" }, crumbs.map((c, i) => /* @__PURE__ */ import_react7.default.createElement(import_react7.default.Fragment, { key: c.path }, i > 0 && /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-breadcrumb__sep" }, "\u203A"), /* @__PURE__ */ import_react7.default.createElement(
       "span",
       {
         className: `pw-breadcrumb__item${i === crumbs.length - 1 ? " pw-breadcrumb__item--active" : ""}`,
         onClick: () => i < crumbs.length - 1 && onNavigate(c.path),
-        title: c.path
+        title: c.path,
+        onDragOver: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          onCrumbsDragOver?.(c.path);
+        },
+        onDragLeave: (e) => {
+          e.stopPropagation();
+          onCrumbsDragLeave?.(c.path);
+        },
+        onDrop: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onCrumbsDrop?.(e, c.path);
+        }
       },
       c.label
-    )))), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__actions" }, /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__search" }, /* @__PURE__ */ import_react6.default.createElement("svg", { className: "pw-bar__search-ico", width: "11", height: "11", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.868-3.833zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" })), /* @__PURE__ */ import_react6.default.createElement(
+    )))), /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar__actions" }, /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar__search" }, /* @__PURE__ */ import_react7.default.createElement("svg", { className: "pw-bar__search-ico", width: "11", height: "11", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.868-3.833zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" })), /* @__PURE__ */ import_react7.default.createElement(
       "input",
       {
         className: "pw-bar__search-input",
@@ -28560,7 +28649,7 @@
         onChange: (e) => onQuery(e.target.value),
         spellCheck: false
       }
-    ), query && /* @__PURE__ */ import_react6.default.createElement("button", { className: "pw-bar__search-clear", onClick: () => onQuery("") }, "\xD7")), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__divider" }), /* @__PURE__ */ import_react6.default.createElement(IconBtn, { title: "Show folders", active: showFolders, onClick: onToggleFolders }, /* @__PURE__ */ import_react6.default.createElement(IcoFolder, null)), /* @__PURE__ */ import_react6.default.createElement(IconBtn, { title: "Show files", active: showFiles, onClick: onToggleFiles }, /* @__PURE__ */ import_react6.default.createElement(IcoFile, null)), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar-count", title: eyeLabel }, /* @__PURE__ */ import_react6.default.createElement(IcoEye, null), eyeLabel && /* @__PURE__ */ import_react6.default.createElement("span", { className: "pw-bar-count__label" }, selectedCount > 0 ? selectedCount : itemCount))));
+    ), query && /* @__PURE__ */ import_react7.default.createElement("button", { className: "pw-bar__search-clear", onClick: () => onQuery("") }, "\xD7")), /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar__divider" }), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: "Show folders", active: showFolders, onClick: onToggleFolders }, /* @__PURE__ */ import_react7.default.createElement(IcoFolder, null)), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: "Show files", active: showFiles, onClick: onToggleFiles }, /* @__PURE__ */ import_react7.default.createElement(IcoFile, null)), /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar-count", title: eyeLabel }, /* @__PURE__ */ import_react7.default.createElement(IcoEye, null), eyeLabel && /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-bar-count__label" }, selectedCount > 0 ? selectedCount : itemCount))));
   };
   var ContentArea = ({
     rootPath,
@@ -28573,39 +28662,61 @@
     itemCount,
     clipboard,
     onClipboardChange,
-    invalidateCache
+    invalidateCache,
+    pushUndo,
+    performUndo,
+    performRedo,
+    zoom
   }) => {
-    const [entries, setEntries] = (0, import_react6.useState)([]);
-    const [loading, setLoading] = (0, import_react6.useState)(false);
-    const [query, setQuery] = (0, import_react6.useState)("");
-    const [showFolders, setShowFolders] = (0, import_react6.useState)(true);
-    const [showFiles, setShowFiles] = (0, import_react6.useState)(true);
-    const [band, setBand] = (0, import_react6.useState)(null);
-    const [renamingPath, setRenamingPath] = (0, import_react6.useState)(null);
-    const gridRef = (0, import_react6.useRef)(null);
-    const contentRef = (0, import_react6.useRef)(null);
-    const bandOrigin = (0, import_react6.useRef)(null);
-    const itemRefs = (0, import_react6.useRef)({});
-    const anchorRef = (0, import_react6.useRef)(null);
-    const selectedItemsRef = (0, import_react6.useRef)(selectedItems);
-    const clipboardRef = (0, import_react6.useRef)(clipboard);
-    const currentPathRef = (0, import_react6.useRef)(currentPath);
-    const visibleRef = (0, import_react6.useRef)([]);
-    (0, import_react6.useEffect)(() => {
+    const [entries, setEntries] = (0, import_react7.useState)([]);
+    const [loading, setLoading] = (0, import_react7.useState)(false);
+    const [query, setQuery] = (0, import_react7.useState)("");
+    const [showFolders, setShowFolders] = (0, import_react7.useState)(true);
+    const [showFiles, setShowFiles] = (0, import_react7.useState)(true);
+    const [band, setBand] = (0, import_react7.useState)(null);
+    const [renamingPath, setRenamingPath] = (0, import_react7.useState)(null);
+    const { dialog: inputDialog, ask } = useInputDialog();
+    const gridRef = (0, import_react7.useRef)(null);
+    const contentRef = (0, import_react7.useRef)(null);
+    const bandOrigin = (0, import_react7.useRef)(null);
+    const bandMoved = (0, import_react7.useRef)(false);
+    const itemRefs = (0, import_react7.useRef)({});
+    const anchorRef = (0, import_react7.useRef)(null);
+    const selectedItemsRef = (0, import_react7.useRef)(selectedItems);
+    const clipboardRef = (0, import_react7.useRef)(clipboard);
+    const currentPathRef = (0, import_react7.useRef)(currentPath);
+    const visibleRef = (0, import_react7.useRef)([]);
+    const pushUndoRef = (0, import_react7.useRef)(pushUndo);
+    const performUndoRef = (0, import_react7.useRef)(performUndo);
+    const performRedoRef = (0, import_react7.useRef)(performRedo);
+    (0, import_react7.useEffect)(() => {
       selectedItemsRef.current = selectedItems;
     }, [selectedItems]);
-    (0, import_react6.useEffect)(() => {
+    (0, import_react7.useEffect)(() => {
       clipboardRef.current = clipboard;
     }, [clipboard]);
-    (0, import_react6.useEffect)(() => {
+    (0, import_react7.useEffect)(() => {
       currentPathRef.current = currentPath;
     }, [currentPath]);
+    (0, import_react7.useEffect)(() => {
+      pushUndoRef.current = pushUndo;
+    }, [pushUndo]);
+    (0, import_react7.useEffect)(() => {
+      performUndoRef.current = performUndo;
+    }, [performUndo]);
+    (0, import_react7.useEffect)(() => {
+      performRedoRef.current = performRedo;
+    }, [performRedo]);
     const [settings] = useSettings_default();
-    const settingsRef = (0, import_react6.useRef)(settings);
-    (0, import_react6.useEffect)(() => {
+    const settingsRef = (0, import_react7.useRef)(settings);
+    (0, import_react7.useEffect)(() => {
       settingsRef.current = settings;
     }, [settings]);
-    const loadEntries = (0, import_react6.useCallback)(() => {
+    const iconSize = Math.round(zoom * 0.48);
+    const isListView = zoom < 60;
+    const itemW = isListView ? 0 : Math.round(zoom * 0.76);
+    const itemP = isListView ? "2px 6px" : `${Math.round(zoom * 0.06)}px ${Math.round(zoom * 0.04)}px ${Math.round(zoom * 0.04)}px`;
+    const loadEntries = (0, import_react7.useCallback)(() => {
       const cp = currentPathRef.current;
       if (!cp) {
         setEntries([]);
@@ -28617,19 +28728,19 @@
         if (onItemsLoaded) onItemsLoaded(data.length);
       }).finally(() => setLoading(false));
     }, [onItemsLoaded]);
-    (0, import_react6.useEffect)(() => {
+    (0, import_react7.useEffect)(() => {
       loadEntries();
     }, [currentPath]);
-    (0, import_react6.useEffect)(() => {
+    (0, import_react7.useEffect)(() => {
       if (refreshToken > 0) loadEntries();
     }, [refreshToken]);
-    (0, import_react6.useEffect)(() => {
+    (0, import_react7.useEffect)(() => {
       setQuery("");
       setShowFolders(true);
       setShowFiles(true);
       setRenamingPath(null);
     }, [currentPath]);
-    const visible = (0, import_react6.useMemo)(() => {
+    const visible = (0, import_react7.useMemo)(() => {
       let r = entries;
       if (!showFolders) r = r.filter((e) => !e.isDir);
       if (!showFiles) r = r.filter((e) => e.isDir);
@@ -28639,10 +28750,10 @@
       }
       return r;
     }, [entries, showFolders, showFiles, query]);
-    (0, import_react6.useEffect)(() => {
+    (0, import_react7.useEffect)(() => {
       visibleRef.current = visible;
     }, [visible]);
-    const execAction = (0, import_react6.useCallback)(async (action, targetPaths, targetDir) => {
+    const execAction = (0, import_react7.useCallback)(async (action, targetPaths, targetDir) => {
       const sel = selectedItemsRef.current;
       const clip = clipboardRef.current;
       const cp = currentPathRef.current;
@@ -28663,17 +28774,19 @@
         }
         // ── Create ──────────────────────────────────────────────────────────
         case "newFolder": {
-          const n = window.prompt("Folder name:", "New Folder");
-          if (n?.trim()) {
-            await window.electronAPI.newFolder(dir, n.trim());
+          const n = await ask("Folder name:", "New Folder");
+          if (n) {
+            const created = await window.electronAPI.newFolder(dir, n);
+            if (created) pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: n, isDir: true });
             loadEntries();
           }
           return;
         }
         case "newFile": {
-          const n = window.prompt("File name:", "New File.txt");
-          if (n?.trim()) {
-            await window.electronAPI.newFile(dir, n.trim());
+          const n = await ask("File name:", "New File.txt");
+          if (n) {
+            const created = await window.electronAPI.newFile(dir, n);
+            if (created) pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: n, isDir: false });
             loadEntries();
           }
           return;
@@ -28686,9 +28799,11 @@
         // ── Delete ──────────────────────────────────────────────────────────
         case "delete": {
           const names = targetPaths.map((p) => p.replace(/.*[\\/]/, ""));
-          const msg = targetPaths.length === 1 ? `Delete "${names[0]}"?` : `Delete ${targetPaths.length} items?`;
-          if (!window.confirm(msg)) return;
+          const label = targetPaths.length === 1 ? `Move "${names[0]}" to Trash?` : `Move ${targetPaths.length} items to Trash?`;
+          const ok = await window.electronAPI.confirmDialog(label);
+          if (!ok) return;
           for (const p of targetPaths) await window.electronAPI.deleteItem(p, true);
+          pushUndoRef.current?.({ type: "delete", paths: targetPaths, parentDir: dir });
           onSetSelectedItems(/* @__PURE__ */ new Set());
           invalidateCache(dir);
           return;
@@ -28708,11 +28823,23 @@
           return;
         case "paste": {
           if (!clip?.paths?.length) return;
+          const sourceParents = /* @__PURE__ */ new Set();
+          const pairs = [];
           for (const src of clip.paths) {
-            if (clip.mode === "copy") await window.electronAPI.copyItem(src, dir);
-            else await window.electronAPI.moveItem(src, dir);
+            if (clip.mode === "copy") {
+              await window.electronAPI.copyItem(src, dir);
+            } else {
+              const srcParent = src.replace(/[\\/][^\\/]+$/, "") || src;
+              sourceParents.add(srcParent);
+              const dest = await window.electronAPI.moveItem(src, dir);
+              if (dest) pairs.push({ from: src, to: dest });
+            }
           }
-          if (clip.mode === "cut") onClipboardChange(null);
+          if (clip.mode === "cut") {
+            if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+            onClipboardChange(null);
+          }
+          for (const p of sourceParents) invalidateCache(p);
           invalidateCache(dir);
           return;
         }
@@ -28732,13 +28859,17 @@
           return;
       }
     }, [onNavigate, onSetSelectedItems, onClipboardChange, invalidateCache, loadEntries]);
-    const handleRenameCommit = (0, import_react6.useCallback)(async (oldPath, newName) => {
+    const handleRenameCommit = (0, import_react7.useCallback)(async (oldPath, newName) => {
       setRenamingPath(null);
+      if (!oldPath || !newName) return;
       const parentDir = oldPath.replace(/[\\/][^\\/]+$/, "") || oldPath;
+      const oldName = oldPath.split(/[\\/]/).pop();
       await window.electronAPI.rename(oldPath, newName);
+      const newPath = parentDir + "/" + newName;
+      pushUndoRef.current?.({ type: "rename", oldPath, oldName, newPath, newName, parentDir });
       invalidateCache(parentDir);
     }, [invalidateCache]);
-    const handleKeyDown = (0, import_react6.useCallback)((e) => {
+    const handleKeyDown = (0, import_react7.useCallback)((e) => {
       if (renamingPath) return;
       const sel = selectedItemsRef.current;
       const vis = visibleRef.current;
@@ -28780,6 +28911,16 @@
         onSetSelectedItems(new Set(vis.map((v) => v.path)));
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        performUndoRef.current?.();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey || e.metaKey) && e.key === "z")) {
+        e.preventDefault();
+        performRedoRef.current?.();
+        return;
+      }
       if (e.key === "Enter" && paths.length) {
         e.preventDefault();
         execAction("open", paths, cp);
@@ -28805,7 +28946,7 @@
         }
       }
     }, [renamingPath, execAction, onSetSelectedItems]);
-    const handleItemClick = (0, import_react6.useCallback)((e, entry) => {
+    const handleItemClick = (0, import_react7.useCallback)((e, entry) => {
       e.stopPropagation();
       if (renamingPath === entry.path) return;
       if (e.ctrlKey || e.metaKey) {
@@ -28824,14 +28965,14 @@
         onSetSelectedItems(/* @__PURE__ */ new Set([entry.path]));
       }
     }, [renamingPath, onSetSelectedItems]);
-    const handleGridClick = (0, import_react6.useCallback)((e) => {
+    const handleGridClick = (0, import_react7.useCallback)((e) => {
       if (e.target === gridRef.current || e.target === contentRef.current) {
         onSetSelectedItems(/* @__PURE__ */ new Set());
         anchorRef.current = null;
         setRenamingPath(null);
       }
     }, [onSetSelectedItems]);
-    const handleMouseDown = (0, import_react6.useCallback)((e) => {
+    const handleMouseDown = (0, import_react7.useCallback)((e) => {
       if (e.button !== 0) return;
       if (e.target !== gridRef.current && e.target !== contentRef.current) return;
       if (renamingPath) {
@@ -28847,8 +28988,10 @@
         anchorRef.current = null;
       }
       const origSel = new Set(selectedItemsRef.current);
+      bandMoved.current = false;
       const onMove = (mv) => {
         if (!bandOrigin.current) return;
+        bandMoved.current = true;
         const cx = mv.clientX - rect.left;
         const cy = mv.clientY - rect.top + contentRef.current.scrollTop;
         const ox = bandOrigin.current.x, oy = bandOrigin.current.y;
@@ -28865,15 +29008,25 @@
         onSetSelectedItems(next);
       };
       const onUp = () => {
+        const moved = bandMoved.current;
         setBand(null);
         bandOrigin.current = null;
+        bandMoved.current = false;
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
+        if (moved) {
+          const handler = (ce) => {
+            ce.stopPropagation();
+            document.removeEventListener("click", handler, true);
+          };
+          document.addEventListener("click", handler, true);
+        }
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     }, [renamingPath, onSetSelectedItems]);
-    const handleDragStart = (0, import_react6.useCallback)((e, entry) => {
+    const dragImageRef = (0, import_react7.useRef)(null);
+    const handleDragStart = (0, import_react7.useCallback)((e, entry) => {
       if (renamingPath) {
         e.preventDefault();
         return;
@@ -28882,8 +29035,124 @@
       const toDrag = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("application/ppoo-paths", JSON.stringify(toDrag));
+      if (toDrag.length > 1) {
+        const el = document.createElement("div");
+        el.textContent = String(toDrag.length);
+        el.style.cssText = "position:fixed;top:-100px;left:0;background:#5a9fd4;color:#fff;font:bold 12px sans-serif;width:24px;height:24px;border-radius:12px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999";
+        document.body.appendChild(el);
+        e.dataTransfer.setDragImage(el, 28, 28);
+        dragImageRef.current = el;
+      }
     }, [renamingPath]);
-    const handleBlankContextMenu = (0, import_react6.useCallback)(async (e) => {
+    const handleDragEnd = (0, import_react7.useCallback)(() => {
+      if (dragImageRef.current) {
+        dragImageRef.current.remove();
+        dragImageRef.current = null;
+      }
+    }, []);
+    const crumbsTimerRef = (0, import_react7.useRef)(null);
+    const crumbsHoverRef = (0, import_react7.useRef)(null);
+    const handleCrumbsDragOver = (0, import_react7.useCallback)((path) => {
+      if (crumbsHoverRef.current !== path) {
+        crumbsHoverRef.current = path;
+        if (crumbsTimerRef.current) clearTimeout(crumbsTimerRef.current);
+        crumbsTimerRef.current = setTimeout(() => {
+          onNavigate(path);
+        }, 2e3);
+      }
+    }, [onNavigate]);
+    const handleCrumbsDragLeave = (0, import_react7.useCallback)((path) => {
+      if (crumbsHoverRef.current === path) {
+        crumbsHoverRef.current = null;
+        if (crumbsTimerRef.current) {
+          clearTimeout(crumbsTimerRef.current);
+          crumbsTimerRef.current = null;
+        }
+      }
+    }, []);
+    const handleCrumbsDrop = (0, import_react7.useCallback)(async (e, path) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (crumbsTimerRef.current) {
+        clearTimeout(crumbsTimerRef.current);
+        crumbsTimerRef.current = null;
+      }
+      crumbsHoverRef.current = null;
+      try {
+        const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+        if (!paths?.length) return;
+        const pairs = [];
+        const sourceParents = /* @__PURE__ */ new Set();
+        for (const src of paths) {
+          if (src === path) continue;
+          const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+          sourceParents.add(parentDir);
+          const dest = await window.electronAPI.moveItem(src, path);
+          if (dest) pairs.push({ from: src, to: dest });
+        }
+        if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+        for (const p of sourceParents) invalidateCache(p);
+        invalidateCache(path);
+        onSetSelectedItems(/* @__PURE__ */ new Set());
+        onNavigate(path);
+      } catch {
+      }
+    }, [invalidateCache, onNavigate, onSetSelectedItems]);
+    const [dropTargetPath, setDropTargetPath] = (0, import_react7.useState)(null);
+    const expandTimerRef = (0, import_react7.useRef)(null);
+    const expandHoverRef = (0, import_react7.useRef)(null);
+    const handleDragOver = (0, import_react7.useCallback)((e, entry) => {
+      if (!entry.isDir) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      setDropTargetPath(entry.path);
+      if (expandHoverRef.current !== entry.path) {
+        expandHoverRef.current = entry.path;
+        if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = setTimeout(() => {
+          onNavigate(entry.path);
+        }, 2e3);
+      }
+    }, [onNavigate]);
+    const handleDragLeave = (0, import_react7.useCallback)((e, entry) => {
+      e.stopPropagation();
+      setDropTargetPath((p) => p === entry.path ? null : p);
+      if (expandTimerRef.current) {
+        clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+    }, []);
+    const handleContentDrop = (0, import_react7.useCallback)(async (e, entry) => {
+      if (!entry.isDir) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDropTargetPath(null);
+      if (expandTimerRef.current) {
+        clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+      try {
+        const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+        if (!paths?.length) return;
+        const pairs = [];
+        const sourceParents = /* @__PURE__ */ new Set();
+        for (const src of paths) {
+          if (src === entry.path) continue;
+          const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+          sourceParents.add(parentDir);
+          const dest = await window.electronAPI.moveItem(src, entry.path);
+          if (dest) pairs.push({ from: src, to: dest });
+        }
+        if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+        for (const p of sourceParents) invalidateCache(p);
+        invalidateCache(entry.path);
+        onSetSelectedItems(/* @__PURE__ */ new Set());
+        onNavigate(entry.path);
+      } catch {
+      }
+    }, [invalidateCache, onNavigate, onSetSelectedItems]);
+    const handleBlankContextMenu = (0, import_react7.useCallback)(async (e) => {
       if (e.target !== gridRef.current && e.target !== contentRef.current) return;
       e.preventDefault();
       const cp = currentPathRef.current;
@@ -28892,7 +29161,7 @@
       const result = await window.electronAPI.showContextMenu("none", [], clipboardRef.current?.paths ?? null);
       if (result) await execAction(result.action, [], cp);
     }, [execAction]);
-    const handleContextMenu = (0, import_react6.useCallback)(async (e, entry) => {
+    const handleContextMenu = (0, import_react7.useCallback)(async (e, entry) => {
       e.preventDefault();
       e.stopPropagation();
       setRenamingPath(null);
@@ -28907,8 +29176,8 @@
       const result = await window.electronAPI.showContextMenu(type, paths, clipboardRef.current?.paths ?? null);
       if (result) await execAction(result.action, paths, currentPathRef.current);
     }, [onSetSelectedItems, execAction]);
-    const cutPaths = (0, import_react6.useMemo)(() => new Set(clipboard?.mode === "cut" ? clipboard.paths : []), [clipboard]);
-    return /* @__PURE__ */ import_react6.default.createElement(
+    const cutPaths = (0, import_react7.useMemo)(() => new Set(clipboard?.mode === "cut" ? clipboard.paths : []), [clipboard]);
+    return /* @__PURE__ */ import_react7.default.createElement(
       "div",
       {
         className: "pw-right",
@@ -28916,7 +29185,8 @@
         onKeyDown: handleKeyDown,
         style: { outline: "none" }
       },
-      /* @__PURE__ */ import_react6.default.createElement(
+      inputDialog,
+      /* @__PURE__ */ import_react7.default.createElement(
         Bar,
         {
           rootPath,
@@ -28929,10 +29199,13 @@
           showFiles,
           onToggleFiles: () => setShowFiles((v) => !v),
           itemCount,
-          selectedCount: selectedItems.size
+          selectedCount: selectedItems.size,
+          onCrumbsDragOver: handleCrumbsDragOver,
+          onCrumbsDragLeave: handleCrumbsDragLeave,
+          onCrumbsDrop: handleCrumbsDrop
         }
       ),
-      /* @__PURE__ */ import_react6.default.createElement(
+      /* @__PURE__ */ import_react7.default.createElement(
         "div",
         {
           className: "pw-content",
@@ -28941,11 +29214,11 @@
           onClick: handleGridClick,
           onContextMenu: handleBlankContextMenu
         },
-        loading && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-content__empty" }, "Loading..."),
-        !loading && visible.length === 0 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-content__empty" }, query || !showFolders || !showFiles ? "No items match" : "Folder is empty"),
-        !loading && visible.length > 0 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-grid", ref: gridRef, role: "list" }, visible.map((entry) => {
+        loading && /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-content__empty" }, "Loading..."),
+        !loading && visible.length === 0 && /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-content__empty" }, query || !showFolders || !showFiles ? "No items match" : "Folder is empty"),
+        !loading && visible.length > 0 && /* @__PURE__ */ import_react7.default.createElement("div", { className: `pw-grid${isListView ? " pw-grid--list" : ""}`, ref: gridRef, role: "list", style: isListView ? void 0 : { gap: `${Math.round(zoom * 0.02)}px` } }, visible.map((entry) => {
           const isRenaming = renamingPath === entry.path;
-          return /* @__PURE__ */ import_react6.default.createElement(
+          return /* @__PURE__ */ import_react7.default.createElement(
             "div",
             {
               key: entry.path,
@@ -28954,63 +29227,105 @@
                 else delete itemRefs.current[entry.path];
               },
               className: [
-                "pw-item",
-                selectedItems.has(entry.path) ? "pw-item--selected" : "",
-                cutPaths.has(entry.path) ? "pw-item--cut" : ""
+                isListView ? "pw-item-list" : "pw-item",
+                selectedItems.has(entry.path) ? isListView ? "pw-item-list--selected" : "pw-item--selected" : "",
+                cutPaths.has(entry.path) ? isListView ? "pw-item-list--cut" : "pw-item--cut" : "",
+                !isListView && dropTargetPath === entry.path ? "pw-item--drop-target" : ""
               ].filter(Boolean).join(" "),
               role: "listitem",
               title: isRenaming ? void 0 : entry.name,
               draggable: !isRenaming,
               onDragStart: (e) => handleDragStart(e, entry),
+              onDragEnd: handleDragEnd,
+              onDragOver: (e) => handleDragOver(e, entry),
+              onDragLeave: (e) => handleDragLeave(e, entry),
+              onDrop: (e) => handleContentDrop(e, entry),
               onClick: (e) => handleItemClick(e, entry),
               onDoubleClick: () => {
                 if (isRenaming) return;
                 if (entry.isDir) onNavigate(entry.path);
                 else window.electronAPI.openFile(entry.path, settingsRef.current.defaultEditor ?? "system");
               },
-              onContextMenu: (e) => handleContextMenu(e, entry)
+              onContextMenu: (e) => handleContextMenu(e, entry),
+              style: !isListView ? { width: `${itemW}px` } : void 0
             },
-            /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-item__icon-wrap" }, /* @__PURE__ */ import_react6.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size: 48 })),
-            isRenaming ? /* @__PURE__ */ import_react6.default.createElement(
+            isListView ? /* @__PURE__ */ import_react7.default.createElement(import_react7.default.Fragment, null, /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-item-list__icon" }, /* @__PURE__ */ import_react7.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size: iconSize })), isRenaming ? /* @__PURE__ */ import_react7.default.createElement(
               RenameInput,
               {
                 initialValue: entry.name,
                 onCommit: (newName) => handleRenameCommit(entry.path, newName),
                 onCancel: () => setRenamingPath(null)
               }
-            ) : /* @__PURE__ */ import_react6.default.createElement("span", { className: "pw-item__label" }, entry.name)
+            ) : /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-item-list__label" }, entry.name)) : /* @__PURE__ */ import_react7.default.createElement(import_react7.default.Fragment, null, /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-item__icon-wrap", style: { width: `${iconSize}px`, height: `${iconSize}px` } }, /* @__PURE__ */ import_react7.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size: iconSize })), isRenaming ? /* @__PURE__ */ import_react7.default.createElement(
+              RenameInput,
+              {
+                initialValue: entry.name,
+                onCommit: (newName) => handleRenameCommit(entry.path, newName),
+                onCancel: () => setRenamingPath(null)
+              }
+            ) : /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-item__label" }, entry.name))
           );
         })),
-        band && band.w > 4 && band.h > 4 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-rubber-band", style: { left: band.x, top: band.y, width: band.w, height: band.h } })
+        band && band.w > 4 && band.h > 4 && /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-rubber-band", style: { left: band.x, top: band.y, width: band.w, height: band.h } })
       )
     );
   };
   var ContentArea_default = ContentArea;
 
   // electron/renderer/components/ProjectWindow/StatusBar.jsx
-  var import_react7 = __toESM(require_react());
-  var StatusBar = ({ selectedPath, itemCount, selectedCount }) => /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-statusbar" }, /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-statusbar__path", title: selectedPath || "" }, selectedPath || ""), /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-statusbar__count" }, selectedCount > 0 ? `${selectedCount} selected` : itemCount != null ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : ""));
+  var import_react8 = __toESM(require_react());
+  var StatusBar = ({ selectedPath, itemCount, selectedCount, zoom, onZoom }) => {
+    const pct = Math.round(zoom);
+    return /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-statusbar" }, /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-statusbar__path", title: selectedPath || "" }, selectedPath || ""), /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-statusbar__count" }, selectedCount > 0 ? `${selectedCount} selected` : itemCount != null ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : ""), /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-statusbar__zoom" }, /* @__PURE__ */ import_react8.default.createElement(
+      "input",
+      {
+        type: "range",
+        className: "pw-zoom-slider",
+        min: "50",
+        max: "200",
+        step: "25",
+        value: zoom,
+        onChange: (e) => onZoom(Number(e.target.value)),
+        title: `Zoom: ${pct}%`
+      }
+    ), /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-zoom-label" }, pct, "%")));
+  };
   var StatusBar_default = StatusBar;
 
   // electron/renderer/components/ProjectWindow/index.jsx
   var SIDEBAR_MIN = 120;
   var SIDEBAR_MAX = 400;
   var SIDEBAR_DEFAULT = 180;
+  var ZOOM_DEFAULT = 100;
   var ProjectWindow = () => {
-    const [rootPath, setRootPath] = (0, import_react8.useState)(null);
-    const [currentPath, setCurrentPath] = (0, import_react8.useState)(null);
-    const [selectedPath, setSelectedPath] = (0, import_react8.useState)(null);
-    const [selectedItems, setSelectedItems] = (0, import_react8.useState)(() => /* @__PURE__ */ new Set());
-    const [expandedSet, setExpandedSet] = (0, import_react8.useState)(() => /* @__PURE__ */ new Set());
-    const [childCache, setChildCache] = (0, import_react8.useState)(() => /* @__PURE__ */ new Map());
-    const [itemCount, setItemCount] = (0, import_react8.useState)(null);
-    const [sidebarWidth, setSidebarWidth] = (0, import_react8.useState)(SIDEBAR_DEFAULT);
-    const [clipboard, setClipboard] = (0, import_react8.useState)(null);
-    const [refreshToken, setRefreshToken] = (0, import_react8.useState)(0);
-    const draggingRef = (0, import_react8.useRef)(false);
-    const startXRef = (0, import_react8.useRef)(0);
-    const startWRef = (0, import_react8.useRef)(SIDEBAR_DEFAULT);
-    const onResizeStart = (0, import_react8.useCallback)((e) => {
+    const [rootPath, setRootPath] = (0, import_react9.useState)(null);
+    const [currentPath, setCurrentPath] = (0, import_react9.useState)(null);
+    const [selectedPath, setSelectedPath] = (0, import_react9.useState)(null);
+    const [selectedItems, setSelectedItems] = (0, import_react9.useState)(() => /* @__PURE__ */ new Set());
+    const [expandedSet, setExpandedSet] = (0, import_react9.useState)(() => /* @__PURE__ */ new Set());
+    const [childCache, setChildCache] = (0, import_react9.useState)(() => /* @__PURE__ */ new Map());
+    const [itemCount, setItemCount] = (0, import_react9.useState)(null);
+    const [sidebarWidth, setSidebarWidth] = (0, import_react9.useState)(SIDEBAR_DEFAULT);
+    const [clipboard, setClipboard] = (0, import_react9.useState)(null);
+    const [refreshToken, setRefreshToken] = (0, import_react9.useState)(0);
+    const [zoom, setZoom] = (0, import_react9.useState)(ZOOM_DEFAULT);
+    const draggingRef = (0, import_react9.useRef)(false);
+    const startXRef = (0, import_react9.useRef)(0);
+    const startWRef = (0, import_react9.useRef)(SIDEBAR_DEFAULT);
+    (0, import_react9.useEffect)(() => {
+      window.electronAPI.readSettings().then((s) => {
+        if (s.zoom) setZoom(s.zoom);
+      });
+    }, []);
+    const handleZoom = (0, import_react9.useCallback)((val) => {
+      setZoom(val);
+      window.electronAPI.readSettings().then((s) => {
+        window.electronAPI.writeSettings({ ...s, zoom: val });
+      });
+    }, []);
+    const undoStackRef = (0, import_react9.useRef)([]);
+    const redoStackRef = (0, import_react9.useRef)([]);
+    const onResizeStart = (0, import_react9.useCallback)((e) => {
       e.preventDefault();
       draggingRef.current = true;
       startXRef.current = e.clientX;
@@ -29027,20 +29342,103 @@
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     }, [sidebarWidth]);
-    const loadChildren = (0, import_react8.useCallback)(async (folderPath) => {
+    const loadChildren = (0, import_react9.useCallback)(async (folderPath) => {
       if (childCache.has(folderPath)) return childCache.get(folderPath);
       const entries = await window.electronAPI.readDir(folderPath);
       setChildCache((prev) => new Map(prev).set(folderPath, entries));
       return entries;
     }, [childCache]);
-    const invalidateCache = (0, import_react8.useCallback)((dirPath) => {
+    const invalidateCache = (0, import_react9.useCallback)((dirPath) => {
       setChildCache((prev) => {
         const n = new Map(prev);
         n.delete(dirPath);
         return n;
       });
     }, []);
-    (0, import_react8.useEffect)(() => {
+    const refreshAll = (0, import_react9.useCallback)((dirs) => {
+      for (const d of dirs) invalidateCache(d);
+      setRefreshToken((t) => t + 1);
+    }, [invalidateCache]);
+    const pushUndo = (0, import_react9.useCallback)((op) => {
+      undoStackRef.current.push(op);
+      redoStackRef.current = [];
+    }, []);
+    const performUndo = (0, import_react9.useCallback)(async () => {
+      const stack = undoStackRef.current;
+      if (!stack.length) return;
+      const op = stack.pop();
+      const affected = /* @__PURE__ */ new Set();
+      try {
+        switch (op.type) {
+          case "move": {
+            for (const { from, to } of op.pairs) {
+              const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
+              const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
+              await window.electronAPI.moveItem(to, srcParent);
+              affected.add(srcParent);
+              affected.add(destParent);
+            }
+            break;
+          }
+          case "create": {
+            await window.electronAPI.deleteItem(op.path, false);
+            affected.add(op.parentDir);
+            break;
+          }
+          case "rename": {
+            await window.electronAPI.rename(op.newPath, op.oldName);
+            affected.add(op.parentDir);
+            break;
+          }
+          case "delete": {
+            break;
+          }
+        }
+        redoStackRef.current.push(op);
+        refreshAll([...affected]);
+      } catch (err) {
+        console.warn("Undo failed:", err);
+      }
+    }, [refreshAll]);
+    const performRedo = (0, import_react9.useCallback)(async () => {
+      const stack = redoStackRef.current;
+      if (!stack.length) return;
+      const op = stack.pop();
+      const affected = /* @__PURE__ */ new Set();
+      try {
+        switch (op.type) {
+          case "move": {
+            for (const { from, to } of op.pairs) {
+              const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
+              const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
+              await window.electronAPI.moveItem(from, to);
+              affected.add(srcParent);
+              affected.add(destParent);
+            }
+            break;
+          }
+          case "create": {
+            if (op.isDir) await window.electronAPI.newFolder(op.parentDir, op.name);
+            else await window.electronAPI.newFile(op.parentDir, op.name);
+            affected.add(op.parentDir);
+            break;
+          }
+          case "rename": {
+            await window.electronAPI.rename(op.oldPath, op.newName);
+            affected.add(op.parentDir);
+            break;
+          }
+          case "delete": {
+            break;
+          }
+        }
+        undoStackRef.current.push(op);
+        refreshAll([...affected]);
+      } catch (err) {
+        console.warn("Redo failed:", err);
+      }
+    }, [refreshAll]);
+    (0, import_react9.useEffect)(() => {
       if (!rootPath) return;
       window.electronAPI.watchDir(rootPath);
       const unsub = window.electronAPI.onFsChange((affectedDir) => {
@@ -29055,7 +29453,7 @@
         window.electronAPI.unwatchDir(rootPath);
       };
     }, [rootPath, invalidateCache]);
-    const openProject = (0, import_react8.useCallback)((folderPath) => {
+    const openProject = (0, import_react9.useCallback)((folderPath) => {
       setRootPath(folderPath);
       setCurrentPath(folderPath);
       setSelectedPath(folderPath);
@@ -29065,8 +29463,10 @@
       setItemCount(null);
       setClipboard(null);
       setRefreshToken(0);
+      undoStackRef.current = [];
+      redoStackRef.current = [];
     }, []);
-    const closeProject = (0, import_react8.useCallback)(() => {
+    const closeProject = (0, import_react9.useCallback)(() => {
       setRootPath(null);
       setCurrentPath(null);
       setSelectedPath(null);
@@ -29075,8 +29475,10 @@
       setChildCache(/* @__PURE__ */ new Map());
       setItemCount(null);
       setClipboard(null);
+      undoStackRef.current = [];
+      redoStackRef.current = [];
     }, []);
-    (0, import_react8.useEffect)(() => {
+    (0, import_react9.useEffect)(() => {
       const u1 = window.electronAPI.onMenuEvent("menu:openProject", openProject);
       const u2 = window.electronAPI.onMenuEvent("menu:newProject", openProject);
       const u3 = window.electronAPI.onMenuEvent("menu:closeProject", closeProject);
@@ -29089,36 +29491,45 @@
         u4();
       };
     }, [openProject, closeProject]);
-    const handleSidebarSelect = (0, import_react8.useCallback)((folderPath) => {
+    const handleSidebarSelect = (0, import_react9.useCallback)((folderPath) => {
       setSelectedPath(folderPath);
       setCurrentPath(folderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
     }, []);
-    const handleToggle = (0, import_react8.useCallback)((folderPath) => {
+    const handleToggle = (0, import_react9.useCallback)((folderPath) => {
       setExpandedSet((prev) => {
         const n = new Set(prev);
         n.has(folderPath) ? n.delete(folderPath) : n.add(folderPath);
         return n;
       });
     }, []);
-    const handleNavigate = (0, import_react8.useCallback)((folderPath) => {
+    const handleNavigate = (0, import_react9.useCallback)((folderPath) => {
       setCurrentPath(folderPath);
       setSelectedPath(folderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
     }, []);
-    const handleSetSelectedItems = (0, import_react8.useCallback)((nextSet) => setSelectedItems(nextSet), []);
-    const handleItemsLoaded = (0, import_react8.useCallback)((count) => setItemCount(count), []);
-    const handleSidebarDrop = (0, import_react8.useCallback)(async (targetFolderPath, draggedPaths) => {
+    const handleSetSelectedItems = (0, import_react9.useCallback)((nextSet) => setSelectedItems(nextSet), []);
+    const handleItemsLoaded = (0, import_react9.useCallback)((count) => setItemCount(count), []);
+    const handleSidebarDrop = (0, import_react9.useCallback)(async (targetFolderPath, draggedPaths) => {
+      const pairs = [];
+      const sourceParents = /* @__PURE__ */ new Set();
       for (const src of draggedPaths) {
         if (src === targetFolderPath) continue;
-        await window.electronAPI.moveItem(src, targetFolderPath);
+        const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+        sourceParents.add(parentDir);
+        const dest = await window.electronAPI.moveItem(src, targetFolderPath);
+        if (dest) pairs.push({ from: src, to: dest });
       }
+      if (pairs.length) pushUndo({ type: "move", pairs });
+      for (const p of sourceParents) invalidateCache(p);
+      invalidateCache(targetFolderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
-    }, []);
+      setRefreshToken((t) => t + 1);
+    }, [invalidateCache, pushUndo]);
     if (!rootPath) {
-      return /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-empty" }, /* @__PURE__ */ import_react8.default.createElement("svg", { className: "pw-empty__svg", width: "40", height: "40", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react8.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z", fill: "#c8a84b" })), /* @__PURE__ */ import_react8.default.createElement("span", null, "No project open"), /* @__PURE__ */ import_react8.default.createElement("span", { style: { fontSize: 11, color: "#444" } }, "File \u2192 Open Project")));
+      return /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-empty" }, /* @__PURE__ */ import_react9.default.createElement("svg", { className: "pw-empty__svg", width: "40", height: "40", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react9.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z", fill: "#c8a84b" })), /* @__PURE__ */ import_react9.default.createElement("span", null, "No project open"), /* @__PURE__ */ import_react9.default.createElement("span", { style: { fontSize: 11, color: "#444" } }, "File \u2192 Open Project")));
     }
-    return /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-body" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-sidebar", style: { width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX } }, /* @__PURE__ */ import_react8.default.createElement(
+    return /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-body" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-sidebar", style: { width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX } }, /* @__PURE__ */ import_react9.default.createElement(
       SidebarTree_default,
       {
         rootPath,
@@ -29132,7 +29543,7 @@
         invalidateCache,
         onDrop: handleSidebarDrop
       }
-    ), /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-sidebar__resize", onMouseDown: onResizeStart })), /* @__PURE__ */ import_react8.default.createElement(
+    ), /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-sidebar__resize", onMouseDown: onResizeStart })), /* @__PURE__ */ import_react9.default.createElement(
       ContentArea_default,
       {
         rootPath,
@@ -29145,14 +29556,20 @@
         itemCount,
         clipboard,
         onClipboardChange: setClipboard,
-        invalidateCache
+        invalidateCache,
+        pushUndo,
+        performUndo,
+        performRedo,
+        zoom
       }
-    )), /* @__PURE__ */ import_react8.default.createElement(
+    )), /* @__PURE__ */ import_react9.default.createElement(
       StatusBar_default,
       {
         selectedCount: selectedItems.size,
         selectedPath: selectedItems.size === 1 ? [...selectedItems][0] : currentPath,
-        itemCount
+        itemCount,
+        zoom,
+        onZoom: handleZoom
       }
     ));
   };
@@ -29160,7 +29577,7 @@
 
   // electron/renderer/components/Panel4.jsx
   var Panel4 = () => {
-    return /* @__PURE__ */ import_react9.default.createElement(ProjectWindow_default, null);
+    return /* @__PURE__ */ import_react10.default.createElement(ProjectWindow_default, null);
   };
   var Panel4_default = Panel4;
 
@@ -29232,19 +29649,19 @@
   var factory = (node) => {
     switch (node.getComponent()) {
       case "panel1":
-        return /* @__PURE__ */ import_react10.default.createElement(Panel1_default, null);
+        return /* @__PURE__ */ import_react11.default.createElement(Panel1_default, null);
       case "panel3":
-        return /* @__PURE__ */ import_react10.default.createElement(Panel3_default, null);
+        return /* @__PURE__ */ import_react11.default.createElement(Panel3_default, null);
       case "panel4":
-        return /* @__PURE__ */ import_react10.default.createElement(Panel4_default, null);
+        return /* @__PURE__ */ import_react11.default.createElement(Panel4_default, null);
       case "panel5":
-        return /* @__PURE__ */ import_react10.default.createElement(Panel5_default, null);
+        return /* @__PURE__ */ import_react11.default.createElement(Panel5_default, null);
       default:
         return null;
     }
   };
-  var App = () => /* @__PURE__ */ import_react10.default.createElement(Layout, { model, factory });
-  import_client2.default.createRoot(document.getElementById("root")).render(/* @__PURE__ */ import_react10.default.createElement(App, null));
+  var App = () => /* @__PURE__ */ import_react11.default.createElement(Layout, { model, factory });
+  import_client2.default.createRoot(document.getElementById("root")).render(/* @__PURE__ */ import_react11.default.createElement(App, null));
 })();
 /*! Bundled license information:
 

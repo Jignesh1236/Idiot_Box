@@ -1,0 +1,22 @@
+{
+  "name": "ppoo",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main/index.js",
+  "scripts": {
+    "build:renderer": "esbuild electron/renderer/index.jsx --bundle --outfile=electron/renderer/bundle.js --platform=browser --loader:.css=css --loader:.jsx=jsx",
+    "build:settings": "esbuild electron/renderer/settings-entry.jsx --bundle --outfile=electron/renderer/settings-bundle.js --platform=browser --loader:.css=css --loader:.jsx=jsx",
+    "build": "npm run build:renderer && npm run build:settings",
+    "start": "npm run build && electron ."
+  },
+  "dependencies": {
+    "flexlayout-react": "^0.8.19",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "vscode-icons-js": "^11.6.1"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "esbuild": "^0.25.6"
+  }
+}

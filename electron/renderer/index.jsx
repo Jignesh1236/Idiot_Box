@@ -1,0 +1,98 @@
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { Layout, Model } from "flexlayout-react";
+import "flexlayout-react/style/dark.css";
+import "./layout.css";
+
+import Panel1 from "./components/Panel1.jsx";
+import Panel3 from "./components/Panel3.jsx";
+import Panel4 from "./components/Panel4.jsx";
+import Panel5 from "./components/Panel5.jsx";
+
+// ─── FlexLayout JSON Model ────────────────────────────────────────────────────
+//
+//  Root column
+//  ├── Top row  (weight 65)
+//  │   ├── Panel1  — left full-height   (weight 22)
+//  │   ├── Panel3  — center main area   (weight 53)
+//  │   └── Panel5  — right full-height  (weight 25)
+//  └── Bottom row  (weight 35)
+//      └── Panel4  — spans full width (left + center + right)
+//
+const json = {
+  global: {
+    tabEnableClose: false,
+    tabEnableRename: false,
+    tabEnableDrag: true,
+    tabSetEnableMaximize: true,
+    tabSetEnableDrop: true,
+    tabSetHeaderShown: true,
+    tabSetTabStripHeight: 26,
+    splitterSize: 6,
+    splitterExtra: 4,
+  },
+  layout: {
+    type: "row",
+    weight: 100,
+    children: [
+      // ── Left + Center column (stacked: top panels + bottom Panel4) ───────
+      {
+        type: "row",
+        weight: 75,
+        children: [
+          // Top section: Panel1 (left) + Panel3 (center)
+          {
+            type: "row",
+            weight: 65,
+            children: [
+              // Panel1 — left
+              {
+                type: "tabset",
+                weight: 30,
+                children: [{ type: "tab", name: "panel1", component: "panel1" }],
+              },
+              // Panel3 — center main
+              {
+                type: "tabset",
+                weight: 70,
+                children: [{ type: "tab", name: "panel3", component: "panel3" }],
+              },
+            ],
+          },
+          // Bottom section: Panel4 spans full left+center width
+          {
+            type: "tabset",
+            weight: 35,
+            children: [{ type: "tab", name: "Project", component: "panel4" }],
+          },
+        ],
+      },
+      // ── Right column — Panel5 full height ────────────────────────────────
+      {
+        type: "tabset",
+        weight: 25,
+        children: [{ type: "tab", name: "panel5", component: "panel5" }],
+      },
+    ],
+  },
+};
+
+const model = Model.fromJson(json);
+
+// ─── Component factory ───────────────────────────────────────────────────────
+const factory = (node) => {
+  switch (node.getComponent()) {
+    case "panel1": return <Panel1 />;
+    case "panel3": return <Panel3 />;
+    case "panel4": return <Panel4 />;
+    case "panel5": return <Panel5 />;
+    default:       return null;
+  }
+};
+
+// ─── Root app ────────────────────────────────────────────────────────────────
+const App = () => (
+  <Layout model={model} factory={factory} />
+);
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);

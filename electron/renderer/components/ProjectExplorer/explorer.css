@@ -1,0 +1,283 @@
+/* ─── Project Explorer — Unity-inspired dark theme ────────────────────────── */
+
+.pe-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #1e1e1e;
+  border-radius: 3px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  color: #c8c8c8;
+  user-select: none;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.pe-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pe-open-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 32px;
+  background: #2d2d2d;
+  border: 1px solid #3c3c3c;
+  border-radius: 2px;
+  color: #c8c8c8;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  outline: none;
+}
+
+.pe-open-btn:hover {
+  background: #383838;
+  border-color: #5a9fd4;
+  color: #e8e8e8;
+}
+
+.pe-open-btn:active {
+  background: #2a2a2a;
+}
+
+.pe-open-btn__svg {
+  display: block;
+  opacity: 0.7;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.pe-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  background: #252525;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.pe-header__title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.pe-header__icon {
+  flex-shrink: 0;
+  color: #aaa;
+}
+
+.pe-header__name {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: #d4d4d4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pe-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Icon buttons ────────────────────────────────────────────────────────── */
+.pe-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  color: #999;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  outline: none;
+}
+
+.pe-icon-btn:hover  { background: #3a3a3a; color: #d4d4d4; }
+.pe-icon-btn:active { background: #444; }
+
+/* ── Dropdown menu ───────────────────────────────────────────────────────── */
+.pe-menu-wrap { position: relative; }
+
+.pe-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 2px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.pe-dropdown__empty {
+  padding: 8px 12px;
+  color: #666;
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* ── Hints ───────────────────────────────────────────────────────────────── */
+.pe-loading, .pe-tree__empty {
+  padding: 16px 12px;
+  color: #555;
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* ── Tree container ──────────────────────────────────────────────────────── */
+.pe-tree {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+  padding: 4px 0;
+}
+
+.pe-tree::-webkit-scrollbar       { width: 6px; }
+.pe-tree::-webkit-scrollbar-track { background: transparent; }
+.pe-tree::-webkit-scrollbar-thumb { background: #3c3c3c; border-radius: 2px; }
+.pe-tree::-webkit-scrollbar-thumb:hover { background: #555; }
+.pe-tree:focus-visible { outline: 1px solid #5a9fd4; outline-offset: -1px; }
+
+/* ── Folder node ─────────────────────────────────────────────────────────── */
+.pe-node { display: block; }
+
+.pe-node__row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding-right: 8px;
+  cursor: pointer;
+  border-radius: 0;
+  margin: 0;
+  transition: background 0.08s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.pe-node__row:hover             { background: #2a2a2a; }
+.pe-node__row--selected         { background: #2c4f6e !important; }
+.pe-node__row--selected .pe-node__arrow,
+.pe-node__row--selected .pe-node__label { color: #ffffff; }
+
+/* ── Arrow ───────────────────────────────────────────────────────────────── */
+.pe-node__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #777;
+  transition: transform 0.12s ease;
+  cursor: pointer;
+}
+
+.pe-node__arrow:hover          { color: #c8c8c8; }
+.pe-node__arrow--open          { transform: rotate(90deg); }
+.pe-node__arrow--hidden        { visibility: hidden; pointer-events: none; }
+
+/* ── Folder icon ─────────────────────────────────────────────────────────── */
+.pe-node__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pe-node__icon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+}
+
+/* ── Label ───────────────────────────────────────────────────────────────── */
+.pe-node__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #c8c8c8;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.pe-node__spinner {
+  font-size: 11px;
+  color: #555;
+  margin-left: 4px;
+  animation: pe-fade 0.8s linear infinite;
+}
+
+@keyframes pe-fade {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Children expand animation ───────────────────────────────────────────── */
+.pe-node__children {
+  display: block;
+  animation: pe-expand 0.12s ease-out;
+  transform-origin: top;
+}
+
+@keyframes pe-expand {
+  from { opacity: 0; transform: scaleY(0.94); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+
+/* ── Empty folder hint ───────────────────────────────────────────────────── */
+.pe-node__empty {
+  height: 20px;
+  line-height: 20px;
+  font-size: 10.5px;
+  color: #444;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* ── Inline rename input ─────────────────────────────────────────────────── */
+.pe-node__rename-input {
+  flex: 1;
+  height: 18px;
+  background: #1a3a52;
+  border: 1px solid #5a9fd4;
+  border-radius: 1px;
+  color: #ffffff;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0 4px;
+  outline: none;
+  min-width: 0;
+}
+
+/* ── Cut item visual ─────────────────────────────────────────────────────── */
+.pe-node__row--cut { opacity: 0.45; }

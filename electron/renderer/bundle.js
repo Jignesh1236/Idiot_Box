@@ -28185,7 +28185,21 @@
 
   // electron/renderer/components/ProjectWindow/SidebarTree.jsx
   var ArrowSvg = () => /* @__PURE__ */ import_react4.default.createElement("svg", { width: "8", height: "8", viewBox: "0 0 8 8", fill: "currentColor" }, /* @__PURE__ */ import_react4.default.createElement("path", { d: "M2 1l4 3-4 3V1z" }));
-  var TreeRow = ({ label, iconEl, depth, hasChildren, isOpen, isSelected, isDropTarget, onClick, onArrowClick, onDragOver, onDragLeave, onDrop }) => /* @__PURE__ */ import_react4.default.createElement(
+  var TreeRow = ({
+    label,
+    iconEl,
+    depth,
+    hasChildren,
+    isOpen,
+    isSelected,
+    isDropTarget,
+    onClick,
+    onArrowClick,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onContextMenu
+  }) => /* @__PURE__ */ import_react4.default.createElement(
     "div",
     {
       className: [
@@ -28198,6 +28212,7 @@
       onDragOver,
       onDragLeave,
       onDrop,
+      onContextMenu,
       role: "treeitem",
       "aria-expanded": hasChildren ? isOpen : void 0,
       "aria-selected": isSelected
@@ -28217,7 +28232,20 @@
     /* @__PURE__ */ import_react4.default.createElement("span", { className: "pw-tree-row__icon", "aria-hidden": "true" }, iconEl),
     /* @__PURE__ */ import_react4.default.createElement("span", { className: "pw-tree-row__label", title: label }, label)
   );
-  var FolderNode = ({ entry, depth, selectedPath, expandedSet, childCache, onSelect, onToggle, loadChildren, onDrop, dropTarget, setDropTarget }) => {
+  var FolderNode = ({
+    entry,
+    depth,
+    selectedPath,
+    expandedSet,
+    childCache,
+    onSelect,
+    onToggle,
+    loadChildren,
+    onDrop,
+    dropTarget,
+    setDropTarget,
+    onContextMenu
+  }) => {
     const isOpen = expandedSet.has(entry.path);
     const isSelected = selectedPath === entry.path;
     const children = childCache.get(entry.path) ?? null;
@@ -28238,7 +28266,7 @@
     }, [entry.path, setDropTarget]);
     const handleDragLeave = (0, import_react4.useCallback)((e) => {
       e.stopPropagation();
-      setDropTarget((prev) => prev === entry.path ? null : prev);
+      setDropTarget((p) => p === entry.path ? null : p);
     }, [entry.path, setDropTarget]);
     const handleDrop = (0, import_react4.useCallback)((e) => {
       e.preventDefault();
@@ -28250,6 +28278,11 @@
       } catch {
       }
     }, [entry.path, onDrop, setDropTarget]);
+    const handleCtxMenu = (0, import_react4.useCallback)((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onContextMenu(entry.path);
+    }, [entry.path, onContextMenu]);
     return /* @__PURE__ */ import_react4.default.createElement(import_react4.default.Fragment, null, /* @__PURE__ */ import_react4.default.createElement(
       TreeRow,
       {
@@ -28264,7 +28297,8 @@
         onArrowClick: () => onToggle(entry.path),
         onDragOver: handleDragOver,
         onDragLeave: handleDragLeave,
-        onDrop: handleDrop
+        onDrop: handleDrop,
+        onContextMenu: handleCtxMenu
       }
     ), isOpen && hasLoaded && children && children.map((child) => /* @__PURE__ */ import_react4.default.createElement(
       FolderNode,
@@ -28280,20 +28314,37 @@
         loadChildren,
         onDrop,
         dropTarget,
-        setDropTarget
+        setDropTarget,
+        onContextMenu
       }
     )), isOpen && loading && /* @__PURE__ */ import_react4.default.createElement("div", { style: { paddingLeft: `${6 + (depth + 1) * 14 + 14}px`, color: "#555", fontSize: 11, height: 20, lineHeight: "20px" } }, "..."));
   };
-  var SidebarTree = ({ rootPath, selectedPath, expandedSet, childCache, onSelect, onToggle, loadChildren, onDrop }) => {
+  var SidebarTree = ({
+    rootPath,
+    selectedPath,
+    expandedSet,
+    childCache,
+    onSelect,
+    onToggle,
+    loadChildren,
+    onDrop,
+    clipboard,
+    invalidateCache
+  }) => {
     const [rootChildren, setRootChildren] = (0, import_react4.useState)(null);
     const [dropTarget, setDropTarget] = (0, import_react4.useState)(null);
+    const [localRefresh, setLocalRefresh] = (0, import_react4.useState)(0);
     (0, import_react4.useEffect)(() => {
       if (!rootPath) {
         setRootChildren(null);
         return;
       }
-      loadChildren(rootPath).then(setRootChildren);
-    }, [rootPath, loadChildren]);
+      window.electronAPI.readDir(rootPath).then(setRootChildren);
+    }, [rootPath, localRefresh]);
+    (0, import_react4.useEffect)(() => {
+      if (!rootPath || childCache.has(rootPath)) return;
+      window.electronAPI.readDir(rootPath).then(setRootChildren);
+    }, [rootPath, childCache]);
     const rootName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).pop() : "";
     const handleRootDragOver = (e) => {
       e.preventDefault();
@@ -28310,6 +28361,77 @@
       } catch {
       }
     };
+    const handleContextMenu = (0, import_react4.useCallback)(async (folderPath) => {
+      if (folderPath !== selectedPath) onSelect(folderPath);
+      const parentDir = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
+      const result = await window.electronAPI.showContextMenu(
+        "folder",
+        [folderPath],
+        clipboard?.paths ?? null
+      );
+      if (!result) return;
+      const refresh = () => {
+        invalidateCache(folderPath);
+        invalidateCache(parentDir);
+        setLocalRefresh((k) => k + 1);
+      };
+      switch (result.action) {
+        case "newFolder": {
+          const n = window.prompt("Folder name:", "New Folder");
+          if (n?.trim()) {
+            await window.electronAPI.newFolder(folderPath, n.trim());
+            refresh();
+          }
+          break;
+        }
+        case "newFile": {
+          const n = window.prompt("File name:", "New File.txt");
+          if (n?.trim()) {
+            await window.electronAPI.newFile(folderPath, n.trim());
+            refresh();
+          }
+          break;
+        }
+        case "rename": {
+          const oldName = folderPath.replace(/.*[\\/]/, "");
+          const n = window.prompt("Rename to:", oldName);
+          if (n?.trim() && n.trim() !== oldName) {
+            await window.electronAPI.rename(folderPath, n.trim());
+            invalidateCache(parentDir);
+            setLocalRefresh((k) => k + 1);
+          }
+          break;
+        }
+        case "delete": {
+          const name = folderPath.replace(/.*[\\/]/, "");
+          if (window.confirm(`Delete "${name}"?`)) {
+            await window.electronAPI.deleteItem(folderPath, true);
+            invalidateCache(parentDir);
+            setLocalRefresh((k) => k + 1);
+          }
+          break;
+        }
+        case "duplicate": {
+          await window.electronAPI.duplicate(folderPath);
+          invalidateCache(parentDir);
+          setLocalRefresh((k) => k + 1);
+          break;
+        }
+        case "copy":
+          if (clipboard !== void 0) {
+          }
+          break;
+        case "reveal":
+          window.electronAPI.revealInExplorer(folderPath);
+          break;
+        case "copyPath":
+          navigator.clipboard.writeText(folderPath);
+          break;
+        case "refresh":
+          refresh();
+          break;
+      }
+    }, [selectedPath, onSelect, clipboard, invalidateCache]);
     return /* @__PURE__ */ import_react4.default.createElement("div", { className: "pw-sidebar__scroll", role: "tree", "aria-label": "Project tree" }, rootPath && /* @__PURE__ */ import_react4.default.createElement(import_react4.default.Fragment, null, /* @__PURE__ */ import_react4.default.createElement("div", { className: "pw-section" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "pw-section__label" }, "Assets")), /* @__PURE__ */ import_react4.default.createElement(
       TreeRow,
       {
@@ -28324,7 +28446,8 @@
         onArrowClick: () => onToggle(rootPath),
         onDragOver: handleRootDragOver,
         onDragLeave: handleRootDragLeave,
-        onDrop: handleRootDrop
+        onDrop: handleRootDrop,
+        onContextMenu: () => handleContextMenu(rootPath)
       }
     ), expandedSet.has(rootPath) && rootChildren && rootChildren.map((entry) => /* @__PURE__ */ import_react4.default.createElement(
       FolderNode,
@@ -28340,7 +28463,8 @@
         loadChildren,
         onDrop,
         dropTarget,
-        setDropTarget
+        setDropTarget,
+        onContextMenu: handleContextMenu
       }
     ))));
   };
@@ -28373,8 +28497,37 @@
   // electron/renderer/components/ProjectWindow/ContentArea.jsx
   var IcoFolder = () => /* @__PURE__ */ import_react6.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z" }));
   var IcoFile = () => /* @__PURE__ */ import_react6.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4Zm5.5 1.5v3A1.5 1.5 0 0 0 11 6h3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5Z" }));
-  var IcoEye = () => /* @__PURE__ */ import_react6.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z" }), /* @__PURE__ */ import_react6.default.createElement("path", { d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" }));
-  var IconBtn = ({ title, active, onClick, children }) => /* @__PURE__ */ import_react6.default.createElement("button", { className: `pw-bar-btn${active ? " pw-bar-btn--active" : ""}`, title, onClick, "aria-pressed": active }, children);
+  var IcoEye = () => /* @__PURE__ */ import_react6.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z" }), /* @__PURE__ */ import_react6.default.createElement("path", { d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" }));
+  var IconBtn = ({ title, active, onClick, children }) => /* @__PURE__ */ import_react6.default.createElement("button", { className: `pw-bar-btn${active ? " pw-bar-btn--active" : ""}`, title, onClick }, children);
+  var RenameInput = ({ initialValue, onCommit, onCancel }) => {
+    const [val, setVal] = (0, import_react6.useState)(initialValue);
+    const ref = (0, import_react6.useRef)(null);
+    (0, import_react6.useEffect)(() => {
+      ref.current?.focus();
+      ref.current?.select();
+    }, []);
+    const commit = () => {
+      const v = val.trim();
+      if (v && v !== initialValue) onCommit(v);
+      else onCancel();
+    };
+    return /* @__PURE__ */ import_react6.default.createElement(
+      "input",
+      {
+        ref,
+        className: "pw-rename-input",
+        value: val,
+        onChange: (e) => setVal(e.target.value),
+        onBlur: commit,
+        onKeyDown: (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") onCancel();
+        },
+        onClick: (e) => e.stopPropagation()
+      }
+    );
+  };
   var Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, itemCount, selectedCount }) => {
     const crumbs = [];
     if (rootPath && currentPath) {
@@ -28397,16 +28550,29 @@
         title: c.path
       },
       c.label
-    )))), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__actions" }, /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__search" }, /* @__PURE__ */ import_react6.default.createElement("svg", { className: "pw-bar__search-ico", width: "11", height: "11", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.868-3.833zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" })), /* @__PURE__ */ import_react6.default.createElement("input", { className: "pw-bar__search-input", type: "text", placeholder: "Search", value: query, onChange: (e) => onQuery(e.target.value), spellCheck: false }), query && /* @__PURE__ */ import_react6.default.createElement("button", { className: "pw-bar__search-clear", onClick: () => onQuery("") }, "\xD7")), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__divider" }), /* @__PURE__ */ import_react6.default.createElement(IconBtn, { title: "Toggle folders", active: !showFolders, onClick: onToggleFolders }, /* @__PURE__ */ import_react6.default.createElement(IcoFolder, null)), /* @__PURE__ */ import_react6.default.createElement(IconBtn, { title: "Toggle files", active: !showFiles, onClick: onToggleFiles }, /* @__PURE__ */ import_react6.default.createElement(IcoFile, null)), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar-count", title: eyeLabel }, /* @__PURE__ */ import_react6.default.createElement(IcoEye, null), eyeLabel && /* @__PURE__ */ import_react6.default.createElement("span", { className: "pw-bar-count__label" }, selectedCount > 0 ? selectedCount : itemCount))));
+    )))), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__actions" }, /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__search" }, /* @__PURE__ */ import_react6.default.createElement("svg", { className: "pw-bar__search-ico", width: "11", height: "11", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react6.default.createElement("path", { d: "M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.868-3.833zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" })), /* @__PURE__ */ import_react6.default.createElement(
+      "input",
+      {
+        className: "pw-bar__search-input",
+        type: "text",
+        placeholder: "Search",
+        value: query,
+        onChange: (e) => onQuery(e.target.value),
+        spellCheck: false
+      }
+    ), query && /* @__PURE__ */ import_react6.default.createElement("button", { className: "pw-bar__search-clear", onClick: () => onQuery("") }, "\xD7")), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar__divider" }), /* @__PURE__ */ import_react6.default.createElement(IconBtn, { title: "Show folders", active: showFolders, onClick: onToggleFolders }, /* @__PURE__ */ import_react6.default.createElement(IcoFolder, null)), /* @__PURE__ */ import_react6.default.createElement(IconBtn, { title: "Show files", active: showFiles, onClick: onToggleFiles }, /* @__PURE__ */ import_react6.default.createElement(IcoFile, null)), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-bar-count", title: eyeLabel }, /* @__PURE__ */ import_react6.default.createElement(IcoEye, null), eyeLabel && /* @__PURE__ */ import_react6.default.createElement("span", { className: "pw-bar-count__label" }, selectedCount > 0 ? selectedCount : itemCount))));
   };
   var ContentArea = ({
     rootPath,
     currentPath,
+    refreshToken,
     selectedItems,
     onSetSelectedItems,
     onNavigate,
     onItemsLoaded,
     itemCount,
+    clipboard,
+    onClipboardChange,
     invalidateCache
   }) => {
     const [entries, setEntries] = (0, import_react6.useState)([]);
@@ -28415,27 +28581,53 @@
     const [showFolders, setShowFolders] = (0, import_react6.useState)(true);
     const [showFiles, setShowFiles] = (0, import_react6.useState)(true);
     const [band, setBand] = (0, import_react6.useState)(null);
+    const [renamingPath, setRenamingPath] = (0, import_react6.useState)(null);
     const gridRef = (0, import_react6.useRef)(null);
     const contentRef = (0, import_react6.useRef)(null);
     const bandOrigin = (0, import_react6.useRef)(null);
     const itemRefs = (0, import_react6.useRef)({});
-    const [settings] = useSettings_default();
     const anchorRef = (0, import_react6.useRef)(null);
+    const selectedItemsRef = (0, import_react6.useRef)(selectedItems);
+    const clipboardRef = (0, import_react6.useRef)(clipboard);
+    const currentPathRef = (0, import_react6.useRef)(currentPath);
+    const visibleRef = (0, import_react6.useRef)([]);
     (0, import_react6.useEffect)(() => {
-      if (!currentPath) {
+      selectedItemsRef.current = selectedItems;
+    }, [selectedItems]);
+    (0, import_react6.useEffect)(() => {
+      clipboardRef.current = clipboard;
+    }, [clipboard]);
+    (0, import_react6.useEffect)(() => {
+      currentPathRef.current = currentPath;
+    }, [currentPath]);
+    const [settings] = useSettings_default();
+    const settingsRef = (0, import_react6.useRef)(settings);
+    (0, import_react6.useEffect)(() => {
+      settingsRef.current = settings;
+    }, [settings]);
+    const loadEntries = (0, import_react6.useCallback)(() => {
+      const cp = currentPathRef.current;
+      if (!cp) {
         setEntries([]);
         return;
       }
       setLoading(true);
-      window.electronAPI.readDirAll(currentPath).then((data) => {
+      window.electronAPI.readDirAll(cp).then((data) => {
         setEntries(data);
         if (onItemsLoaded) onItemsLoaded(data.length);
       }).finally(() => setLoading(false));
+    }, [onItemsLoaded]);
+    (0, import_react6.useEffect)(() => {
+      loadEntries();
     }, [currentPath]);
+    (0, import_react6.useEffect)(() => {
+      if (refreshToken > 0) loadEntries();
+    }, [refreshToken]);
     (0, import_react6.useEffect)(() => {
       setQuery("");
       setShowFolders(true);
       setShowFiles(true);
+      setRenamingPath(null);
     }, [currentPath]);
     const visible = (0, import_react6.useMemo)(() => {
       let r = entries;
@@ -28447,39 +28639,205 @@
       }
       return r;
     }, [entries, showFolders, showFiles, query]);
-    const openFile = (0, import_react6.useCallback)(async (p) => {
-      await window.electronAPI.openFile(p, settings.defaultEditor ?? "system");
-    }, [settings.defaultEditor]);
+    (0, import_react6.useEffect)(() => {
+      visibleRef.current = visible;
+    }, [visible]);
+    const execAction = (0, import_react6.useCallback)(async (action, targetPaths, targetDir) => {
+      const sel = selectedItemsRef.current;
+      const clip = clipboardRef.current;
+      const cp = currentPathRef.current;
+      const dir = targetDir ?? cp;
+      switch (action) {
+        // ── Open ────────────────────────────────────────────────────────────
+        case "open": {
+          for (const p of targetPaths) {
+            const s = await window.electronAPI.stat(p);
+            if (s.isDir) onNavigate(p);
+            else await window.electronAPI.openFile(p, settingsRef.current.defaultEditor ?? "system");
+          }
+          return;
+        }
+        case "openWith": {
+          for (const p of targetPaths) await window.electronAPI.openFile(p, "system");
+          return;
+        }
+        // ── Create ──────────────────────────────────────────────────────────
+        case "newFolder": {
+          const n = window.prompt("Folder name:", "New Folder");
+          if (n?.trim()) {
+            await window.electronAPI.newFolder(dir, n.trim());
+            loadEntries();
+          }
+          return;
+        }
+        case "newFile": {
+          const n = window.prompt("File name:", "New File.txt");
+          if (n?.trim()) {
+            await window.electronAPI.newFile(dir, n.trim());
+            loadEntries();
+          }
+          return;
+        }
+        // ── Rename — trigger inline UI ──────────────────────────────────────
+        case "rename": {
+          if (targetPaths.length === 1) setRenamingPath(targetPaths[0]);
+          return;
+        }
+        // ── Delete ──────────────────────────────────────────────────────────
+        case "delete": {
+          const names = targetPaths.map((p) => p.replace(/.*[\\/]/, ""));
+          const msg = targetPaths.length === 1 ? `Delete "${names[0]}"?` : `Delete ${targetPaths.length} items?`;
+          if (!window.confirm(msg)) return;
+          for (const p of targetPaths) await window.electronAPI.deleteItem(p, true);
+          onSetSelectedItems(/* @__PURE__ */ new Set());
+          invalidateCache(dir);
+          return;
+        }
+        // ── Duplicate ────────────────────────────────────────────────────────
+        case "duplicate": {
+          for (const p of targetPaths) await window.electronAPI.duplicate(p);
+          invalidateCache(dir);
+          return;
+        }
+        // ── Clipboard ────────────────────────────────────────────────────────
+        case "copy":
+          onClipboardChange({ paths: targetPaths, mode: "copy" });
+          return;
+        case "cut":
+          onClipboardChange({ paths: targetPaths, mode: "cut" });
+          return;
+        case "paste": {
+          if (!clip?.paths?.length) return;
+          for (const src of clip.paths) {
+            if (clip.mode === "copy") await window.electronAPI.copyItem(src, dir);
+            else await window.electronAPI.moveItem(src, dir);
+          }
+          if (clip.mode === "cut") onClipboardChange(null);
+          invalidateCache(dir);
+          return;
+        }
+        // ── Misc ─────────────────────────────────────────────────────────────
+        case "reveal":
+          if (targetPaths[0]) window.electronAPI.revealInExplorer(targetPaths[0]);
+          else window.electronAPI.revealInExplorer(dir);
+          return;
+        case "copyPath":
+          navigator.clipboard.writeText(targetPaths.length ? targetPaths.join("\n") : dir);
+          return;
+        case "refresh":
+          invalidateCache(dir);
+          loadEntries();
+          return;
+        default:
+          return;
+      }
+    }, [onNavigate, onSetSelectedItems, onClipboardChange, invalidateCache, loadEntries]);
+    const handleRenameCommit = (0, import_react6.useCallback)(async (oldPath, newName) => {
+      setRenamingPath(null);
+      const parentDir = oldPath.replace(/[\\/][^\\/]+$/, "") || oldPath;
+      await window.electronAPI.rename(oldPath, newName);
+      invalidateCache(parentDir);
+    }, [invalidateCache]);
+    const handleKeyDown = (0, import_react6.useCallback)((e) => {
+      if (renamingPath) return;
+      const sel = selectedItemsRef.current;
+      const vis = visibleRef.current;
+      const cp = currentPathRef.current;
+      const cli = clipboardRef.current;
+      const paths = sel.size > 0 ? [...sel] : [];
+      if (e.key === "F2") {
+        e.preventDefault();
+        if (paths.length === 1) setRenamingPath(paths[0]);
+        return;
+      }
+      if (e.key === "Delete") {
+        e.preventDefault();
+        if (paths.length) execAction("delete", paths, cp);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        e.preventDefault();
+        if (paths.length) execAction("copy", paths, cp);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "x") {
+        e.preventDefault();
+        if (paths.length) execAction("cut", paths, cp);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        e.preventDefault();
+        execAction("paste", [], cp);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "d") {
+        e.preventDefault();
+        if (paths.length) execAction("duplicate", paths, cp);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault();
+        onSetSelectedItems(new Set(vis.map((v) => v.path)));
+        return;
+      }
+      if (e.key === "Enter" && paths.length) {
+        e.preventDefault();
+        execAction("open", paths, cp);
+        return;
+      }
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!vis.length) return;
+        const allPaths = vis.map((v) => v.path);
+        const last = paths[paths.length - 1];
+        const idx = last ? allPaths.indexOf(last) : -1;
+        let next = idx;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") next = Math.min(idx + 1, allPaths.length - 1);
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = Math.max(idx - 1, 0);
+        if (e.shiftKey) {
+          const anchor = anchorRef.current;
+          const ai = anchor ? allPaths.indexOf(anchor) : idx;
+          const [lo, hi] = ai < next ? [ai, next] : [next, ai];
+          onSetSelectedItems(new Set(allPaths.slice(lo, hi + 1)));
+        } else {
+          anchorRef.current = allPaths[next];
+          onSetSelectedItems(/* @__PURE__ */ new Set([allPaths[next]]));
+        }
+      }
+    }, [renamingPath, execAction, onSetSelectedItems]);
     const handleItemClick = (0, import_react6.useCallback)((e, entry) => {
       e.stopPropagation();
+      if (renamingPath === entry.path) return;
       if (e.ctrlKey || e.metaKey) {
-        const next = new Set(selectedItems);
+        const next = new Set(selectedItemsRef.current);
         next.has(entry.path) ? next.delete(entry.path) : next.add(entry.path);
         onSetSelectedItems(next);
       } else if (e.shiftKey && anchorRef.current) {
-        const paths = visible.map((v) => v.path);
-        const a = paths.indexOf(anchorRef.current);
-        const b = paths.indexOf(entry.path);
+        const vp = visibleRef.current.map((v) => v.path);
+        const a = vp.indexOf(anchorRef.current), b = vp.indexOf(entry.path);
         if (a !== -1 && b !== -1) {
           const [lo, hi] = a < b ? [a, b] : [b, a];
-          onSetSelectedItems(new Set(paths.slice(lo, hi + 1)));
-        } else {
-          onSetSelectedItems(/* @__PURE__ */ new Set([entry.path]));
-        }
+          onSetSelectedItems(new Set(vp.slice(lo, hi + 1)));
+        } else onSetSelectedItems(/* @__PURE__ */ new Set([entry.path]));
       } else {
         anchorRef.current = entry.path;
         onSetSelectedItems(/* @__PURE__ */ new Set([entry.path]));
       }
-    }, [selectedItems, onSetSelectedItems, visible]);
+    }, [renamingPath, onSetSelectedItems]);
     const handleGridClick = (0, import_react6.useCallback)((e) => {
       if (e.target === gridRef.current || e.target === contentRef.current) {
         onSetSelectedItems(/* @__PURE__ */ new Set());
         anchorRef.current = null;
+        setRenamingPath(null);
       }
     }, [onSetSelectedItems]);
     const handleMouseDown = (0, import_react6.useCallback)((e) => {
       if (e.button !== 0) return;
       if (e.target !== gridRef.current && e.target !== contentRef.current) return;
+      if (renamingPath) {
+        setRenamingPath(null);
+        return;
+      }
       e.preventDefault();
       const rect = contentRef.current.getBoundingClientRect();
       const scrollTop = contentRef.current.scrollTop;
@@ -28488,25 +28846,21 @@
         onSetSelectedItems(/* @__PURE__ */ new Set());
         anchorRef.current = null;
       }
+      const origSel = new Set(selectedItemsRef.current);
       const onMove = (mv) => {
+        if (!bandOrigin.current) return;
         const cx = mv.clientX - rect.left;
         const cy = mv.clientY - rect.top + contentRef.current.scrollTop;
-        const ox = bandOrigin.current.x;
-        const oy = bandOrigin.current.y;
-        const bx = Math.min(cx, ox), by = Math.min(cy, oy);
-        const bw = Math.abs(cx - ox), bh = Math.abs(cy - oy);
+        const ox = bandOrigin.current.x, oy = bandOrigin.current.y;
+        const bx = Math.min(cx, ox), by = Math.min(cy, oy), bw = Math.abs(cx - ox), bh = Math.abs(cy - oy);
         setBand({ x: bx, y: by, w: bw, h: bh });
-        const next = new Set(e.ctrlKey || e.metaKey ? selectedItems : []);
-        visible.forEach((entry) => {
+        const next = new Set(e.ctrlKey || e.metaKey ? origSel : []);
+        visibleRef.current.forEach((entry) => {
           const el = itemRefs.current[entry.path];
           if (!el) return;
           const er = el.getBoundingClientRect();
-          const elx = er.left - rect.left;
-          const ely = er.top - rect.top + contentRef.current.scrollTop;
-          const elr = elx + er.width;
-          const elb = ely + er.height;
-          if (bx < elr && bx + bw > elx && by < elb && by + bh > ely) next.add(entry.path);
-          else if (!e.ctrlKey && !e.metaKey) next.delete(entry.path);
+          const elx = er.left - rect.left, ely = er.top - rect.top + contentRef.current.scrollTop;
+          if (bx < elx + er.width && bx + bw > elx && by < ely + er.height && by + bh > ely) next.add(entry.path);
         });
         onSetSelectedItems(next);
       };
@@ -28518,89 +28872,118 @@
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
-    }, [visible, selectedItems, onSetSelectedItems]);
+    }, [renamingPath, onSetSelectedItems]);
     const handleDragStart = (0, import_react6.useCallback)((e, entry) => {
-      let toDrag = selectedItems.size > 0 && selectedItems.has(entry.path) ? [...selectedItems] : [entry.path];
+      if (renamingPath) {
+        e.preventDefault();
+        return;
+      }
+      const sel = selectedItemsRef.current;
+      const toDrag = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("application/ppoo-paths", JSON.stringify(toDrag));
-    }, [selectedItems]);
+    }, [renamingPath]);
+    const handleBlankContextMenu = (0, import_react6.useCallback)(async (e) => {
+      if (e.target !== gridRef.current && e.target !== contentRef.current) return;
+      e.preventDefault();
+      const cp = currentPathRef.current;
+      if (!cp) return;
+      setRenamingPath(null);
+      const result = await window.electronAPI.showContextMenu("none", [], clipboardRef.current?.paths ?? null);
+      if (result) await execAction(result.action, [], cp);
+    }, [execAction]);
     const handleContextMenu = (0, import_react6.useCallback)(async (e, entry) => {
       e.preventDefault();
-      if (!selectedItems.has(entry.path)) {
-        onSetSelectedItems(/* @__PURE__ */ new Set([entry.path]));
+      e.stopPropagation();
+      setRenamingPath(null);
+      const sel = selectedItemsRef.current;
+      if (!sel.has(entry.path)) {
         anchorRef.current = entry.path;
+        onSetSelectedItems(/* @__PURE__ */ new Set([entry.path]));
       }
-      const result = await window.electronAPI.showContextMenu(entry.isDir ? "folder" : "file", entry.path, null);
-      if (!result) return;
-      switch (result.action) {
-        case "open":
-          if (!entry.isDir) await openFile(entry.path);
-          break;
-        case "openWith":
-          await window.electronAPI.openFile(entry.path, "system");
-          break;
-        case "rename": {
-          const n = window.prompt("Rename to:", entry.name);
-          if (n?.trim()) {
-            await window.electronAPI.rename(entry.path, n.trim());
-            onNavigate(currentPath);
-          }
-          break;
-        }
-        case "delete": {
-          if (window.confirm(`Delete "${entry.name}"?`)) {
-            await window.electronAPI.deleteItem(entry.path, true);
-            onNavigate(currentPath);
-          }
-          break;
-        }
-        case "duplicate":
-          await window.electronAPI.duplicate(entry.path);
-          onNavigate(currentPath);
-          break;
-        case "reveal":
-          window.electronAPI.revealInExplorer(entry.path);
-          break;
-        case "copyPath":
-          navigator.clipboard.writeText(entry.path);
-          break;
-      }
-    }, [currentPath, selectedItems, openFile, onSetSelectedItems, onNavigate]);
-    return /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-right" }, /* @__PURE__ */ import_react6.default.createElement(
-      Bar,
-      {
-        rootPath,
-        currentPath,
-        onNavigate,
-        query,
-        onQuery: setQuery,
-        showFolders,
-        onToggleFolders: () => setShowFolders((v) => !v),
-        showFiles,
-        onToggleFiles: () => setShowFiles((v) => !v),
-        itemCount,
-        selectedCount: selectedItems.size
-      }
-    ), /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-content", ref: contentRef, onMouseDown: handleMouseDown, onClick: handleGridClick }, loading && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-content__empty" }, "Loading..."), !loading && visible.length === 0 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-content__empty" }, query || !showFolders || !showFiles ? "No items match" : "Folder is empty"), !loading && visible.length > 0 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-grid", ref: gridRef, role: "list" }, visible.map((entry) => /* @__PURE__ */ import_react6.default.createElement(
+      const paths = sel.has(entry.path) && sel.size > 1 ? [...sel] : [entry.path];
+      const isMulti = paths.length > 1;
+      const type = isMulti ? "multi" : entry.isDir ? "folder" : "file";
+      const result = await window.electronAPI.showContextMenu(type, paths, clipboardRef.current?.paths ?? null);
+      if (result) await execAction(result.action, paths, currentPathRef.current);
+    }, [onSetSelectedItems, execAction]);
+    const cutPaths = (0, import_react6.useMemo)(() => new Set(clipboard?.mode === "cut" ? clipboard.paths : []), [clipboard]);
+    return /* @__PURE__ */ import_react6.default.createElement(
       "div",
       {
-        key: entry.path,
-        ref: (el) => {
-          if (el) itemRefs.current[entry.path] = el;
-          else delete itemRefs.current[entry.path];
-        },
-        className: `pw-item${selectedItems.has(entry.path) ? " pw-item--selected" : ""}`,
-        role: "listitem",
-        title: entry.name,
-        draggable: true,
-        onDragStart: (e) => handleDragStart(e, entry),
-        onClick: (e) => handleItemClick(e, entry),
-        onDoubleClick: () => entry.isDir ? onNavigate(entry.path) : openFile(entry.path),
-        onContextMenu: (e) => handleContextMenu(e, entry)
+        className: "pw-right",
+        tabIndex: 0,
+        onKeyDown: handleKeyDown,
+        style: { outline: "none" }
       },
-      /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-item__icon-wrap" }, /* @__PURE__ */ import_react6.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size: 48 })),
-      /* @__PURE__ */ import_react6.default.createElement("span", { className: "pw-item__label" }, entry.name)
-    ))), band && band.w > 4 && band.h > 4 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-rubber-band", style: { left: band.x, top: band.y, width: band.w, height: band.h } })));
+      /* @__PURE__ */ import_react6.default.createElement(
+        Bar,
+        {
+          rootPath,
+          currentPath,
+          onNavigate,
+          query,
+          onQuery: setQuery,
+          showFolders,
+          onToggleFolders: () => setShowFolders((v) => !v),
+          showFiles,
+          onToggleFiles: () => setShowFiles((v) => !v),
+          itemCount,
+          selectedCount: selectedItems.size
+        }
+      ),
+      /* @__PURE__ */ import_react6.default.createElement(
+        "div",
+        {
+          className: "pw-content",
+          ref: contentRef,
+          onMouseDown: handleMouseDown,
+          onClick: handleGridClick,
+          onContextMenu: handleBlankContextMenu
+        },
+        loading && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-content__empty" }, "Loading..."),
+        !loading && visible.length === 0 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-content__empty" }, query || !showFolders || !showFiles ? "No items match" : "Folder is empty"),
+        !loading && visible.length > 0 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-grid", ref: gridRef, role: "list" }, visible.map((entry) => {
+          const isRenaming = renamingPath === entry.path;
+          return /* @__PURE__ */ import_react6.default.createElement(
+            "div",
+            {
+              key: entry.path,
+              ref: (el) => {
+                if (el) itemRefs.current[entry.path] = el;
+                else delete itemRefs.current[entry.path];
+              },
+              className: [
+                "pw-item",
+                selectedItems.has(entry.path) ? "pw-item--selected" : "",
+                cutPaths.has(entry.path) ? "pw-item--cut" : ""
+              ].filter(Boolean).join(" "),
+              role: "listitem",
+              title: isRenaming ? void 0 : entry.name,
+              draggable: !isRenaming,
+              onDragStart: (e) => handleDragStart(e, entry),
+              onClick: (e) => handleItemClick(e, entry),
+              onDoubleClick: () => {
+                if (isRenaming) return;
+                if (entry.isDir) onNavigate(entry.path);
+                else window.electronAPI.openFile(entry.path, settingsRef.current.defaultEditor ?? "system");
+              },
+              onContextMenu: (e) => handleContextMenu(e, entry)
+            },
+            /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-item__icon-wrap" }, /* @__PURE__ */ import_react6.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size: 48 })),
+            isRenaming ? /* @__PURE__ */ import_react6.default.createElement(
+              RenameInput,
+              {
+                initialValue: entry.name,
+                onCommit: (newName) => handleRenameCommit(entry.path, newName),
+                onCancel: () => setRenamingPath(null)
+              }
+            ) : /* @__PURE__ */ import_react6.default.createElement("span", { className: "pw-item__label" }, entry.name)
+          );
+        })),
+        band && band.w > 4 && band.h > 4 && /* @__PURE__ */ import_react6.default.createElement("div", { className: "pw-rubber-band", style: { left: band.x, top: band.y, width: band.w, height: band.h } })
+      )
+    );
   };
   var ContentArea_default = ContentArea;
 
@@ -28622,6 +29005,8 @@
     const [childCache, setChildCache] = (0, import_react8.useState)(() => /* @__PURE__ */ new Map());
     const [itemCount, setItemCount] = (0, import_react8.useState)(null);
     const [sidebarWidth, setSidebarWidth] = (0, import_react8.useState)(SIDEBAR_DEFAULT);
+    const [clipboard, setClipboard] = (0, import_react8.useState)(null);
+    const [refreshToken, setRefreshToken] = (0, import_react8.useState)(0);
     const draggingRef = (0, import_react8.useRef)(false);
     const startXRef = (0, import_react8.useRef)(0);
     const startWRef = (0, import_react8.useRef)(SIDEBAR_DEFAULT);
@@ -28632,8 +29017,7 @@
       startWRef.current = sidebarWidth;
       const onMove = (ev) => {
         if (!draggingRef.current) return;
-        const delta = ev.clientX - startXRef.current;
-        setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWRef.current + delta)));
+        setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWRef.current + (ev.clientX - startXRef.current))));
       };
       const onUp = () => {
         draggingRef.current = false;
@@ -28656,6 +29040,21 @@
         return n;
       });
     }, []);
+    (0, import_react8.useEffect)(() => {
+      if (!rootPath) return;
+      window.electronAPI.watchDir(rootPath);
+      const unsub = window.electronAPI.onFsChange((affectedDir) => {
+        invalidateCache(affectedDir);
+        setCurrentPath((p) => {
+          if (p === affectedDir) setRefreshToken((t) => t + 1);
+          return p;
+        });
+      });
+      return () => {
+        unsub();
+        window.electronAPI.unwatchDir(rootPath);
+      };
+    }, [rootPath, invalidateCache]);
     const openProject = (0, import_react8.useCallback)((folderPath) => {
       setRootPath(folderPath);
       setCurrentPath(folderPath);
@@ -28664,6 +29063,8 @@
       setExpandedSet(/* @__PURE__ */ new Set([folderPath]));
       setChildCache(/* @__PURE__ */ new Map());
       setItemCount(null);
+      setClipboard(null);
+      setRefreshToken(0);
     }, []);
     const closeProject = (0, import_react8.useCallback)(() => {
       setRootPath(null);
@@ -28673,6 +29074,7 @@
       setExpandedSet(/* @__PURE__ */ new Set());
       setChildCache(/* @__PURE__ */ new Map());
       setItemCount(null);
+      setClipboard(null);
     }, []);
     (0, import_react8.useEffect)(() => {
       const u1 = window.electronAPI.onMenuEvent("menu:openProject", openProject);
@@ -28694,9 +29096,9 @@
     }, []);
     const handleToggle = (0, import_react8.useCallback)((folderPath) => {
       setExpandedSet((prev) => {
-        const next = new Set(prev);
-        next.has(folderPath) ? next.delete(folderPath) : next.add(folderPath);
-        return next;
+        const n = new Set(prev);
+        n.has(folderPath) ? n.delete(folderPath) : n.add(folderPath);
+        return n;
       });
     }, []);
     const handleNavigate = (0, import_react8.useCallback)((folderPath) => {
@@ -28704,21 +29106,15 @@
       setSelectedPath(folderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
     }, []);
-    const handleSetSelectedItems = (0, import_react8.useCallback)((nextSet) => {
-      setSelectedItems(nextSet);
-    }, []);
+    const handleSetSelectedItems = (0, import_react8.useCallback)((nextSet) => setSelectedItems(nextSet), []);
     const handleItemsLoaded = (0, import_react8.useCallback)((count) => setItemCount(count), []);
     const handleSidebarDrop = (0, import_react8.useCallback)(async (targetFolderPath, draggedPaths) => {
       for (const src of draggedPaths) {
         if (src === targetFolderPath) continue;
-        const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
         await window.electronAPI.moveItem(src, targetFolderPath);
-        invalidateCache(parentDir);
       }
-      invalidateCache(targetFolderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
-      setCurrentPath((p) => p);
-    }, [invalidateCache]);
+    }, []);
     if (!rootPath) {
       return /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-empty" }, /* @__PURE__ */ import_react8.default.createElement("svg", { className: "pw-empty__svg", width: "40", height: "40", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react8.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z", fill: "#c8a84b" })), /* @__PURE__ */ import_react8.default.createElement("span", null, "No project open"), /* @__PURE__ */ import_react8.default.createElement("span", { style: { fontSize: 11, color: "#444" } }, "File \u2192 Open Project")));
     }
@@ -28729,9 +29125,11 @@
         selectedPath,
         expandedSet,
         childCache,
+        clipboard,
         onSelect: handleSidebarSelect,
         onToggle: handleToggle,
         loadChildren,
+        invalidateCache,
         onDrop: handleSidebarDrop
       }
     ), /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-sidebar__resize", onMouseDown: onResizeStart })), /* @__PURE__ */ import_react8.default.createElement(
@@ -28739,11 +29137,14 @@
       {
         rootPath,
         currentPath,
+        refreshToken,
         selectedItems,
         onSetSelectedItems: handleSetSelectedItems,
         onNavigate: handleNavigate,
         onItemsLoaded: handleItemsLoaded,
         itemCount,
+        clipboard,
+        onClipboardChange: setClipboard,
         invalidateCache
       }
     )), /* @__PURE__ */ import_react8.default.createElement(

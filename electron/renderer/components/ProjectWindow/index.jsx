@@ -4,47 +4,45 @@ import ContentArea from "./ContentArea.jsx";
 import StatusBar   from "./StatusBar.jsx";
 import "./project-window.css";
 
-// ── Resizable sidebar handle ──────────────────────────────────────────────────
-const SIDEBAR_MIN = 120;
-const SIDEBAR_MAX = 400;
+const SIDEBAR_MIN     = 120;
+const SIDEBAR_MAX     = 400;
 const SIDEBAR_DEFAULT = 180;
 
 const ProjectWindow = () => {
   const [rootPath,      setRootPath]      = useState(null);
   const [currentPath,   setCurrentPath]   = useState(null);
   const [selectedPath,  setSelectedPath]  = useState(null);
-  // Multi-select: Set<string>
   const [selectedItems, setSelectedItems] = useState(() => new Set());
   const [expandedSet,   setExpandedSet]   = useState(() => new Set());
   const [childCache,    setChildCache]    = useState(() => new Map());
   const [itemCount,     setItemCount]     = useState(null);
   const [sidebarWidth,  setSidebarWidth]  = useState(SIDEBAR_DEFAULT);
+  const [clipboard,     setClipboard]     = useState(null);
+  const [refreshToken,  setRefreshToken]  = useState(0);
   const draggingRef = useRef(false);
   const startXRef   = useRef(0);
   const startWRef   = useRef(SIDEBAR_DEFAULT);
 
-  // ── Sidebar resize drag ──────────────────────────────────────────────────
+  // ── Sidebar resize ───────────────────────────────────────────────────────
   const onResizeStart = useCallback((e) => {
     e.preventDefault();
     draggingRef.current = true;
     startXRef.current   = e.clientX;
     startWRef.current   = sidebarWidth;
-
     const onMove = (ev) => {
       if (!draggingRef.current) return;
-      const delta = ev.clientX - startXRef.current;
-      setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWRef.current + delta)));
+      setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWRef.current + (ev.clientX - startXRef.current))));
     };
     const onUp = () => {
       draggingRef.current = false;
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup",   onUp);
+      window.removeEventListener("mouseup", onUp);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup",   onUp);
   }, [sidebarWidth]);
 
-  // ── Children cache ───────────────────────────────────────────────────────
+  // ── Cache ────────────────────────────────────────────────────────────────
   const loadChildren = useCallback(async (folderPath) => {
     if (childCache.has(folderPath)) return childCache.get(folderPath);
     const entries = await window.electronAPI.readDir(folderPath);
@@ -56,6 +54,22 @@ const ProjectWindow = () => {
     setChildCache((prev) => { const n = new Map(prev); n.delete(dirPath); return n; });
   }, []);
 
+  // ── Chokidar watcher ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!rootPath) return;
+    window.electronAPI.watchDir(rootPath);
+    const unsub = window.electronAPI.onFsChange((affectedDir) => {
+      invalidateCache(affectedDir);
+      // If the currently-viewed folder is the one that changed, bump the token
+      // so ContentArea re-fetches even though currentPath string didn't change
+      setCurrentPath((p) => {
+        if (p === affectedDir) setRefreshToken((t) => t + 1);
+        return p;
+      });
+    });
+    return () => { unsub(); window.electronAPI.unwatchDir(rootPath); };
+  }, [rootPath, invalidateCache]);
+
   // ── Project open / close ─────────────────────────────────────────────────
   const openProject = useCallback((folderPath) => {
     setRootPath(folderPath);
@@ -65,12 +79,14 @@ const ProjectWindow = () => {
     setExpandedSet(new Set([folderPath]));
     setChildCache(new Map());
     setItemCount(null);
+    setClipboard(null);
+    setRefreshToken(0);
   }, []);
 
   const closeProject = useCallback(() => {
     setRootPath(null); setCurrentPath(null); setSelectedPath(null);
     setSelectedItems(new Set()); setExpandedSet(new Set());
-    setChildCache(new Map()); setItemCount(null);
+    setChildCache(new Map()); setItemCount(null); setClipboard(null);
   }, []);
 
   useEffect(() => {
@@ -81,49 +97,31 @@ const ProjectWindow = () => {
     return () => { u1(); u2(); u3(); u4(); };
   }, [openProject, closeProject]);
 
-  // ── Sidebar select ───────────────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleSidebarSelect = useCallback((folderPath) => {
-    setSelectedPath(folderPath);
-    setCurrentPath(folderPath);
-    setSelectedItems(new Set());
+    setSelectedPath(folderPath); setCurrentPath(folderPath); setSelectedItems(new Set());
   }, []);
 
   const handleToggle = useCallback((folderPath) => {
-    setExpandedSet((prev) => {
-      const next = new Set(prev);
-      next.has(folderPath) ? next.delete(folderPath) : next.add(folderPath);
-      return next;
-    });
+    setExpandedSet((prev) => { const n = new Set(prev); n.has(folderPath) ? n.delete(folderPath) : n.add(folderPath); return n; });
   }, []);
 
-  // ── Content grid navigation ──────────────────────────────────────────────
   const handleNavigate = useCallback((folderPath) => {
-    setCurrentPath(folderPath);
-    setSelectedPath(folderPath);
-    setSelectedItems(new Set());
+    setCurrentPath(folderPath); setSelectedPath(folderPath); setSelectedItems(new Set());
   }, []);
 
-  // ── Multi-select from ContentArea ────────────────────────────────────────
-  const handleSetSelectedItems = useCallback((nextSet) => {
-    setSelectedItems(nextSet);
-  }, []);
+  const handleSetSelectedItems = useCallback((nextSet) => setSelectedItems(nextSet), []);
+  const handleItemsLoaded      = useCallback((count)   => setItemCount(count),       []);
 
-  const handleItemsLoaded = useCallback((count) => setItemCount(count), []);
-
-  // ── Drop onto sidebar folder ─────────────────────────────────────────────
   const handleSidebarDrop = useCallback(async (targetFolderPath, draggedPaths) => {
     for (const src of draggedPaths) {
       if (src === targetFolderPath) continue;
-      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
       await window.electronAPI.moveItem(src, targetFolderPath);
-      invalidateCache(parentDir);
     }
-    invalidateCache(targetFolderPath);
     setSelectedItems(new Set());
-    // refresh current view if affected
-    setCurrentPath((p) => p);
-  }, [invalidateCache]);
+  }, []);
 
+  // ── Empty state ──────────────────────────────────────────────────────────
   if (!rootPath) {
     return (
       <div className="pw-root">
@@ -141,30 +139,33 @@ const ProjectWindow = () => {
   return (
     <div className="pw-root">
       <div className="pw-body">
-        {/* Resizable sidebar */}
         <div className="pw-sidebar" style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX }}>
           <SidebarTree
             rootPath={rootPath}
             selectedPath={selectedPath}
             expandedSet={expandedSet}
             childCache={childCache}
+            clipboard={clipboard}
             onSelect={handleSidebarSelect}
             onToggle={handleToggle}
             loadChildren={loadChildren}
+            invalidateCache={invalidateCache}
             onDrop={handleSidebarDrop}
           />
-          {/* Resize handle */}
           <div className="pw-sidebar__resize" onMouseDown={onResizeStart} />
         </div>
 
         <ContentArea
           rootPath={rootPath}
           currentPath={currentPath}
+          refreshToken={refreshToken}
           selectedItems={selectedItems}
           onSetSelectedItems={handleSetSelectedItems}
           onNavigate={handleNavigate}
           onItemsLoaded={handleItemsLoaded}
           itemCount={itemCount}
+          clipboard={clipboard}
+          onClipboardChange={setClipboard}
           invalidateCache={invalidateCache}
         />
       </div>

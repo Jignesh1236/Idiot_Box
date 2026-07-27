@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import VscodeIcon from "../shared/VscodeIcon.jsx";
+import { useInputDialog } from "../shared/InputDialog.jsx";
 
 const ArrowSvg = () => (
   <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
@@ -7,8 +8,11 @@ const ArrowSvg = () => (
   </svg>
 );
 
-// ── Single tree row — supports drop target ────────────────────────────────────
-const TreeRow = ({ label, iconEl, depth, hasChildren, isOpen, isSelected, isDropTarget, onClick, onArrowClick, onDragOver, onDragLeave, onDrop }) => (
+// ── TreeRow ───────────────────────────────────────────────────────────────────
+const TreeRow = ({
+  label, iconEl, depth, hasChildren, isOpen, isSelected, isDropTarget,
+  onClick, onArrowClick, onDragOver, onDragLeave, onDrop, onContextMenu,
+}) => (
   <div
     className={[
       "pw-tree-row",
@@ -20,12 +24,15 @@ const TreeRow = ({ label, iconEl, depth, hasChildren, isOpen, isSelected, isDrop
     onDragOver={onDragOver}
     onDragLeave={onDragLeave}
     onDrop={onDrop}
+    onContextMenu={onContextMenu}
     role="treeitem"
     aria-expanded={hasChildren ? isOpen : undefined}
     aria-selected={isSelected}
   >
     <span
-      className={`pw-tree-row__arrow${hasChildren ? (isOpen ? " pw-tree-row__arrow--open" : "") : " pw-tree-row__arrow--hidden"}`}
+      className={`pw-tree-row__arrow${hasChildren
+        ? (isOpen ? " pw-tree-row__arrow--open" : "")
+        : " pw-tree-row__arrow--hidden"}`}
       onClick={hasChildren ? (e) => { e.stopPropagation(); onArrowClick(); } : undefined}
       aria-hidden="true"
     >
@@ -37,7 +44,11 @@ const TreeRow = ({ label, iconEl, depth, hasChildren, isOpen, isSelected, isDrop
 );
 
 // ── Recursive folder node ─────────────────────────────────────────────────────
-const FolderNode = ({ entry, depth, selectedPath, expandedSet, childCache, onSelect, onToggle, loadChildren, onDrop, dropTarget, setDropTarget }) => {
+const FolderNode = ({
+  entry, depth, selectedPath, expandedSet, childCache,
+  onSelect, onToggle, loadChildren, onDrop,
+  dropTarget, setDropTarget, onContextMenu,
+}) => {
   const isOpen     = expandedSet.has(entry.path);
   const isSelected = selectedPath === entry.path;
   const children   = childCache.get(entry.path) ?? null;
@@ -53,27 +64,13 @@ const FolderNode = ({ entry, depth, selectedPath, expandedSet, childCache, onSel
 
   const hasChildren = !hasLoaded || (children && children.length > 0);
 
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-    setDropTarget(entry.path);
-  }, [entry.path, setDropTarget]);
-
-  const handleDragLeave = useCallback((e) => {
-    e.stopPropagation();
-    setDropTarget((prev) => prev === entry.path ? null : prev);
-  }, [entry.path, setDropTarget]);
-
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDropTarget(null);
-    try {
-      const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-      if (paths?.length) onDrop(entry.path, paths);
-    } catch {}
+  const handleDragOver  = useCallback((e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setDropTarget(entry.path); }, [entry.path, setDropTarget]);
+  const handleDragLeave = useCallback((e) => { e.stopPropagation(); setDropTarget((p) => p === entry.path ? null : p); }, [entry.path, setDropTarget]);
+  const handleDrop      = useCallback((e) => {
+    e.preventDefault(); e.stopPropagation(); setDropTarget(null);
+    try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(entry.path, paths); } catch {}
   }, [entry.path, onDrop, setDropTarget]);
+  const handleCtxMenu   = useCallback((e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(entry.path); }, [entry.path, onContextMenu]);
 
   return (
     <>
@@ -90,13 +87,24 @@ const FolderNode = ({ entry, depth, selectedPath, expandedSet, childCache, onSel
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onContextMenu={handleCtxMenu}
       />
       {isOpen && hasLoaded && children && children.map((child) => (
-        <FolderNode key={child.path} entry={child} depth={depth + 1}
-          selectedPath={selectedPath} expandedSet={expandedSet}
-          childCache={childCache} onSelect={onSelect} onToggle={onToggle}
-          loadChildren={loadChildren} onDrop={onDrop}
-          dropTarget={dropTarget} setDropTarget={setDropTarget} />
+        <FolderNode
+          key={child.path}
+          entry={child}
+          depth={depth + 1}
+          selectedPath={selectedPath}
+          expandedSet={expandedSet}
+          childCache={childCache}
+          onSelect={onSelect}
+          onToggle={onToggle}
+          loadChildren={loadChildren}
+          onDrop={onDrop}
+          dropTarget={dropTarget}
+          setDropTarget={setDropTarget}
+          onContextMenu={onContextMenu}
+        />
       ))}
       {isOpen && loading && (
         <div style={{ paddingLeft: `${6 + (depth + 1) * 14 + 14}px`, color: "#555", fontSize: 11, height: 20, lineHeight: "20px" }}>...</div>
@@ -106,33 +114,104 @@ const FolderNode = ({ entry, depth, selectedPath, expandedSet, childCache, onSel
 };
 
 // ── SidebarTree root ──────────────────────────────────────────────────────────
-const SidebarTree = ({ rootPath, selectedPath, expandedSet, childCache, onSelect, onToggle, loadChildren, onDrop }) => {
+const SidebarTree = ({
+  rootPath, selectedPath, expandedSet, childCache,
+  onSelect, onToggle, loadChildren, onDrop,
+  clipboard, invalidateCache,
+}) => {
   const [rootChildren, setRootChildren] = useState(null);
   const [dropTarget,   setDropTarget]   = useState(null);
+  // Bump this to force a re-fetch of rootChildren after mutations
+  const [localRefresh, setLocalRefresh] = useState(0);
 
+  // Reload root children whenever rootPath changes OR a mutation triggers localRefresh
   useEffect(() => {
     if (!rootPath) { setRootChildren(null); return; }
-    loadChildren(rootPath).then(setRootChildren);
-  }, [rootPath, loadChildren]);
+    // Always re-read from IPC (bypass in-component cache) so mutations are visible
+    window.electronAPI.readDir(rootPath).then(setRootChildren);
+  }, [rootPath, localRefresh]);
+
+  // Also reload when childCache for rootPath is invalidated (chokidar trigger)
+  useEffect(() => {
+    if (!rootPath || childCache.has(rootPath)) return;
+    window.electronAPI.readDir(rootPath).then(setRootChildren);
+  }, [rootPath, childCache]);
 
   const rootName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).pop() : "";
 
-  // Root row drop handlers
-  const handleRootDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootPath); };
-  const handleRootDragLeave = () => setDropTarget((p) => p === rootPath ? null : p);
-  const handleRootDrop = (e) => {
+  // ── Root row drag handlers ────────────────────────────────────────────────
+  const handleRootDragOver  = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootPath); };
+  const handleRootDragLeave = ()  => setDropTarget((p) => p === rootPath ? null : p);
+  const handleRootDrop      = (e) => {
     e.preventDefault(); setDropTarget(null);
-    try {
-      const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-      if (paths?.length) onDrop(rootPath, paths);
-    } catch {}
+    try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(rootPath, paths); } catch {}
   };
+
+  // ── Context menu for any sidebar folder ───────────────────────────────────
+  const handleContextMenu = useCallback(async (folderPath) => {
+    if (folderPath !== selectedPath) onSelect(folderPath);
+    const parentDir = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
+    const result = await window.electronAPI.showContextMenu(
+      "folder", [folderPath], clipboard?.paths ?? null
+    );
+    if (!result) return;
+
+    const refresh = () => {
+      invalidateCache(folderPath);
+      invalidateCache(parentDir);
+      setLocalRefresh((k) => k + 1);
+    };
+
+    switch (result.action) {
+      case "newFolder": {
+        const n = window.prompt("Folder name:", "New Folder");
+        if (n?.trim()) { await window.electronAPI.newFolder(folderPath, n.trim()); refresh(); }
+        break;
+      }
+      case "newFile": {
+        const n = window.prompt("File name:", "New File.txt");
+        if (n?.trim()) { await window.electronAPI.newFile(folderPath, n.trim()); refresh(); }
+        break;
+      }
+      case "rename": {
+        const oldName = folderPath.replace(/.*[\\/]/, "");
+        const n = window.prompt("Rename to:", oldName);
+        if (n?.trim() && n.trim() !== oldName) {
+          await window.electronAPI.rename(folderPath, n.trim());
+          invalidateCache(parentDir);
+          setLocalRefresh((k) => k + 1);
+        }
+        break;
+      }
+      case "delete": {
+        const name = folderPath.replace(/.*[\\/]/, "");
+        if (window.confirm(`Delete "${name}"?`)) {
+          await window.electronAPI.deleteItem(folderPath, true);
+          invalidateCache(parentDir);
+          setLocalRefresh((k) => k + 1);
+        }
+        break;
+      }
+      case "duplicate": {
+        await window.electronAPI.duplicate(folderPath);
+        invalidateCache(parentDir);
+        setLocalRefresh((k) => k + 1);
+        break;
+      }
+      case "copy":     if (clipboard !== undefined) { /* handled by parent via onClipboardChange — skip for now */ } break;
+      case "reveal":   window.electronAPI.revealInExplorer(folderPath); break;
+      case "copyPath": navigator.clipboard.writeText(folderPath); break;
+      case "refresh":  refresh(); break;
+    }
+  }, [selectedPath, onSelect, clipboard, invalidateCache]);
 
   return (
     <div className="pw-sidebar__scroll" role="tree" aria-label="Project tree">
       {rootPath && (
         <>
-          <div className="pw-section"><span className="pw-section__label">Assets</span></div>
+          <div className="pw-section">
+            <span className="pw-section__label">Assets</span>
+          </div>
           <TreeRow
             label={rootName}
             iconEl={<VscodeIcon name={rootName} isDir={true} isOpen={expandedSet.has(rootPath)} size={16} />}
@@ -146,13 +225,24 @@ const SidebarTree = ({ rootPath, selectedPath, expandedSet, childCache, onSelect
             onDragOver={handleRootDragOver}
             onDragLeave={handleRootDragLeave}
             onDrop={handleRootDrop}
+            onContextMenu={() => handleContextMenu(rootPath)}
           />
           {expandedSet.has(rootPath) && rootChildren && rootChildren.map((entry) => (
-            <FolderNode key={entry.path} entry={entry} depth={1}
-              selectedPath={selectedPath} expandedSet={expandedSet}
-              childCache={childCache} onSelect={onSelect} onToggle={onToggle}
-              loadChildren={loadChildren} onDrop={onDrop}
-              dropTarget={dropTarget} setDropTarget={setDropTarget} />
+            <FolderNode
+              key={entry.path}
+              entry={entry}
+              depth={1}
+              selectedPath={selectedPath}
+              expandedSet={expandedSet}
+              childCache={childCache}
+              onSelect={onSelect}
+              onToggle={onToggle}
+              loadChildren={loadChildren}
+              onDrop={onDrop}
+              dropTarget={dropTarget}
+              setDropTarget={setDropTarget}
+              onContextMenu={handleContextMenu}
+            />
           ))}
         </>
       )}

@@ -277,6 +277,7 @@ const TerminalPanel = () => {
         projPath.current = dir;
         setProjectOpen(true);
         createTab(dir);
+        window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
       }
     };
     window.addEventListener("open-terminal", handler);

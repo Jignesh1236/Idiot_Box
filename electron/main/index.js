@@ -105,6 +105,26 @@ ipcMain.handle("fs:readDirAll", async (_e, dirPath) => {
   } catch { return []; }
 });
 
+// ─── Pin config ────────────────────────────────────────────────────────────────
+const PIN_DIR  = ".project_config";
+const PIN_FILE = ".pinconfig";
+
+ipcMain.handle("fs:readPinConfig", async (_e, rootPath) => {
+  const filePath = path.join(rootPath, PIN_DIR, PIN_FILE);
+  try { return JSON.parse(fs.readFileSync(filePath, "utf8")); }
+  catch {
+    const exists = (name) => fs.existsSync(path.join(rootPath, name));
+    return ["assets", "components"].filter(exists);
+  }
+});
+
+ipcMain.handle("fs:writePinConfig", async (_e, rootPath, data) => {
+  const dir  = path.join(rootPath, PIN_DIR);
+  const filePath = path.join(dir, PIN_FILE);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+});
+
 // ─── File system operations ───────────────────────────────────────────────────
 ipcMain.handle("fs:newFolder", async (_e, { parentPath, name }) => {
   const lp = toLongPath(parentPath);
@@ -283,6 +303,25 @@ ipcMain.handle("fs:getIcon", async (_e, filePath) => {
   try { return (await app.getFileIcon(filePath, { size: "normal" })).toDataURL(); } catch { return null; }
 });
 
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico"];
+const VIDEO_EXTS = [".mp4", ".webm", ".avi", ".mov", ".mkv", ".wmv", ".flv"];
+
+ipcMain.handle("fs:getFilePreview", async (_e, filePath) => {
+  const ext = path.extname(filePath).toLowerCase();
+  if (IMAGE_EXTS.includes(ext)) {
+    try {
+      const data = fs.readFileSync(toLongPath(filePath));
+      if (data.length > 2 * 1024 * 1024) return { type: "image", data: null };
+      const mime = ext === ".svg" ? "image/svg+xml"
+        : ext === ".ico" ? "image/x-icon"
+        : `image/${ext.slice(1)}`;
+      return { type: "image", data: `data:${mime};base64,${data.toString("base64")}` };
+    } catch { return null; }
+  }
+  if (VIDEO_EXTS.includes(ext)) return { type: "video" };
+  return null;
+});
+
 // ─── Chokidar filesystem watcher ─────────────────────────────────────────────
 // Map: watchKey (rootPath:webContentsId) → chokidar.FSWatcher
 const watchers = new Map();
@@ -354,7 +393,17 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
 
     let items = [];
 
-    if (type === "none") {
+    if (type === "breadcrumb") {
+      items = [
+        { label: "Copy Path",               accelerator: "Ctrl+Shift+C", click: () => act("copyPath") },
+        { label: "Copy Name",                                             click: () => act("copyName") },
+        sep,
+        { label: "Open in Terminal",                                     click: () => act("openInTerminal") },
+        { label: "Reveal in File Explorer", accelerator: "Ctrl+Shift+R", click: () => act("reveal")   },
+        sep,
+        { label: "Refresh",                 accelerator: "F5",           click: () => act("refresh") },
+      ];
+    } else if (type === "none") {
       items = [
         { label: "New Folder",              accelerator: "Ctrl+Shift+N", click: () => act("newFolder") },
         { label: "New File",                accelerator: "Ctrl+N",       click: () => act("newFile")   },
@@ -373,12 +422,35 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
         sep,
         { label: "Copy Path",               accelerator: "Ctrl+Shift+C", click: () => act("copyPath") },
       ];
+    } else if (type === "pinned") {
+      items = [
+        { label: "New Folder",              accelerator: "Ctrl+Shift+N", click: () => act("newFolder") },
+        { label: "New File",                accelerator: "Ctrl+N",       click: () => act("newFile")   },
+        sep,
+        { label: "Open in Terminal",                                     click: () => act("openInTerminal") },
+        sep,
+        { label: "Unpin",                                                click: () => act("pinToSidebar") },
+        sep,
+        { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
+        { label: "Delete",                  accelerator: "Delete",       click: () => act("delete")    },
+        { label: "Duplicate",               accelerator: "Ctrl+D",       click: () => act("duplicate") },
+        sep,
+        { label: "Copy",                    accelerator: "Ctrl+C",       click: () => act("copy") },
+        { label: "Cut",                     accelerator: "Ctrl+X",       click: () => act("cut")  },
+        { label: "Paste",                   accelerator: "Ctrl+V", enabled: !!(clipboardPaths?.length), click: () => act("paste") },
+        sep,
+        { label: "Reveal in File Explorer", accelerator: "Ctrl+Shift+R", click: () => act("reveal")   },
+        { label: "Copy Path",               accelerator: "Ctrl+Shift+C", click: () => act("copyPath") },
+        { label: "Refresh",                 accelerator: "F5",           click: () => act("refresh")  },
+      ];
     } else if (type === "folder") {
       items = [
         { label: "New Folder",              accelerator: "Ctrl+Shift+N", click: () => act("newFolder") },
         { label: "New File",                accelerator: "Ctrl+N",       click: () => act("newFile")   },
         sep,
         { label: "Open in Terminal",                                     click: () => act("openInTerminal") },
+        sep,
+        { label: "Pin to sidebar",                                       click: () => act("pinToSidebar") },
         sep,
         { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
         { label: "Delete",                  accelerator: "Delete",       click: () => act("delete")    },
@@ -396,8 +468,6 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
       items = [
         { label: "Open",                    accelerator: "Enter",        click: () => act("open")     },
         { label: "Open With...",            accelerator: "Ctrl+Enter",   click: () => act("openWith") },
-        sep,
-        { label: "Open in Terminal",                                     click: () => act("openInTerminal") },
         sep,
         { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
         { label: "Delete",                  accelerator: "Delete",       click: () => act("delete")    },
@@ -533,7 +603,7 @@ function buildMenu() {
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280, height: 720, backgroundColor: "#0d0d0d",
-    webPreferences: { preload: path.join(__dirname, "../preload/index.js"), contextIsolation: true, nodeIntegration: false },
+    webPreferences: { preload: path.join(__dirname, "../preload/index.js"), contextIsolation: true, nodeIntegration: false, webviewTag: true },
   });
   win.loadFile(path.join(__dirname, "../renderer/index.html"));
   win.webContents.openDevTools();

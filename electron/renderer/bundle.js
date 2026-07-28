@@ -1329,7 +1329,7 @@
           return dispatcher;
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React13 = require_react(), Internals = {
+        var React14 = require_react(), Internals = {
           d: {
             f: noop,
             r: function() {
@@ -1347,7 +1347,7 @@
           },
           p: 0,
           findDOMNode: null
-        }, REACT_PORTAL_TYPE = Symbol.for("react.portal"), ReactSharedInternals = React13.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+        }, REACT_PORTAL_TYPE = Symbol.for("react.portal"), ReactSharedInternals = React14.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
         "function" === typeof Map && null != Map.prototype && "function" === typeof Map.prototype.forEach && "function" === typeof Set && null != Set.prototype && "function" === typeof Set.prototype.clear && "function" === typeof Set.prototype.forEach || console.error(
           "React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills"
         );
@@ -2882,7 +2882,7 @@
           "number" === type && getActiveElement(node.ownerDocument) === node || node.defaultValue === "" + value || (node.defaultValue = "" + value);
         }
         function validateOptionProps(element, props) {
-          null == props.value && ("object" === typeof props.children && null !== props.children ? React13.Children.forEach(props.children, function(child) {
+          null == props.value && ("object" === typeof props.children && null !== props.children ? React14.Children.forEach(props.children, function(child) {
             null == child || "string" === typeof child || "number" === typeof child || "bigint" === typeof child || didWarnInvalidChild || (didWarnInvalidChild = true, console.error(
               "Cannot infer the option value of complex children. Pass a `value` prop or use a plain string as children to <option>."
             ));
@@ -18514,14 +18514,14 @@
           ));
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var Scheduler = require_scheduler(), React13 = require_react(), ReactDOM2 = require_react_dom(), assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy");
+        var Scheduler = require_scheduler(), React14 = require_react(), ReactDOM2 = require_react_dom(), assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy");
         Symbol.for("react.scope");
         var REACT_ACTIVITY_TYPE = Symbol.for("react.activity");
         Symbol.for("react.legacy_hidden");
         Symbol.for("react.tracing_marker");
         var REACT_MEMO_CACHE_SENTINEL = Symbol.for("react.memo_cache_sentinel");
         Symbol.for("react.view_transition");
-        var MAYBE_ITERATOR_SYMBOL = Symbol.iterator, REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), isArrayImpl = Array.isArray, ReactSharedInternals = React13.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, NotPending = Object.freeze({
+        var MAYBE_ITERATOR_SYMBOL = Symbol.iterator, REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), isArrayImpl = Array.isArray, ReactSharedInternals = React14.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, NotPending = Object.freeze({
           pending: false,
           data: null,
           method: null,
@@ -21309,7 +21309,7 @@
           }
         };
         (function() {
-          var isomorphicReactPackageVersion = React13.version;
+          var isomorphicReactPackageVersion = React14.version;
           if ("19.2.8" !== isomorphicReactPackageVersion)
             throw Error(
               'Incompatible React versions: The "react" and "react-dom" packages must have the exact same version. Instead got:\n  - react:      ' + (isomorphicReactPackageVersion + "\n  - react-dom:  19.2.8\nLearn more: https://react.dev/warnings/version-mismatch")
@@ -21663,18 +21663,18 @@
         function isValidElement(object) {
           return "object" === typeof object && null !== object && object.$$typeof === REACT_ELEMENT_TYPE;
         }
-        var React13 = require_react(), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = Symbol.for("react.activity"), REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), ReactSharedInternals = React13.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, hasOwnProperty = Object.prototype.hasOwnProperty, isArrayImpl = Array.isArray, createTask = console.createTask ? console.createTask : function() {
+        var React14 = require_react(), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = Symbol.for("react.activity"), REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), ReactSharedInternals = React14.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, hasOwnProperty = Object.prototype.hasOwnProperty, isArrayImpl = Array.isArray, createTask = console.createTask ? console.createTask : function() {
           return null;
         };
-        React13 = {
+        React14 = {
           react_stack_bottom_frame: function(callStackForError) {
             return callStackForError();
           }
         };
         var specialPropKeyWarningShown;
         var didWarnAboutElementRef = {};
-        var unknownOwnerDebugStack = React13.react_stack_bottom_frame.bind(
-          React13,
+        var unknownOwnerDebugStack = React14.react_stack_bottom_frame.bind(
+          React14,
           UnknownOwner
         )();
         var unknownOwnerDebugTask = createTask(getTaskName(UnknownOwner));
@@ -21719,7 +21719,7 @@
   });
 
   // electron/renderer/index.jsx
-  var import_react12 = __toESM(require_react());
+  var import_react13 = __toESM(require_react());
   var import_client2 = __toESM(require_client());
 
   // node_modules/flexlayout-react/dist/index.js
@@ -28129,31 +28129,78 @@
   var Panel1_default = Panel1;
 
   // electron/renderer/components/Panel3.jsx
+  var import_react3 = __toESM(require_react());
   var Panel3 = () => {
-    return /* @__PURE__ */ React.createElement("div", { className: "panel" });
+    const [url, setUrl] = (0, import_react3.useState)("https://www.google.com");
+    const [inputValue, setInputValue] = (0, import_react3.useState)("https://www.google.com");
+    const webviewRef = (0, import_react3.useRef)(null);
+    const [canGoBack, setCanGoBack] = (0, import_react3.useState)(false);
+    const [canGoForward, setCanGoForward] = (0, import_react3.useState)(false);
+    const [isLoading, setIsLoading] = (0, import_react3.useState)(false);
+    const goToUrl = (0, import_react3.useCallback)((u) => {
+      let fixed = u.trim();
+      if (fixed && !/^https?:\/\//i.test(fixed)) fixed = "https://" + fixed;
+      setUrl(fixed);
+      setInputValue(fixed);
+    }, []);
+    const handleKeyDown = (0, import_react3.useCallback)((e) => {
+      if (e.key === "Enter") goToUrl(inputValue);
+    }, [inputValue, goToUrl]);
+    (0, import_react3.useEffect)(() => {
+      const wv = webviewRef.current;
+      if (!wv) return;
+      const onStart = () => setIsLoading(true);
+      const onStop = () => setIsLoading(false);
+      const onNavigate = (e) => {
+        setInputValue(e.url);
+        setUrl(e.url);
+        setCanGoBack(wv.canGoBack());
+        setCanGoForward(wv.canGoForward());
+      };
+      wv.addEventListener("did-start-loading", onStart);
+      wv.addEventListener("did-stop-loading", onStop);
+      wv.addEventListener("did-navigate", onNavigate);
+      wv.addEventListener("did-navigate-in-page", onNavigate);
+      return () => {
+        wv.removeEventListener("did-start-loading", onStart);
+        wv.removeEventListener("did-stop-loading", onStop);
+        wv.removeEventListener("did-navigate", onNavigate);
+        wv.removeEventListener("did-navigate-in-page", onNavigate);
+      };
+    }, [url]);
+    return /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__bar" }, /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", disabled: !canGoBack, onClick: () => webviewRef.current?.goBack(), title: "Back" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M10 12L6 8l4-4" }))), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", disabled: !canGoForward, onClick: () => webviewRef.current?.goForward(), title: "Forward" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M6 4l4 4-4 4" }))), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", onClick: () => webviewRef.current?.reload(), title: "Refresh" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M2 8a6 6 0 0 1 10.47-4M14 8a6 6 0 0 1-10.47 4M9 1l3 3-3 3M7 15l-3-3 3-3" }))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__url-wrap" }, isLoading && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__spinner" }), /* @__PURE__ */ import_react3.default.createElement(
+      "input",
+      {
+        className: "browser__url",
+        value: inputValue,
+        onChange: (e) => setInputValue(e.target.value),
+        onKeyDown: handleKeyDown,
+        spellCheck: false
+      }
+    )), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn browser__btn--go", onClick: () => goToUrl(inputValue), title: "Go" }, "Go")), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__view-wrap" }, /* @__PURE__ */ import_react3.default.createElement("webview", { className: "browser__view", ref: webviewRef, src: url, allowpopups: true, allowfullscreen: true })));
   };
   var Panel3_default = Panel3;
 
   // electron/renderer/components/ProjectPanel.jsx
-  var import_react10 = __toESM(require_react());
+  var import_react11 = __toESM(require_react());
 
   // electron/renderer/components/ProjectWindow/index.jsx
-  var import_react9 = __toESM(require_react());
+  var import_react10 = __toESM(require_react());
 
   // electron/renderer/components/ProjectWindow/SidebarTree.jsx
-  var import_react5 = __toESM(require_react());
+  var import_react8 = __toESM(require_react());
 
   // electron/renderer/components/shared/VscodeIcon.jsx
-  var import_react3 = __toESM(require_react());
+  var import_react4 = __toESM(require_react());
   var urlCache = /* @__PURE__ */ new Map();
   var cacheKey = (name, isDir, isOpen) => `${name}|${isDir ? 1 : 0}|${isOpen ? 1 : 0}`;
-  var FolderFallback = ({ size }) => /* @__PURE__ */ import_react3.default.createElement("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z", fill: "#c8a84b", opacity: "0.85" }));
-  var FileFallback = ({ size }) => /* @__PURE__ */ import_react3.default.createElement("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react3.default.createElement("rect", { x: "2", y: "1", width: "10", height: "14", rx: "1", fill: "#6b6b6b" }), /* @__PURE__ */ import_react3.default.createElement("path", { d: "M8.5 1.5V5H12", fill: "none", stroke: "#999", strokeWidth: "0.8" }));
+  var FolderFallback = ({ size }) => /* @__PURE__ */ import_react4.default.createElement("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react4.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z", fill: "#c8a84b", opacity: "0.85" }));
+  var FileFallback = ({ size }) => /* @__PURE__ */ import_react4.default.createElement("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react4.default.createElement("rect", { x: "2", y: "1", width: "10", height: "14", rx: "1", fill: "#6b6b6b" }), /* @__PURE__ */ import_react4.default.createElement("path", { d: "M8.5 1.5V5H12", fill: "none", stroke: "#999", strokeWidth: "0.8" }));
   var VscodeIcon = ({ name, isDir = false, isOpen = false, size = 16, style: style2 }) => {
     const key = cacheKey(name, isDir, isOpen);
-    const [url, setUrl] = (0, import_react3.useState)(() => urlCache.get(key) ?? null);
-    const mounted = (0, import_react3.useRef)(true);
-    (0, import_react3.useEffect)(() => {
+    const [url, setUrl] = (0, import_react4.useState)(() => urlCache.get(key) ?? null);
+    const mounted = (0, import_react4.useRef)(true);
+    (0, import_react4.useEffect)(() => {
       mounted.current = true;
       if (url) return;
       window.electronAPI.getVscodeIcon(name, isDir, isOpen).then((resolved) => {
@@ -28167,9 +28214,9 @@
       };
     }, [key]);
     if (!url) {
-      return isDir ? /* @__PURE__ */ import_react3.default.createElement(FolderFallback, { size }) : /* @__PURE__ */ import_react3.default.createElement(FileFallback, { size });
+      return isDir ? /* @__PURE__ */ import_react4.default.createElement(FolderFallback, { size }) : /* @__PURE__ */ import_react4.default.createElement(FileFallback, { size });
     }
-    return /* @__PURE__ */ import_react3.default.createElement(
+    return /* @__PURE__ */ import_react4.default.createElement(
       "img",
       {
         src: url,
@@ -28184,11 +28231,11 @@
   var VscodeIcon_default = VscodeIcon;
 
   // electron/renderer/components/shared/InputDialog.jsx
-  var import_react4 = __toESM(require_react());
+  var import_react5 = __toESM(require_react());
   var InputDialog = ({ state }) => {
-    const [val, setVal] = (0, import_react4.useState)("");
-    const inputRef = (0, import_react4.useRef)(null);
-    (0, import_react4.useEffect)(() => {
+    const [val, setVal] = (0, import_react5.useState)("");
+    const inputRef = (0, import_react5.useRef)(null);
+    (0, import_react5.useEffect)(() => {
       if (state.open) {
         setVal(state.defaultValue ?? "");
         requestAnimationFrame(() => {
@@ -28203,7 +28250,7 @@
       state.resolve(v2 || null);
     };
     const cancel = () => state.resolve(null);
-    return /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-overlay", onMouseDown: cancel }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-box", onMouseDown: (e) => e.stopPropagation() }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-label" }, state.label), /* @__PURE__ */ import_react4.default.createElement(
+    return /* @__PURE__ */ import_react5.default.createElement("div", { className: "id-overlay", onMouseDown: cancel }, /* @__PURE__ */ import_react5.default.createElement("div", { className: "id-box", onMouseDown: (e) => e.stopPropagation() }, /* @__PURE__ */ import_react5.default.createElement("div", { className: "id-label" }, state.label), /* @__PURE__ */ import_react5.default.createElement(
       "input",
       {
         ref: inputRef,
@@ -28221,445 +28268,19 @@
           }
         }
       }
-    ), /* @__PURE__ */ import_react4.default.createElement("div", { className: "id-actions" }, /* @__PURE__ */ import_react4.default.createElement("button", { className: "id-btn id-btn--cancel", onClick: cancel }, "Cancel"), /* @__PURE__ */ import_react4.default.createElement("button", { className: "id-btn id-btn--ok", onClick: commit }, "OK"))));
+    ), /* @__PURE__ */ import_react5.default.createElement("div", { className: "id-actions" }, /* @__PURE__ */ import_react5.default.createElement("button", { className: "id-btn id-btn--cancel", onClick: cancel }, "Cancel"), /* @__PURE__ */ import_react5.default.createElement("button", { className: "id-btn id-btn--ok", onClick: commit }, "OK"))));
   };
   var useInputDialog = () => {
-    const [state, setState] = (0, import_react4.useState)({ open: false, label: "", defaultValue: "", resolve: null });
+    const [state, setState] = (0, import_react5.useState)({ open: false, label: "", defaultValue: "", resolve: null });
     const ask = (label, defaultValue = "") => new Promise((resolve) => {
       setState({ open: true, label, defaultValue, resolve: (v2) => {
         setState((s15) => ({ ...s15, open: false }));
         resolve(v2);
       } });
     });
-    const dialog = /* @__PURE__ */ import_react4.default.createElement(InputDialog, { state });
+    const dialog = /* @__PURE__ */ import_react5.default.createElement(InputDialog, { state });
     return { dialog, ask };
   };
-
-  // electron/renderer/components/ProjectWindow/SidebarTree.jsx
-  var ArrowSvg = () => /* @__PURE__ */ import_react5.default.createElement("svg", { width: "8", height: "8", viewBox: "0 0 8 8", fill: "currentColor" }, /* @__PURE__ */ import_react5.default.createElement("path", { d: "M2 1l4 3-4 3V1z" }));
-  var TreeRow = ({
-    label,
-    iconEl,
-    depth,
-    hasChildren,
-    isOpen,
-    isSelected,
-    isDropTarget,
-    onClick,
-    onDoubleClick,
-    onArrowClick,
-    onDragOver,
-    onDragLeave,
-    onDrop,
-    onContextMenu
-  }) => /* @__PURE__ */ import_react5.default.createElement(
-    "div",
-    {
-      className: [
-        "pw-tree-row",
-        isSelected ? "pw-tree-row--selected" : "",
-        isDropTarget ? "pw-tree-row--drop-target" : ""
-      ].filter(Boolean).join(" "),
-      style: { paddingLeft: `${6 + depth * 14}px` },
-      onClick,
-      onDoubleClick,
-      onDragOver,
-      onDragLeave,
-      onDrop,
-      onContextMenu,
-      role: "treeitem",
-      "aria-expanded": hasChildren ? isOpen : void 0,
-      "aria-selected": isSelected
-    },
-    /* @__PURE__ */ import_react5.default.createElement(
-      "span",
-      {
-        className: `pw-tree-row__arrow${hasChildren ? isOpen ? " pw-tree-row__arrow--open" : "" : " pw-tree-row__arrow--hidden"}`,
-        onClick: hasChildren ? (e) => {
-          e.stopPropagation();
-          onArrowClick();
-        } : void 0,
-        "aria-hidden": "true"
-      },
-      /* @__PURE__ */ import_react5.default.createElement(ArrowSvg, null)
-    ),
-    /* @__PURE__ */ import_react5.default.createElement("span", { className: "pw-tree-row__icon", "aria-hidden": "true" }, iconEl),
-    /* @__PURE__ */ import_react5.default.createElement("span", { className: "pw-tree-row__label", title: label }, label)
-  );
-  var FolderNode = ({
-    entry,
-    depth,
-    selectedPath,
-    expandedSet,
-    childCache,
-    onSelect,
-    onToggle,
-    loadChildren,
-    onDrop,
-    dropTarget,
-    setDropTarget,
-    onContextMenu,
-    showHidden
-  }) => {
-    const isOpen = expandedSet.has(entry.path);
-    const isSelected = selectedPath === entry.path;
-    const raw = childCache.get(entry.path) ?? null;
-    const children = raw ? showHidden ? raw : raw.filter((c) => !c.name.startsWith(".")) : null;
-    const hasLoaded = childCache.has(entry.path);
-    const [loading, setLoading] = (0, import_react5.useState)(false);
-    const expandTimerRef = (0, import_react5.useRef)(null);
-    const expandHoverRef = (0, import_react5.useRef)(null);
-    (0, import_react5.useEffect)(() => {
-      if (isOpen && !hasLoaded) {
-        setLoading(true);
-        loadChildren(entry.path).finally(() => setLoading(false));
-      }
-    }, [isOpen, hasLoaded, entry.path, loadChildren]);
-    const hasChildren = !hasLoaded || raw && raw.length > 0;
-    const handleDragOver = (0, import_react5.useCallback)((e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer.dropEffect = "move";
-      setDropTarget(entry.path);
-      if (expandHoverRef.current !== entry.path) {
-        expandHoverRef.current = entry.path;
-        if (expandTimerRef.current) {
-          clearTimeout(expandTimerRef.current);
-          expandTimerRef.current = null;
-        }
-        expandTimerRef.current = setTimeout(() => {
-          if (!isOpen) onToggle(entry.path);
-        }, 2e3);
-      }
-    }, [entry.path, setDropTarget, isOpen, onToggle]);
-    const handleDragLeave = (0, import_react5.useCallback)((e) => {
-      e.stopPropagation();
-      setDropTarget((p) => p === entry.path ? null : p);
-      if (expandTimerRef.current) {
-        clearTimeout(expandTimerRef.current);
-        expandTimerRef.current = null;
-      }
-      expandHoverRef.current = null;
-    }, [entry.path, setDropTarget]);
-    const handleDrop = (0, import_react5.useCallback)((e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDropTarget(null);
-      if (expandTimerRef.current) {
-        clearTimeout(expandTimerRef.current);
-        expandTimerRef.current = null;
-      }
-      expandHoverRef.current = null;
-      try {
-        const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-        if (paths?.length) onDrop(entry.path, paths);
-      } catch {
-      }
-    }, [entry.path, onDrop, setDropTarget]);
-    const handleCtxMenu = (0, import_react5.useCallback)((e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      onContextMenu(entry.path);
-    }, [entry.path, onContextMenu]);
-    return /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement(
-      TreeRow,
-      {
-        label: entry.name,
-        iconEl: /* @__PURE__ */ import_react5.default.createElement(VscodeIcon_default, { name: entry.name, isDir: true, isOpen, size: 16 }),
-        depth,
-        hasChildren,
-        isOpen,
-        isSelected,
-        isDropTarget: dropTarget === entry.path,
-        onClick: () => onSelect(entry.path),
-        onDoubleClick: () => onToggle(entry.path),
-        onArrowClick: () => onToggle(entry.path),
-        onDragOver: handleDragOver,
-        onDragLeave: handleDragLeave,
-        onDrop: handleDrop,
-        onContextMenu: handleCtxMenu
-      }
-    ), isOpen && hasLoaded && children && children.map((child) => /* @__PURE__ */ import_react5.default.createElement(
-      FolderNode,
-      {
-        key: child.path,
-        entry: child,
-        depth: depth + 1,
-        selectedPath,
-        expandedSet,
-        childCache,
-        onSelect,
-        onToggle,
-        loadChildren,
-        onDrop,
-        dropTarget,
-        setDropTarget,
-        onContextMenu
-      }
-    )), isOpen && loading && /* @__PURE__ */ import_react5.default.createElement("div", { style: { paddingLeft: `${6 + (depth + 1) * 14 + 14}px`, color: "#555", fontSize: 11, height: 20, lineHeight: "20px" } }, "..."));
-  };
-  var SidebarTree = ({
-    rootPath,
-    selectedPath,
-    expandedSet,
-    childCache,
-    onSelect,
-    onToggle,
-    loadChildren,
-    onDrop,
-    clipboard,
-    invalidateCache,
-    showHidden
-  }) => {
-    const [rootChildren, setRootChildren] = (0, import_react5.useState)(null);
-    const [dropTarget, setDropTarget] = (0, import_react5.useState)(null);
-    const [localRefresh, setLocalRefresh] = (0, import_react5.useState)(0);
-    const { dialog: inputDialog, ask } = useInputDialog();
-    const findTrashRoot = (0, import_react5.useCallback)((folderPath) => {
-      if (rootPath && folderPath.startsWith(rootPath)) return rootPath;
-      const parent = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
-      return parent;
-    }, [rootPath]);
-    (0, import_react5.useEffect)(() => {
-      if (!rootPath) {
-        setRootChildren(null);
-        return;
-      }
-      window.electronAPI.readDir(rootPath).then(setRootChildren);
-    }, [rootPath, localRefresh]);
-    (0, import_react5.useEffect)(() => {
-      if (!rootPath || childCache.has(rootPath)) return;
-      window.electronAPI.readDir(rootPath).then(setRootChildren);
-    }, [rootPath, childCache]);
-    const rootName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).pop() : "";
-    const handleRootDragOver = (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      setDropTarget(rootPath);
-    };
-    const handleRootDragLeave = () => setDropTarget((p) => p === rootPath ? null : p);
-    const handleRootDrop = (e) => {
-      e.preventDefault();
-      setDropTarget(null);
-      try {
-        const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-        if (paths?.length) onDrop(rootPath, paths);
-      } catch {
-      }
-    };
-    const handleContextMenu = (0, import_react5.useCallback)(async (folderPath) => {
-      if (folderPath !== selectedPath) onSelect(folderPath);
-      const parentDir = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
-      const result = await window.electronAPI.showContextMenu(
-        "folder",
-        [folderPath],
-        clipboard?.paths ?? null
-      );
-      if (!result) return;
-      const refresh = () => {
-        invalidateCache(folderPath);
-        invalidateCache(parentDir);
-        setLocalRefresh((k) => k + 1);
-      };
-      switch (result.action) {
-        case "newFolder": {
-          try {
-            const created = await window.electronAPI.newFolder(folderPath, "New Folder");
-            if (created) {
-              invalidateCache(folderPath);
-              setLocalRefresh((k) => k + 1);
-              onSelect(folderPath);
-            }
-          } catch (err) {
-            await window.electronAPI.showAlert(`Cannot create folder:
-${err.message}`);
-          }
-          break;
-        }
-        case "newFile": {
-          try {
-            const created = await window.electronAPI.newFile(folderPath, "New File.txt");
-            if (created) {
-              invalidateCache(folderPath);
-              setLocalRefresh((k) => k + 1);
-              onSelect(folderPath);
-            }
-          } catch (err) {
-            await window.electronAPI.showAlert(`Cannot create file:
-${err.message}`);
-          }
-          break;
-        }
-        case "rename": {
-          const oldName = folderPath.replace(/.*[\\/]/, "");
-          const n = await ask("Rename to:", oldName);
-          if (n && n !== oldName) {
-            try {
-              await window.electronAPI.rename(folderPath, n);
-              invalidateCache(parentDir);
-              setLocalRefresh((k) => k + 1);
-            } catch (err) {
-              await window.electronAPI.showAlert(`Cannot rename:
-${err.message}`);
-            }
-          }
-          break;
-        }
-        case "delete": {
-          const name = folderPath.replace(/.*[\\/]/, "");
-          const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
-          if (ok) {
-            try {
-              await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
-              invalidateCache(parentDir);
-              setLocalRefresh((k) => k + 1);
-            } catch (err) {
-              await window.electronAPI.showAlert(`Cannot delete:
-${err.message}`);
-            }
-          }
-          break;
-        }
-        case "duplicate": {
-          try {
-            await window.electronAPI.duplicate(folderPath);
-            invalidateCache(parentDir);
-            setLocalRefresh((k) => k + 1);
-          } catch (err) {
-            await window.electronAPI.showAlert(`Cannot duplicate:
-${err.message}`);
-          }
-          break;
-        }
-        case "copy":
-          break;
-        case "reveal":
-          window.electronAPI.revealInExplorer(folderPath);
-          break;
-        case "copyPath":
-          navigator.clipboard.writeText(folderPath);
-          break;
-        case "openInTerminal": {
-          window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: folderPath } }));
-          break;
-        }
-        case "refresh":
-          refresh();
-          break;
-      }
-    }, [selectedPath, onSelect, clipboard, invalidateCache]);
-    const handleBlankContext = (0, import_react5.useCallback)(async (e) => {
-      if (!rootPath) return;
-      const result = await window.electronAPI.showContextMenu(
-        "none",
-        [],
-        clipboard?.paths ?? null
-      );
-      if (!result) return;
-      const refresh = () => {
-        invalidateCache(rootPath);
-        setLocalRefresh((k) => k + 1);
-      };
-      switch (result.action) {
-        case "newFolder": {
-          try {
-            await window.electronAPI.newFolder(rootPath, "New Folder");
-            refresh();
-          } catch (err) {
-            await window.electronAPI.showAlert(`Cannot create folder:
-${err.message}`);
-          }
-          break;
-        }
-        case "newFile": {
-          try {
-            await window.electronAPI.newFile(rootPath, "New File.txt");
-            refresh();
-          } catch (err) {
-            await window.electronAPI.showAlert(`Cannot create file:
-${err.message}`);
-          }
-          break;
-        }
-        case "paste": {
-          if (!clipboard?.paths?.length) break;
-          const failed = [];
-          for (const src of clipboard.paths) {
-            if (clipboard.mode === "copy") {
-              try {
-                await window.electronAPI.copyItem(src, rootPath);
-              } catch (err) {
-                failed.push(src.split(/[\\/]/).pop());
-              }
-            } else {
-              try {
-                await window.electronAPI.moveItem(src, rootPath);
-              } catch (err) {
-                failed.push(src.split(/[\\/]/).pop());
-              }
-            }
-          }
-          if (failed.length) await window.electronAPI.showAlert(`Cannot paste:
-${failed.join(", ")}`);
-          refresh();
-          break;
-        }
-        case "reveal":
-          window.electronAPI.revealInExplorer(rootPath);
-          break;
-        case "refresh":
-          refresh();
-          break;
-      }
-    }, [rootPath, clipboard, invalidateCache]);
-    return /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, inputDialog, /* @__PURE__ */ import_react5.default.createElement(
-      "div",
-      {
-        className: "pw-sidebar__scroll",
-        role: "tree",
-        "aria-label": "Project tree",
-        onContextMenu: handleBlankContext
-      },
-      rootPath && /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("div", { className: "pw-section" }, /* @__PURE__ */ import_react5.default.createElement("span", { className: "pw-section__label" }, "Assets")), /* @__PURE__ */ import_react5.default.createElement(
-        TreeRow,
-        {
-          label: rootName,
-          iconEl: /* @__PURE__ */ import_react5.default.createElement(VscodeIcon_default, { name: rootName, isDir: true, isOpen: expandedSet.has(rootPath), size: 16 }),
-          depth: 0,
-          hasChildren: rootChildren === null || rootChildren && rootChildren.length > 0,
-          isOpen: expandedSet.has(rootPath),
-          isSelected: selectedPath === rootPath,
-          isDropTarget: dropTarget === rootPath,
-          onClick: () => onSelect(rootPath),
-          onDoubleClick: () => onToggle(rootPath),
-          onArrowClick: () => onToggle(rootPath),
-          onDragOver: handleRootDragOver,
-          onDragLeave: handleRootDragLeave,
-          onDrop: handleRootDrop,
-          onContextMenu: () => handleContextMenu(rootPath)
-        }
-      ), expandedSet.has(rootPath) && rootChildren && rootChildren.filter((c) => showHidden || !c.name.startsWith(".")).map((entry) => /* @__PURE__ */ import_react5.default.createElement(
-        FolderNode,
-        {
-          key: entry.path,
-          entry,
-          depth: 1,
-          selectedPath,
-          expandedSet,
-          childCache,
-          onSelect,
-          onToggle,
-          loadChildren,
-          onDrop,
-          dropTarget,
-          setDropTarget,
-          onContextMenu: handleContextMenu,
-          showHidden
-        }
-      )))
-    ));
-  };
-  var SidebarTree_default = SidebarTree;
 
   // electron/renderer/components/ProjectWindow/ContentArea.jsx
   var import_react7 = __toESM(require_react());
@@ -28690,7 +28311,42 @@ ${failed.join(", ")}`);
   var IcoFile = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4Zm5.5 1.5v3A1.5 1.5 0 0 0 11 6h3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5Z" }));
   var IcoEye = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z" }), /* @__PURE__ */ import_react7.default.createElement("path", { d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" }));
   var IcoHidden = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M13.36 2.64a.5.5 0 0 1 0 .707l-10 10a.5.5 0 0 1-.707-.707l10-10a.5.5 0 0 1 .707 0zm-.277 3.754A12.09 12.09 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-.746 0-1.444-.13-2.083-.354l1.05-1.05A2.5 2.5 0 0 0 9.904 8.967l1.18-1.18c.226-.241.444-.5.64-.78zM4.917 5.623l-1.17 1.17c-.226.242-.444.5-.64.78A12.09 12.09 0 0 0 1.172 8c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.746 0 1.444-.13 2.083-.354l.792.792A9.996 9.996 0 0 1 8 14C3 14 0 8 0 8s1.128-2.303 3.122-3.78l1.795 1.795zm1.479-1.015A8.534 8.534 0 0 1 8 4c5 0 8 4 8 4s-1.128 2.303-3.122 3.78L10.3 9.202A2.5 2.5 0 0 0 6.396 5.402l.707-.707z" }), /* @__PURE__ */ import_react7.default.createElement("path", { d: "M8 5.5a2.53 2.53 0 0 1 .794.13l-1.552 1.552A.5.5 0 0 1 6.5 6.5v-.001a2.5 2.5 0 0 1 1.5-.999z" }));
+  var IcoPreview = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M2 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H2zm0 1h12a1 1 0 0 1 1 1v5.5l-3.78-3.78a.5.5 0 0 0-.68.02L6.5 10.5 4.28 8.28a.5.5 0 0 0-.56-.1L1 9.96V4a1 1 0 0 1 1-1zm11 9H3.62l3.2-3.2 2.2 2.2a.5.5 0 0 0 .71.05L12 9.96l1 1V12z" }));
   var IconBtn = ({ title, active, onClick, children }) => /* @__PURE__ */ import_react7.default.createElement("button", { className: `pw-bar-btn${active ? " pw-bar-btn--active" : ""}`, title, onClick }, children);
+  var PREVIEW_CACHE = /* @__PURE__ */ new Map();
+  var PreviewIcon = ({ entry, showPreview, size }) => {
+    const [preview, setPreview] = (0, import_react7.useState)(null);
+    const mounted = (0, import_react7.useRef)(true);
+    (0, import_react7.useEffect)(() => {
+      mounted.current = true;
+      if (!showPreview) {
+        setPreview(null);
+        return;
+      }
+      const cached = PREVIEW_CACHE.get(entry.path);
+      if (cached) {
+        setPreview(cached);
+        return;
+      }
+      if (entry.isDir) return;
+      window.electronAPI.getFilePreview(entry.path).then((r) => {
+        if (!mounted.current) return;
+        if (r) PREVIEW_CACHE.set(entry.path, r);
+        setPreview(r);
+      });
+      return () => {
+        mounted.current = false;
+      };
+    }, [entry.path, showPreview, entry.isDir]);
+    if (!showPreview || entry.isDir || !preview) return /* @__PURE__ */ import_react7.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size });
+    if (preview.type === "image" && preview.data) {
+      return /* @__PURE__ */ import_react7.default.createElement("img", { src: preview.data, width: size, height: size, alt: "", style: { objectFit: "contain", display: "block", borderRadius: 2 } });
+    }
+    if (preview.type === "video") {
+      return /* @__PURE__ */ import_react7.default.createElement("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react7.default.createElement("rect", { x: "1", y: "3.5", width: "14", height: "9", rx: "1.2", fill: "#3a3a3a", stroke: "#666", strokeWidth: "0.8" }), /* @__PURE__ */ import_react7.default.createElement("polygon", { points: "5.5,5.5 5.5,10.5 10.5,8", fill: "#999" }));
+    }
+    return /* @__PURE__ */ import_react7.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size });
+  };
   var RenameInput = ({ initialValue, onCommit, onCancel }) => {
     const [val, setVal] = (0, import_react7.useState)(initialValue);
     const ref = (0, import_react7.useRef)(null);
@@ -28720,7 +28376,7 @@ ${failed.join(", ")}`);
       }
     );
   };
-  var Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, showHidden, onToggleHidden, itemCount, selectedCount, onCrumbsDragOver, onCrumbsDragLeave, onCrumbsDrop }) => {
+  var Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, showHidden, onToggleHidden, showPreview, onTogglePreview, itemCount, selectedCount, onCrumbsDragOver, onCrumbsDragLeave, onCrumbsDrop }) => {
     const crumbs = [];
     if (rootPath && currentPath) {
       const rootName = rootPath.split(/[\\/]/).filter(Boolean).pop();
@@ -28740,6 +28396,28 @@ ${failed.join(", ")}`);
         className: `pw-breadcrumb__item${i === crumbs.length - 1 ? " pw-breadcrumb__item--active" : ""}`,
         onClick: () => i < crumbs.length - 1 && onNavigate(c.path),
         title: c.path,
+        onContextMenu: async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const r = await window.electronAPI.showContextMenu("breadcrumb", [c.path]);
+          if (!r) return;
+          switch (r.action) {
+            case "copyPath":
+              navigator.clipboard.writeText(c.path);
+              break;
+            case "copyName":
+              navigator.clipboard.writeText(c.label);
+              break;
+            case "openInTerminal":
+              window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: c.path } }));
+              break;
+            case "reveal":
+              window.electronAPI.revealInExplorer(c.path);
+              break;
+            case "refresh":
+              break;
+          }
+        },
         onDragOver: (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -28767,7 +28445,7 @@ ${failed.join(", ")}`);
         onChange: (e) => onQuery(e.target.value),
         spellCheck: false
       }
-    ), query && /* @__PURE__ */ import_react7.default.createElement("button", { className: "pw-bar__search-clear", onClick: () => onQuery("") }, "\xD7")), /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar__divider" }), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: "Show folders", active: showFolders, onClick: onToggleFolders }, /* @__PURE__ */ import_react7.default.createElement(IcoFolder, null)), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: "Show files", active: showFiles, onClick: onToggleFiles }, /* @__PURE__ */ import_react7.default.createElement(IcoFile, null)), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: `${showHidden ? "Hide" : "Show"} hidden files (Ctrl+H)`, active: showHidden, onClick: onToggleHidden }, /* @__PURE__ */ import_react7.default.createElement(IcoHidden, null)), /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar-count", title: eyeLabel }, /* @__PURE__ */ import_react7.default.createElement(IcoEye, null), eyeLabel && /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-bar-count__label" }, selectedCount > 0 ? selectedCount : itemCount))));
+    ), query && /* @__PURE__ */ import_react7.default.createElement("button", { className: "pw-bar__search-clear", onClick: () => onQuery("") }, "\xD7")), /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar__divider" }), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: "Show folders", active: showFolders, onClick: onToggleFolders }, /* @__PURE__ */ import_react7.default.createElement(IcoFolder, null)), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: "Show files", active: showFiles, onClick: onToggleFiles }, /* @__PURE__ */ import_react7.default.createElement(IcoFile, null)), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: `${showHidden ? "Hide" : "Show"} hidden files (Ctrl+H)`, active: showHidden, onClick: onToggleHidden }, /* @__PURE__ */ import_react7.default.createElement(IcoHidden, null)), /* @__PURE__ */ import_react7.default.createElement(IconBtn, { title: `${showPreview ? "Disable" : "Enable"} preview`, active: showPreview, onClick: onTogglePreview }, /* @__PURE__ */ import_react7.default.createElement(IcoPreview, null)), /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-bar-count", title: eyeLabel }, /* @__PURE__ */ import_react7.default.createElement(IcoEye, null), eyeLabel && /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-bar-count__label" }, selectedCount > 0 ? selectedCount : itemCount))));
   };
   var ContentArea = ({
     rootPath,
@@ -28786,13 +28464,17 @@ ${failed.join(", ")}`);
     performRedo,
     zoom,
     showHidden,
-    onToggleHidden
+    onToggleHidden,
+    showFolders,
+    onToggleFolders,
+    showFiles,
+    onToggleFiles,
+    showPreview,
+    onTogglePreview
   }) => {
     const [entries, setEntries] = (0, import_react7.useState)([]);
     const [loading, setLoading] = (0, import_react7.useState)(false);
     const [query, setQuery] = (0, import_react7.useState)("");
-    const [showFolders, setShowFolders] = (0, import_react7.useState)(true);
-    const [showFiles, setShowFiles] = (0, import_react7.useState)(true);
     const [band, setBand] = (0, import_react7.useState)(null);
     const [renamingPath, setRenamingPath] = (0, import_react7.useState)(null);
     const gridRef = (0, import_react7.useRef)(null);
@@ -28864,8 +28546,6 @@ ${msg}`);
     }, [refreshToken]);
     (0, import_react7.useEffect)(() => {
       setQuery("");
-      setShowFolders(true);
-      setShowFiles(true);
       setRenamingPath(null);
     }, [currentPath]);
     const visible = (0, import_react7.useMemo)(() => {
@@ -29056,6 +28736,21 @@ ${msg}`);
           invalidateCache(dir);
           loadEntries();
           return;
+        case "pinToSidebar": {
+          for (const p of targetPaths) {
+            const s15 = await window.electronAPI.stat(p);
+            if (s15.isDir) {
+              const name = p.replace(/.*[\\/]/, "");
+              const existing = await window.electronAPI.readPinConfig(rootPathRef.current);
+              if (!existing.includes(name)) {
+                existing.push(name);
+                await window.electronAPI.writePinConfig(rootPathRef.current, existing);
+              }
+            }
+          }
+          window.dispatchEvent(new CustomEvent("pin-changed"));
+          return;
+        }
         default:
           return;
       }
@@ -29267,6 +28962,100 @@ ${msg}`);
         dragImageRef.current = null;
       }
     }, []);
+    const getExternalPaths = (0, import_react7.useCallback)((e) => {
+      const dt2 = e.dataTransfer;
+      if (!dt2) return null;
+      if (!dt2.types?.includes("Files")) return null;
+      const getPath = window.electronAPI.getPathForFile;
+      if (!getPath) return null;
+      const paths = [];
+      const items = dt2.items;
+      if (items?.length) {
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].kind === "file") {
+            try {
+              const f = items[i].getAsFile();
+              if (f) {
+                const p = getPath(f);
+                if (p) paths.push(p);
+              }
+            } catch {
+            }
+          }
+        }
+      }
+      if (!paths.length) {
+        const files = dt2.files;
+        if (files?.length) {
+          for (let i = 0; i < files.length; i++) {
+            try {
+              const p = getPath(files[i]);
+              if (p) paths.push(p);
+            } catch {
+            }
+          }
+        }
+      }
+      return paths.length ? paths : null;
+    }, []);
+    const copyExternalFiles = (0, import_react7.useCallback)(async (externalPaths, targetDir) => {
+      const failed = [];
+      const copied = [];
+      for (const src of externalPaths) {
+        try {
+          const dest = await window.electronAPI.copyItem(src, targetDir);
+          if (dest) copied.push(dest);
+        } catch (err) {
+          failed.push(src.split(/[\\/]/).pop());
+        }
+      }
+      if (failed.length) await alertErr("Cannot import", new Error(failed.join(", ")));
+      return copied;
+    }, [alertErr]);
+    const handleContentAreaDragOver = (0, import_react7.useCallback)((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
+    }, []);
+    const handleContentAreaDrop = (0, import_react7.useCallback)(async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const cp = currentPathRef.current;
+      if (!cp) return;
+      const externalPaths = getExternalPaths(e);
+      if (externalPaths) {
+        const copied = await copyExternalFiles(externalPaths, cp);
+        if (copied.length) {
+          invalidateCache(cp);
+          await loadEntries();
+        }
+        return;
+      }
+      let paths;
+      try {
+        paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+      } catch {
+        return;
+      }
+      if (!paths?.length) return;
+      const pairs = [];
+      const sourceParents = /* @__PURE__ */ new Set();
+      for (const src of paths) {
+        if (src === cp) continue;
+        const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+        sourceParents.add(parentDir);
+        try {
+          const dest = await window.electronAPI.moveItem(src, cp);
+          if (dest) pairs.push({ from: src, to: dest });
+        } catch (err) {
+        }
+      }
+      if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+      for (const p of sourceParents) invalidateCache(p);
+      invalidateCache(cp);
+      onSetSelectedItems(/* @__PURE__ */ new Set());
+      await loadEntries();
+    }, [invalidateCache, loadEntries, onSetSelectedItems, getExternalPaths, copyExternalFiles]);
     const crumbsTimerRef = (0, import_react7.useRef)(null);
     const crumbsHoverRef = (0, import_react7.useRef)(null);
     const handleCrumbsDragOver = (0, import_react7.useCallback)((path) => {
@@ -29295,6 +29084,15 @@ ${msg}`);
         crumbsTimerRef.current = null;
       }
       crumbsHoverRef.current = null;
+      const externalPaths = getExternalPaths(e);
+      if (externalPaths) {
+        const copied = await copyExternalFiles(externalPaths, path);
+        if (copied.length) {
+          invalidateCache(path);
+          onNavigate(path);
+        }
+        return;
+      }
       let paths;
       try {
         paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
@@ -29322,7 +29120,7 @@ ${msg}`);
       invalidateCache(path);
       onSetSelectedItems(/* @__PURE__ */ new Set());
       onNavigate(path);
-    }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr]);
+    }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr, getExternalPaths, copyExternalFiles]);
     const [dropTargetPath, setDropTargetPath] = (0, import_react7.useState)(null);
     const expandTimerRef = (0, import_react7.useRef)(null);
     const expandHoverRef = (0, import_react7.useRef)(null);
@@ -29330,7 +29128,7 @@ ${msg}`);
       if (!entry.isDir) return;
       e.preventDefault();
       e.stopPropagation();
-      e.dataTransfer.dropEffect = "move";
+      e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
       setDropTargetPath(entry.path);
       if (expandHoverRef.current !== entry.path) {
         expandHoverRef.current = entry.path;
@@ -29356,6 +29154,15 @@ ${msg}`);
       if (expandTimerRef.current) {
         clearTimeout(expandTimerRef.current);
         expandTimerRef.current = null;
+      }
+      const externalPaths = getExternalPaths(e);
+      if (externalPaths) {
+        const copied = await copyExternalFiles(externalPaths, entry.path);
+        if (copied.length) {
+          invalidateCache(entry.path);
+          onNavigate(entry.path);
+        }
+        return;
       }
       let paths;
       try {
@@ -29384,7 +29191,7 @@ ${msg}`);
       invalidateCache(entry.path);
       onSetSelectedItems(/* @__PURE__ */ new Set());
       onNavigate(entry.path);
-    }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr]);
+    }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr, getExternalPaths, copyExternalFiles]);
     const handleBlankContextMenu = (0, import_react7.useCallback)(async (e) => {
       if (e.target !== gridRef.current && e.target !== contentRef.current) return;
       e.preventDefault();
@@ -29427,11 +29234,13 @@ ${msg}`);
           query,
           onQuery: setQuery,
           showFolders,
-          onToggleFolders: () => setShowFolders((v2) => !v2),
+          onToggleFolders,
           showFiles,
-          onToggleFiles: () => setShowFiles((v2) => !v2),
+          onToggleFiles,
           showHidden,
           onToggleHidden,
+          showPreview,
+          onTogglePreview,
           itemCount,
           selectedCount: selectedItems.size,
           onCrumbsDragOver: handleCrumbsDragOver,
@@ -29446,7 +29255,9 @@ ${msg}`);
           ref: contentRef,
           onMouseDown: handleMouseDown,
           onClick: handleGridClick,
-          onContextMenu: handleBlankContextMenu
+          onContextMenu: handleBlankContextMenu,
+          onDragOver: handleContentAreaDragOver,
+          onDrop: handleContentAreaDrop
         },
         loading && /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-content__empty" }, "Loading..."),
         !loading && visible.length === 0 && /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-content__empty" }, query || !showFolders || !showFiles ? "No items match" : "Folder is empty"),
@@ -29483,14 +29294,14 @@ ${msg}`);
               onContextMenu: (e) => handleContextMenu(e, entry),
               style: !isListView ? { width: `${itemW}px` } : void 0
             },
-            isListView ? /* @__PURE__ */ import_react7.default.createElement(import_react7.default.Fragment, null, /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-item-list__icon" }, /* @__PURE__ */ import_react7.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size: iconSize })), isRenaming ? /* @__PURE__ */ import_react7.default.createElement(
+            isListView ? /* @__PURE__ */ import_react7.default.createElement(import_react7.default.Fragment, null, /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-item-list__icon" }, /* @__PURE__ */ import_react7.default.createElement(PreviewIcon, { entry, showPreview, size: iconSize })), isRenaming ? /* @__PURE__ */ import_react7.default.createElement(
               RenameInput,
               {
                 initialValue: entry.name,
                 onCommit: (newName) => handleRenameCommit(entry.path, newName),
                 onCancel: () => setRenamingPath(null)
               }
-            ) : /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-item-list__label" }, entry.name)) : /* @__PURE__ */ import_react7.default.createElement(import_react7.default.Fragment, null, /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-item__icon-wrap", style: { width: `${iconSize}px`, height: `${iconSize}px` } }, /* @__PURE__ */ import_react7.default.createElement(VscodeIcon_default, { name: entry.name, isDir: entry.isDir, size: iconSize })), isRenaming ? /* @__PURE__ */ import_react7.default.createElement(
+            ) : /* @__PURE__ */ import_react7.default.createElement("span", { className: "pw-item-list__label" }, entry.name)) : /* @__PURE__ */ import_react7.default.createElement(import_react7.default.Fragment, null, /* @__PURE__ */ import_react7.default.createElement("div", { className: "pw-item__icon-wrap", style: { width: `${iconSize}px`, height: `${iconSize}px` } }, /* @__PURE__ */ import_react7.default.createElement(PreviewIcon, { entry, showPreview, size: iconSize })), isRenaming ? /* @__PURE__ */ import_react7.default.createElement(
               RenameInput,
               {
                 initialValue: entry.name,
@@ -29506,11 +29317,754 @@ ${msg}`);
   };
   var ContentArea_default = ContentArea;
 
+  // electron/renderer/components/ProjectWindow/SidebarTree.jsx
+  var ArrowSvg = () => /* @__PURE__ */ import_react8.default.createElement("svg", { width: "8", height: "8", viewBox: "0 0 8 8", fill: "currentColor" }, /* @__PURE__ */ import_react8.default.createElement("path", { d: "M2 1l4 3-4 3V1z" }));
+  var TreeRow = ({
+    label,
+    iconEl,
+    depth,
+    hasChildren,
+    isOpen,
+    isSelected,
+    isDropTarget,
+    onClick,
+    onDoubleClick,
+    onArrowClick,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onContextMenu
+  }) => /* @__PURE__ */ import_react8.default.createElement(
+    "div",
+    {
+      className: [
+        "pw-tree-row",
+        isSelected ? "pw-tree-row--selected" : "",
+        isDropTarget ? "pw-tree-row--drop-target" : ""
+      ].filter(Boolean).join(" "),
+      style: { paddingLeft: `${6 + depth * 14}px` },
+      onClick,
+      onDoubleClick,
+      onDragOver,
+      onDragLeave,
+      onDrop,
+      onContextMenu,
+      role: "treeitem",
+      "aria-expanded": hasChildren ? isOpen : void 0,
+      "aria-selected": isSelected
+    },
+    /* @__PURE__ */ import_react8.default.createElement(
+      "span",
+      {
+        className: `pw-tree-row__arrow${hasChildren ? isOpen ? " pw-tree-row__arrow--open" : "" : " pw-tree-row__arrow--hidden"}`,
+        onClick: hasChildren ? (e) => {
+          e.stopPropagation();
+          onArrowClick();
+        } : void 0,
+        "aria-hidden": "true"
+      },
+      /* @__PURE__ */ import_react8.default.createElement(ArrowSvg, null)
+    ),
+    /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-tree-row__icon", "aria-hidden": "true" }, iconEl),
+    /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-tree-row__label", title: label }, label)
+  );
+  var FolderNode = ({
+    entry,
+    depth,
+    selectedPath,
+    expandedSet,
+    childCache,
+    onSelect,
+    onToggle,
+    loadChildren,
+    onDrop,
+    dropTarget,
+    setDropTarget,
+    onContextMenu,
+    showHidden,
+    showFolders,
+    showFiles,
+    showPreview,
+    onFileClick,
+    onFileDblClick,
+    onFileCtxMenu,
+    onExternalDrop
+  }) => {
+    const isOpen = expandedSet.has(entry.path);
+    const isSelected = selectedPath === entry.path;
+    const raw = childCache.get(entry.path) ?? null;
+    const children = raw ? showHidden ? raw : raw.filter((c) => !c.name.startsWith(".")) : null;
+    const hasLoaded = childCache.has(entry.path);
+    const [loading, setLoading] = (0, import_react8.useState)(false);
+    const expandTimerRef = (0, import_react8.useRef)(null);
+    const expandHoverRef = (0, import_react8.useRef)(null);
+    (0, import_react8.useEffect)(() => {
+      if (isOpen && !hasLoaded) {
+        setLoading(true);
+        loadChildren(entry.path).finally(() => setLoading(false));
+      }
+    }, [isOpen, hasLoaded, entry.path, loadChildren]);
+    const hasChildren = !hasLoaded || raw && raw.length > 0;
+    const handleDragOver = (0, import_react8.useCallback)((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
+      setDropTarget(entry.path);
+      if (expandHoverRef.current !== entry.path) {
+        expandHoverRef.current = entry.path;
+        if (expandTimerRef.current) {
+          clearTimeout(expandTimerRef.current);
+          expandTimerRef.current = null;
+        }
+        expandTimerRef.current = setTimeout(() => {
+          if (!isOpen) onToggle(entry.path);
+        }, 2e3);
+      }
+    }, [entry.path, setDropTarget, isOpen, onToggle]);
+    const handleDragLeave = (0, import_react8.useCallback)((e) => {
+      e.stopPropagation();
+      setDropTarget((p) => p === entry.path ? null : p);
+      if (expandTimerRef.current) {
+        clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+      expandHoverRef.current = null;
+    }, [entry.path, setDropTarget]);
+    const handleDrop = (0, import_react8.useCallback)(async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDropTarget(null);
+      if (expandTimerRef.current) {
+        clearTimeout(expandTimerRef.current);
+        expandTimerRef.current = null;
+      }
+      expandHoverRef.current = null;
+      if (await onExternalDrop?.(e, entry.path)) return;
+      try {
+        const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+        if (paths?.length) onDrop(entry.path, paths);
+      } catch {
+      }
+    }, [entry.path, onDrop, setDropTarget, onExternalDrop]);
+    const handleCtxMenu = (0, import_react8.useCallback)((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onContextMenu(entry.path, e.shiftKey);
+    }, [entry.path, onContextMenu]);
+    return /* @__PURE__ */ import_react8.default.createElement(import_react8.default.Fragment, null, /* @__PURE__ */ import_react8.default.createElement(
+      TreeRow,
+      {
+        label: entry.name,
+        iconEl: /* @__PURE__ */ import_react8.default.createElement(VscodeIcon_default, { name: entry.name, isDir: true, isOpen, size: 16 }),
+        depth,
+        hasChildren,
+        isOpen,
+        isSelected,
+        isDropTarget: dropTarget === entry.path,
+        onClick: () => onSelect(entry.path),
+        onDoubleClick: () => onToggle(entry.path),
+        onArrowClick: () => onToggle(entry.path),
+        onDragOver: handleDragOver,
+        onDragLeave: handleDragLeave,
+        onDrop: handleDrop,
+        onContextMenu: handleCtxMenu
+      }
+    ), isOpen && hasLoaded && children && children.filter((c) => c.isDir ? showFolders : showFiles).map((child) => child.isDir ? /* @__PURE__ */ import_react8.default.createElement(
+      FolderNode,
+      {
+        key: child.path,
+        entry: child,
+        depth: depth + 1,
+        selectedPath,
+        expandedSet,
+        childCache,
+        onSelect,
+        onToggle,
+        loadChildren,
+        onDrop,
+        dropTarget,
+        setDropTarget,
+        onContextMenu,
+        showHidden,
+        showFolders,
+        showFiles,
+        showPreview,
+        onFileClick,
+        onFileDblClick,
+        onFileCtxMenu,
+        onExternalDrop
+      }
+    ) : /* @__PURE__ */ import_react8.default.createElement(
+      TreeRow,
+      {
+        key: child.path,
+        label: child.name,
+        iconEl: /* @__PURE__ */ import_react8.default.createElement(PreviewIcon, { entry: child, showPreview, size: 16 }),
+        depth: depth + 1,
+        hasChildren: false,
+        isOpen: false,
+        isSelected: selectedPath === child.path,
+        isDropTarget: false,
+        onClick: () => onFileClick?.(child.path),
+        onDoubleClick: () => onFileDblClick?.(child.path),
+        onArrowClick: () => {
+        },
+        onDragOver: () => {
+        },
+        onDragLeave: () => {
+        },
+        onDrop: () => {
+        },
+        onContextMenu: (e) => onFileCtxMenu?.(e, child.path)
+      }
+    )), isOpen && loading && /* @__PURE__ */ import_react8.default.createElement("div", { style: { paddingLeft: `${6 + (depth + 1) * 14 + 14}px`, color: "#555", fontSize: 11, height: 20, lineHeight: "20px" } }, "..."));
+  };
+  var SidebarTree = ({
+    rootPath,
+    selectedPath,
+    expandedSet,
+    childCache,
+    onSelect,
+    onToggle,
+    loadChildren,
+    onDrop,
+    clipboard,
+    invalidateCache,
+    showHidden,
+    showFolders,
+    showFiles,
+    showPreview,
+    onFileSelect
+  }) => {
+    const [rootChildren, setRootChildren] = (0, import_react8.useState)(null);
+    const [dropTarget, setDropTarget] = (0, import_react8.useState)(null);
+    const [localRefresh, setLocalRefresh] = (0, import_react8.useState)(0);
+    const [pinned, setPinned] = (0, import_react8.useState)([]);
+    const { dialog: inputDialog, ask } = useInputDialog();
+    const findTrashRoot = (0, import_react8.useCallback)((folderPath) => {
+      if (rootPath && folderPath.startsWith(rootPath)) return rootPath;
+      const parent = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
+      return parent;
+    }, [rootPath]);
+    (0, import_react8.useEffect)(() => {
+      if (!rootPath) {
+        setRootChildren(null);
+        return;
+      }
+      window.electronAPI.readDirAll(rootPath).then(setRootChildren);
+    }, [rootPath, localRefresh]);
+    (0, import_react8.useEffect)(() => {
+      if (!rootPath || childCache.has(rootPath)) return;
+      window.electronAPI.readDirAll(rootPath).then(setRootChildren);
+    }, [rootPath, childCache]);
+    const rootName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).pop() : "";
+    const handleExternalDrop = (0, import_react8.useCallback)(async (e, targetDir) => {
+      const dt2 = e.dataTransfer;
+      if (!dt2) return false;
+      const hasFiles = dt2.types?.includes("Files");
+      if (!hasFiles) return false;
+      const getPath = window.electronAPI.getPathForFile;
+      if (!getPath) return false;
+      const paths = [];
+      const items = dt2.items;
+      if (items?.length) {
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].kind === "file") {
+            try {
+              const f = items[i].getAsFile();
+              if (f) {
+                const p = getPath(f);
+                if (p) paths.push(p);
+              }
+            } catch {
+            }
+          }
+        }
+      }
+      if (!paths.length) {
+        const files = dt2.files;
+        if (files?.length) {
+          for (let i = 0; i < files.length; i++) {
+            try {
+              const p = getPath(files[i]);
+              if (p) paths.push(p);
+            } catch {
+            }
+          }
+        }
+      }
+      if (!paths.length) return false;
+      const failed = [];
+      let copied = false;
+      for (const src of paths) {
+        try {
+          await window.electronAPI.copyItem(src, targetDir);
+          copied = true;
+        } catch {
+          failed.push(src.split(/[\\/]/).pop());
+        }
+      }
+      if (failed.length) await window.electronAPI.showAlert(`Cannot import:
+${failed.join(", ")}`);
+      if (copied) {
+        invalidateCache(targetDir);
+        setLocalRefresh((k) => k + 1);
+      }
+      return true;
+    }, [invalidateCache]);
+    const handleRootDragOver = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
+      setDropTarget(rootPath);
+    };
+    const handleRootDragLeave = () => setDropTarget((p) => p === rootPath ? null : p);
+    const handleRootDrop = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDropTarget(null);
+      if (await handleExternalDrop(e, rootPath)) return;
+      try {
+        const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+        if (paths?.length) onDrop(rootPath, paths);
+      } catch {
+      }
+    };
+    const handleSidebarDragOver = (0, import_react8.useCallback)((e) => {
+      if (!rootPath) return;
+      if (!e.dataTransfer.types?.includes("Files")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "copy";
+    }, [rootPath]);
+    const handleSidebarDrop = (0, import_react8.useCallback)(async (e) => {
+      if (!rootPath) return;
+      e.preventDefault();
+      e.stopPropagation();
+      await handleExternalDrop(e, rootPath);
+    }, [rootPath, handleExternalDrop]);
+    (0, import_react8.useEffect)(() => {
+      if (!rootPath) {
+        setPinned([]);
+        return;
+      }
+      window.electronAPI.readPinConfig(rootPath).then(setPinned);
+      const handler = () => window.electronAPI.readPinConfig(rootPath).then(setPinned);
+      window.addEventListener("pin-changed", handler);
+      return () => window.removeEventListener("pin-changed", handler);
+    }, [rootPath]);
+    const handlePinToggle = (0, import_react8.useCallback)(async (folderName) => {
+      if (!rootPath) return;
+      let next;
+      if (pinned.includes(folderName)) next = pinned.filter((n) => n !== folderName);
+      else next = [...pinned, folderName];
+      setPinned(next);
+      await window.electronAPI.writePinConfig(rootPath, next);
+      window.dispatchEvent(new CustomEvent("pin-changed"));
+    }, [rootPath, pinned]);
+    const handleContextMenu = (0, import_react8.useCallback)(async (folderPath, shiftKey = false) => {
+      if (folderPath !== selectedPath) onSelect(folderPath);
+      const parentDir = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
+      const result = await window.electronAPI.showContextMenu(
+        "folder",
+        [folderPath],
+        clipboard?.paths ?? null
+      );
+      if (!result) return;
+      const refresh = () => {
+        invalidateCache(folderPath);
+        invalidateCache(parentDir);
+        setLocalRefresh((k) => k + 1);
+      };
+      switch (result.action) {
+        case "newFolder": {
+          try {
+            const created = await window.electronAPI.newFolder(folderPath, "New Folder");
+            if (created) {
+              invalidateCache(folderPath);
+              setLocalRefresh((k) => k + 1);
+              onSelect(folderPath);
+            }
+          } catch (err) {
+            await window.electronAPI.showAlert(`Cannot create folder:
+${err.message}`);
+          }
+          break;
+        }
+        case "newFile": {
+          try {
+            const created = await window.electronAPI.newFile(folderPath, "New File.txt");
+            if (created) {
+              invalidateCache(folderPath);
+              setLocalRefresh((k) => k + 1);
+              onSelect(folderPath);
+            }
+          } catch (err) {
+            await window.electronAPI.showAlert(`Cannot create file:
+${err.message}`);
+          }
+          break;
+        }
+        case "rename": {
+          const oldName = folderPath.replace(/.*[\\/]/, "");
+          const n = await ask("Rename to:", oldName);
+          if (n && n !== oldName) {
+            try {
+              await window.electronAPI.rename(folderPath, n);
+              invalidateCache(parentDir);
+              setLocalRefresh((k) => k + 1);
+            } catch (err) {
+              await window.electronAPI.showAlert(`Cannot rename:
+${err.message}`);
+            }
+          }
+          break;
+        }
+        case "delete": {
+          const name = folderPath.replace(/.*[\\/]/, "");
+          if (shiftKey) {
+            const ok = await window.electronAPI.confirmDialog(`Permanently delete "${name}"?`);
+            if (ok) {
+              try {
+                await window.electronAPI.deleteItem(folderPath);
+                invalidateCache(parentDir);
+                setLocalRefresh((k) => k + 1);
+              } catch (err) {
+                await window.electronAPI.showAlert(`Cannot delete:
+${err.message}`);
+              }
+            }
+          } else {
+            const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
+            if (ok) {
+              try {
+                await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
+                invalidateCache(parentDir);
+                setLocalRefresh((k) => k + 1);
+              } catch (err) {
+                await window.electronAPI.showAlert(`Cannot delete:
+${err.message}`);
+              }
+            }
+          }
+          break;
+        }
+        case "duplicate": {
+          try {
+            await window.electronAPI.duplicate(folderPath);
+            invalidateCache(parentDir);
+            setLocalRefresh((k) => k + 1);
+          } catch (err) {
+            await window.electronAPI.showAlert(`Cannot duplicate:
+${err.message}`);
+          }
+          break;
+        }
+        case "copy":
+          break;
+        case "reveal":
+          window.electronAPI.revealInExplorer(folderPath);
+          break;
+        case "copyPath":
+          navigator.clipboard.writeText(folderPath);
+          break;
+        case "openInTerminal": {
+          window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: folderPath } }));
+          break;
+        }
+        case "pinToSidebar": {
+          const relPath = folderPath.length > rootPath.length ? folderPath.slice(rootPath.length + 1) : folderPath.replace(/.*[\\/]/, "");
+          handlePinToggle(relPath);
+          break;
+        }
+        case "refresh":
+          refresh();
+          break;
+      }
+    }, [selectedPath, onSelect, clipboard, invalidateCache, handlePinToggle]);
+    const handleFileClick = (0, import_react8.useCallback)((filePath) => {
+      onFileSelect?.(filePath);
+    }, [onFileSelect]);
+    const handleFileDoubleClick = (0, import_react8.useCallback)(async (filePath) => {
+      await window.electronAPI.openFile(filePath, "system");
+    }, []);
+    const handleFileContextMenu = (0, import_react8.useCallback)(async (e, filePath) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const shiftKey = e.shiftKey;
+      if (filePath !== selectedPath) onSelect(filePath);
+      const parentDir = filePath.replace(/[\\/][^\\/]+$/, "") || filePath;
+      const result = await window.electronAPI.showContextMenu(
+        "file",
+        [filePath],
+        clipboard?.paths ?? null
+      );
+      if (!result) return;
+      switch (result.action) {
+        case "open":
+          await window.electronAPI.openFile(filePath, "system");
+          break;
+        case "openWith":
+          await window.electronAPI.openFile(filePath, "system");
+          break;
+        case "openInTerminal": {
+          window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: parentDir } }));
+          break;
+        }
+        case "rename": {
+          const oldName = filePath.replace(/.*[\\/]/, "");
+          const n = await ask("Rename to:", oldName);
+          if (n && n !== oldName) {
+            try {
+              await window.electronAPI.rename(filePath, n);
+              invalidateCache(parentDir);
+              setLocalRefresh((k) => k + 1);
+            } catch (err) {
+              await window.electronAPI.showAlert(`Cannot rename:
+${err.message}`);
+            }
+          }
+          break;
+        }
+        case "delete": {
+          const name = filePath.replace(/.*[\\/]/, "");
+          if (shiftKey) {
+            const ok = await window.electronAPI.confirmDialog(`Permanently delete "${name}"?`);
+            if (ok) {
+              try {
+                await window.electronAPI.deleteItem(filePath);
+                invalidateCache(parentDir);
+                setLocalRefresh((k) => k + 1);
+              } catch (err) {
+                await window.electronAPI.showAlert(`Cannot delete:
+${err.message}`);
+              }
+            }
+          } else {
+            const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
+            if (ok) {
+              try {
+                await window.electronAPI.trashItem(filePath, findTrashRoot(filePath));
+                invalidateCache(parentDir);
+                setLocalRefresh((k) => k + 1);
+              } catch (err) {
+                await window.electronAPI.showAlert(`Cannot delete:
+${err.message}`);
+              }
+            }
+          }
+          break;
+        }
+        case "duplicate": {
+          try {
+            await window.electronAPI.duplicate(filePath);
+            invalidateCache(parentDir);
+            setLocalRefresh((k) => k + 1);
+          } catch (err) {
+            await window.electronAPI.showAlert(`Cannot duplicate:
+${err.message}`);
+          }
+          break;
+        }
+        case "reveal":
+          window.electronAPI.revealInExplorer(filePath);
+          break;
+        case "copyPath":
+          navigator.clipboard.writeText(filePath);
+          break;
+        case "refresh": {
+          invalidateCache(parentDir);
+          setLocalRefresh((k) => k + 1);
+          break;
+        }
+      }
+    }, [selectedPath, onSelect, clipboard, invalidateCache, findTrashRoot]);
+    const handleBlankContext = (0, import_react8.useCallback)(async (e) => {
+      if (!rootPath) return;
+      const result = await window.electronAPI.showContextMenu(
+        "none",
+        [],
+        clipboard?.paths ?? null
+      );
+      if (!result) return;
+      const refresh = () => {
+        invalidateCache(rootPath);
+        setLocalRefresh((k) => k + 1);
+      };
+      switch (result.action) {
+        case "newFolder": {
+          try {
+            await window.electronAPI.newFolder(rootPath, "New Folder");
+            refresh();
+          } catch (err) {
+            await window.electronAPI.showAlert(`Cannot create folder:
+${err.message}`);
+          }
+          break;
+        }
+        case "newFile": {
+          try {
+            await window.electronAPI.newFile(rootPath, "New File.txt");
+            refresh();
+          } catch (err) {
+            await window.electronAPI.showAlert(`Cannot create file:
+${err.message}`);
+          }
+          break;
+        }
+        case "paste": {
+          if (!clipboard?.paths?.length) break;
+          const failed = [];
+          for (const src of clipboard.paths) {
+            if (clipboard.mode === "copy") {
+              try {
+                await window.electronAPI.copyItem(src, rootPath);
+              } catch (err) {
+                failed.push(src.split(/[\\/]/).pop());
+              }
+            } else {
+              try {
+                await window.electronAPI.moveItem(src, rootPath);
+              } catch (err) {
+                failed.push(src.split(/[\\/]/).pop());
+              }
+            }
+          }
+          if (failed.length) await window.electronAPI.showAlert(`Cannot paste:
+${failed.join(", ")}`);
+          refresh();
+          break;
+        }
+        case "reveal":
+          window.electronAPI.revealInExplorer(rootPath);
+          break;
+        case "refresh":
+          refresh();
+          break;
+      }
+    }, [rootPath, clipboard, invalidateCache]);
+    return /* @__PURE__ */ import_react8.default.createElement(import_react8.default.Fragment, null, inputDialog, /* @__PURE__ */ import_react8.default.createElement(
+      "div",
+      {
+        className: "pw-sidebar__scroll",
+        role: "tree",
+        "aria-label": "Project tree",
+        onContextMenu: handleBlankContext,
+        onDragOver: handleSidebarDragOver,
+        onDrop: handleSidebarDrop
+      },
+      rootPath && /* @__PURE__ */ import_react8.default.createElement(import_react8.default.Fragment, null, pinned.length > 0 && /* @__PURE__ */ import_react8.default.createElement(import_react8.default.Fragment, null, /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-section" }, /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-section__label" }, "Pinned")), pinned.map((name) => {
+        const sep = rootPath.includes("\\") ? "\\" : "/";
+        const fullPath = rootPath + sep + name;
+        return /* @__PURE__ */ import_react8.default.createElement(
+          TreeRow,
+          {
+            key: name,
+            label: name,
+            iconEl: /* @__PURE__ */ import_react8.default.createElement(VscodeIcon_default, { name, isDir: true, size: 16 }),
+            depth: 0,
+            hasChildren: false,
+            isOpen: false,
+            isSelected: selectedPath === fullPath,
+            isDropTarget: false,
+            onClick: () => onSelect(fullPath),
+            onDoubleClick: () => onToggle(fullPath),
+            onArrowClick: () => {
+            },
+            onDragOver: () => {
+            },
+            onDragLeave: () => {
+            },
+            onDrop: () => {
+            },
+            onContextMenu: async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const result = await window.electronAPI.showContextMenu("pinned", [fullPath], clipboard?.paths ?? null);
+              if (result?.action === "pinToSidebar") handlePinToggle(name);
+            }
+          }
+        );
+      })), /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-section" }, /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-section__label" }, "Files")), /* @__PURE__ */ import_react8.default.createElement(
+        TreeRow,
+        {
+          label: rootName,
+          iconEl: /* @__PURE__ */ import_react8.default.createElement(VscodeIcon_default, { name: rootName, isDir: true, isOpen: expandedSet.has(rootPath), size: 16 }),
+          depth: 0,
+          hasChildren: rootChildren === null || rootChildren && rootChildren.length > 0,
+          isOpen: expandedSet.has(rootPath),
+          isSelected: selectedPath === rootPath,
+          isDropTarget: dropTarget === rootPath,
+          onClick: () => onSelect(rootPath),
+          onDoubleClick: () => onToggle(rootPath),
+          onArrowClick: () => onToggle(rootPath),
+          onDragOver: handleRootDragOver,
+          onDragLeave: handleRootDragLeave,
+          onDrop: handleRootDrop,
+          onContextMenu: (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleContextMenu(rootPath, e.shiftKey);
+          }
+        }
+      ), expandedSet.has(rootPath) && rootChildren && rootChildren.filter((c) => showHidden || !c.name.startsWith(".")).filter((c) => c.isDir ? showFolders : showFiles).map((entry) => entry.isDir ? /* @__PURE__ */ import_react8.default.createElement(
+        FolderNode,
+        {
+          key: entry.path,
+          entry,
+          depth: 1,
+          selectedPath,
+          expandedSet,
+          childCache,
+          onSelect,
+          onToggle,
+          loadChildren,
+          onDrop,
+          dropTarget,
+          setDropTarget,
+          onContextMenu: handleContextMenu,
+          showHidden,
+          showFolders,
+          showFiles,
+          showPreview,
+          onFileClick: handleFileClick,
+          onFileDblClick: handleFileDoubleClick,
+          onFileCtxMenu: handleFileContextMenu,
+          onExternalDrop: handleExternalDrop
+        }
+      ) : /* @__PURE__ */ import_react8.default.createElement(
+        TreeRow,
+        {
+          key: entry.path,
+          label: entry.name,
+          iconEl: /* @__PURE__ */ import_react8.default.createElement(PreviewIcon, { entry, showPreview, size: 16 }),
+          depth: 1,
+          hasChildren: false,
+          isOpen: false,
+          isSelected: selectedPath === entry.path,
+          isDropTarget: false,
+          onClick: () => handleFileClick(entry.path),
+          onDoubleClick: () => handleFileDoubleClick(entry.path),
+          onArrowClick: () => {
+          },
+          onDragOver: () => {
+          },
+          onDragLeave: () => {
+          },
+          onDrop: () => {
+          },
+          onContextMenu: (e) => handleFileContextMenu(e, entry.path)
+        }
+      )))
+    ));
+  };
+  var SidebarTree_default = SidebarTree;
+
   // electron/renderer/components/ProjectWindow/StatusBar.jsx
-  var import_react8 = __toESM(require_react());
+  var import_react9 = __toESM(require_react());
   var StatusBar = ({ selectedPath, itemCount, selectedCount, zoom, onZoom }) => {
     const pct = Math.round(zoom);
-    return /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-statusbar" }, /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-statusbar__path", title: selectedPath || "" }, selectedPath || ""), /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-statusbar__count" }, selectedCount > 0 ? `${selectedCount} selected` : itemCount != null ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : ""), /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-statusbar__zoom" }, /* @__PURE__ */ import_react8.default.createElement(
+    return /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-statusbar" }, /* @__PURE__ */ import_react9.default.createElement("span", { className: "pw-statusbar__path", title: selectedPath || "" }, selectedPath || ""), /* @__PURE__ */ import_react9.default.createElement("span", { className: "pw-statusbar__count" }, selectedCount > 0 ? `${selectedCount} selected` : itemCount != null ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : ""), /* @__PURE__ */ import_react9.default.createElement("span", { className: "pw-statusbar__zoom" }, /* @__PURE__ */ import_react9.default.createElement(
       "input",
       {
         type: "range",
@@ -29522,7 +30076,7 @@ ${msg}`);
         onChange: (e) => onZoom(Number(e.target.value)),
         title: `Zoom: ${pct}%`
       }
-    ), /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-zoom-label" }, pct, "%")));
+    ), /* @__PURE__ */ import_react9.default.createElement("span", { className: "pw-zoom-label" }, pct, "%")));
   };
   var StatusBar_default = StatusBar;
 
@@ -29532,35 +30086,38 @@ ${msg}`);
   var SIDEBAR_DEFAULT = 180;
   var ZOOM_DEFAULT = 100;
   var ProjectWindow = () => {
-    const [rootPath, setRootPath] = (0, import_react9.useState)(null);
-    const [currentPath, setCurrentPath] = (0, import_react9.useState)(null);
-    const [selectedPath, setSelectedPath] = (0, import_react9.useState)(null);
-    const [selectedItems, setSelectedItems] = (0, import_react9.useState)(() => /* @__PURE__ */ new Set());
-    const [expandedSet, setExpandedSet] = (0, import_react9.useState)(() => /* @__PURE__ */ new Set());
-    const [childCache, setChildCache] = (0, import_react9.useState)(() => /* @__PURE__ */ new Map());
-    const [itemCount, setItemCount] = (0, import_react9.useState)(null);
-    const [sidebarWidth, setSidebarWidth] = (0, import_react9.useState)(SIDEBAR_DEFAULT);
-    const [clipboard, setClipboard] = (0, import_react9.useState)(null);
-    const [refreshToken, setRefreshToken] = (0, import_react9.useState)(0);
-    const [zoom, setZoom] = (0, import_react9.useState)(ZOOM_DEFAULT);
-    const [showHidden, setShowHidden] = (0, import_react9.useState)(false);
-    const draggingRef = (0, import_react9.useRef)(false);
-    const startXRef = (0, import_react9.useRef)(0);
-    const startWRef = (0, import_react9.useRef)(SIDEBAR_DEFAULT);
-    (0, import_react9.useEffect)(() => {
+    const [rootPath, setRootPath] = (0, import_react10.useState)(null);
+    const [currentPath, setCurrentPath] = (0, import_react10.useState)(null);
+    const [selectedPath, setSelectedPath] = (0, import_react10.useState)(null);
+    const [selectedItems, setSelectedItems] = (0, import_react10.useState)(() => /* @__PURE__ */ new Set());
+    const [expandedSet, setExpandedSet] = (0, import_react10.useState)(() => /* @__PURE__ */ new Set());
+    const [childCache, setChildCache] = (0, import_react10.useState)(() => /* @__PURE__ */ new Map());
+    const [itemCount, setItemCount] = (0, import_react10.useState)(null);
+    const [sidebarWidth, setSidebarWidth] = (0, import_react10.useState)(SIDEBAR_DEFAULT);
+    const [clipboard, setClipboard] = (0, import_react10.useState)(null);
+    const [refreshToken, setRefreshToken] = (0, import_react10.useState)(0);
+    const [zoom, setZoom] = (0, import_react10.useState)(ZOOM_DEFAULT);
+    const [showHidden, setShowHidden] = (0, import_react10.useState)(false);
+    const [showFolders, setShowFolders] = (0, import_react10.useState)(true);
+    const [showFiles, setShowFiles] = (0, import_react10.useState)(true);
+    const [showPreview, setShowPreview] = (0, import_react10.useState)(false);
+    const draggingRef = (0, import_react10.useRef)(false);
+    const startXRef = (0, import_react10.useRef)(0);
+    const startWRef = (0, import_react10.useRef)(SIDEBAR_DEFAULT);
+    (0, import_react10.useEffect)(() => {
       window.electronAPI.readSettings().then((s15) => {
         if (s15.zoom) setZoom(s15.zoom);
       });
     }, []);
-    const handleZoom = (0, import_react9.useCallback)((val) => {
+    const handleZoom = (0, import_react10.useCallback)((val) => {
       setZoom(val);
       window.electronAPI.readSettings().then((s15) => {
         window.electronAPI.writeSettings({ ...s15, zoom: val });
       });
     }, []);
-    const undoStackRef = (0, import_react9.useRef)([]);
-    const redoStackRef = (0, import_react9.useRef)([]);
-    const onResizeStart = (0, import_react9.useCallback)((e) => {
+    const undoStackRef = (0, import_react10.useRef)([]);
+    const redoStackRef = (0, import_react10.useRef)([]);
+    const onResizeStart = (0, import_react10.useCallback)((e) => {
       e.preventDefault();
       draggingRef.current = true;
       startXRef.current = e.clientX;
@@ -29577,28 +30134,28 @@ ${msg}`);
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     }, [sidebarWidth]);
-    const loadChildren = (0, import_react9.useCallback)(async (folderPath) => {
+    const loadChildren = (0, import_react10.useCallback)(async (folderPath) => {
       if (childCache.has(folderPath)) return childCache.get(folderPath);
-      const entries = await window.electronAPI.readDir(folderPath);
+      const entries = await window.electronAPI.readDirAll(folderPath);
       setChildCache((prev) => new Map(prev).set(folderPath, entries));
       return entries;
     }, [childCache]);
-    const invalidateCache = (0, import_react9.useCallback)((dirPath) => {
+    const invalidateCache = (0, import_react10.useCallback)((dirPath) => {
       setChildCache((prev) => {
         const n = new Map(prev);
         n.delete(dirPath);
         return n;
       });
     }, []);
-    const refreshAll = (0, import_react9.useCallback)((dirs) => {
+    const refreshAll = (0, import_react10.useCallback)((dirs) => {
       for (const d of dirs) invalidateCache(d);
       setRefreshToken((t) => t + 1);
     }, [invalidateCache]);
-    const pushUndo = (0, import_react9.useCallback)((op) => {
+    const pushUndo = (0, import_react10.useCallback)((op) => {
       undoStackRef.current.push(op);
       redoStackRef.current = [];
     }, []);
-    const performUndo = (0, import_react9.useCallback)(async () => {
+    const performUndo = (0, import_react10.useCallback)(async () => {
       const stack = undoStackRef.current;
       if (!stack.length) return;
       const op = stack.pop();
@@ -29665,7 +30222,7 @@ ${err.message}`);
         console.warn("Undo failed:", err);
       }
     }, [refreshAll]);
-    const performRedo = (0, import_react9.useCallback)(async () => {
+    const performRedo = (0, import_react10.useCallback)(async () => {
       const stack = redoStackRef.current;
       if (!stack.length) return;
       const op = stack.pop();
@@ -29733,7 +30290,7 @@ ${err.message}`);
         console.warn("Redo failed:", err);
       }
     }, [refreshAll]);
-    (0, import_react9.useEffect)(() => {
+    (0, import_react10.useEffect)(() => {
       if (!rootPath) return;
       window.electronAPI.watchDir(rootPath);
       const unsub = window.electronAPI.onFsChange((affectedDir) => {
@@ -29748,7 +30305,7 @@ ${err.message}`);
         window.electronAPI.unwatchDir(rootPath);
       };
     }, [rootPath, invalidateCache]);
-    const openProject = (0, import_react9.useCallback)((folderPath) => {
+    const openProject = (0, import_react10.useCallback)((folderPath) => {
       setRootPath(folderPath);
       setCurrentPath(folderPath);
       setSelectedPath(folderPath);
@@ -29761,7 +30318,7 @@ ${err.message}`);
       undoStackRef.current = [];
       redoStackRef.current = [];
     }, []);
-    const closeProject = (0, import_react9.useCallback)(() => {
+    const closeProject = (0, import_react10.useCallback)(() => {
       setRootPath(null);
       setCurrentPath(null);
       setSelectedPath(null);
@@ -29773,7 +30330,7 @@ ${err.message}`);
       undoStackRef.current = [];
       redoStackRef.current = [];
     }, []);
-    (0, import_react9.useEffect)(() => {
+    (0, import_react10.useEffect)(() => {
       const u1 = window.electronAPI.onMenuEvent("menu:openProject", openProject);
       const u2 = window.electronAPI.onMenuEvent("menu:newProject", openProject);
       const u3 = window.electronAPI.onMenuEvent("menu:closeProject", closeProject);
@@ -29786,26 +30343,31 @@ ${err.message}`);
         u4();
       };
     }, [openProject, closeProject]);
-    const handleSidebarSelect = (0, import_react9.useCallback)((folderPath) => {
+    const handleSidebarSelect = (0, import_react10.useCallback)((folderPath) => {
       setSelectedPath(folderPath);
       setCurrentPath(folderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
     }, []);
-    const handleToggle = (0, import_react9.useCallback)((folderPath) => {
+    const handleToggle = (0, import_react10.useCallback)((folderPath) => {
       setExpandedSet((prev) => {
         const n = new Set(prev);
         n.has(folderPath) ? n.delete(folderPath) : n.add(folderPath);
         return n;
       });
     }, []);
-    const handleNavigate = (0, import_react9.useCallback)((folderPath) => {
+    const handleNavigate = (0, import_react10.useCallback)((folderPath) => {
       setCurrentPath(folderPath);
       setSelectedPath(folderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
     }, []);
-    const handleSetSelectedItems = (0, import_react9.useCallback)((nextSet) => setSelectedItems(nextSet), []);
-    const handleItemsLoaded = (0, import_react9.useCallback)((count) => setItemCount(count), []);
-    const handleSidebarDrop = (0, import_react9.useCallback)(async (targetFolderPath, draggedPaths) => {
+    const handleSetSelectedItems = (0, import_react10.useCallback)((nextSet) => setSelectedItems(nextSet), []);
+    const handleItemsLoaded = (0, import_react10.useCallback)((count) => setItemCount(count), []);
+    const handleSidebarFileSelect = (0, import_react10.useCallback)((filePath) => {
+      setSelectedPath(filePath);
+      setCurrentPath(filePath.replace(/[\\/][^\\/]+$/, "") || filePath);
+      setSelectedItems(/* @__PURE__ */ new Set([filePath]));
+    }, []);
+    const handleSidebarDrop = (0, import_react10.useCallback)(async (targetFolderPath, draggedPaths) => {
       const pairs = [];
       const sourceParents = /* @__PURE__ */ new Set();
       const failedDrop = [];
@@ -29831,7 +30393,7 @@ ${failedDrop.join(", ")}`);
       setRefreshToken((t) => t + 1);
     }, [invalidateCache, pushUndo]);
     if (!rootPath) {
-      return /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-empty" }, /* @__PURE__ */ import_react9.default.createElement(
+      return /* @__PURE__ */ import_react10.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react10.default.createElement("div", { className: "pw-empty" }, /* @__PURE__ */ import_react10.default.createElement(
         "button",
         {
           onClick: async () => {
@@ -29864,11 +30426,11 @@ ${failedDrop.join(", ")}`);
             e.currentTarget.style.color = "#c8c8c8";
           }
         },
-        /* @__PURE__ */ import_react9.default.createElement("svg", { width: "28", height: "28", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react9.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z", fill: "#c8a84b" })),
+        /* @__PURE__ */ import_react10.default.createElement("svg", { width: "28", height: "28", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react10.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z", fill: "#c8a84b" })),
         "Open Folder"
       )));
     }
-    return /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-body" }, /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-sidebar", style: { width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX } }, /* @__PURE__ */ import_react9.default.createElement(
+    return /* @__PURE__ */ import_react10.default.createElement("div", { className: "pw-root" }, /* @__PURE__ */ import_react10.default.createElement("div", { className: "pw-body" }, /* @__PURE__ */ import_react10.default.createElement("div", { className: "pw-sidebar", style: { width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX } }, /* @__PURE__ */ import_react10.default.createElement(
       SidebarTree_default,
       {
         rootPath,
@@ -29881,9 +30443,13 @@ ${failedDrop.join(", ")}`);
         loadChildren,
         invalidateCache,
         onDrop: handleSidebarDrop,
-        showHidden
+        showHidden,
+        showFolders,
+        showFiles,
+        showPreview,
+        onFileSelect: handleSidebarFileSelect
       }
-    ), /* @__PURE__ */ import_react9.default.createElement("div", { className: "pw-sidebar__resize", onMouseDown: onResizeStart })), /* @__PURE__ */ import_react9.default.createElement(
+    ), /* @__PURE__ */ import_react10.default.createElement("div", { className: "pw-sidebar__resize", onMouseDown: onResizeStart })), /* @__PURE__ */ import_react10.default.createElement(
       ContentArea_default,
       {
         rootPath,
@@ -29902,9 +30468,15 @@ ${failedDrop.join(", ")}`);
         performRedo,
         zoom,
         showHidden,
-        onToggleHidden: () => setShowHidden((v2) => !v2)
+        onToggleHidden: () => setShowHidden((v2) => !v2),
+        showFolders,
+        onToggleFolders: () => setShowFolders((v2) => !v2),
+        showFiles,
+        onToggleFiles: () => setShowFiles((v2) => !v2),
+        showPreview,
+        onTogglePreview: () => setShowPreview((v2) => !v2)
       }
-    )), /* @__PURE__ */ import_react9.default.createElement(
+    )), /* @__PURE__ */ import_react10.default.createElement(
       StatusBar_default,
       {
         selectedCount: selectedItems.size,
@@ -29919,7 +30491,7 @@ ${failedDrop.join(", ")}`);
 
   // electron/renderer/components/ProjectPanel.jsx
   var ProjectPanel = () => {
-    return /* @__PURE__ */ import_react10.default.createElement(ProjectWindow_default, null);
+    return /* @__PURE__ */ import_react11.default.createElement(ProjectWindow_default, null);
   };
   var ProjectPanel_default = ProjectPanel;
 
@@ -29930,7 +30502,7 @@ ${failedDrop.join(", ")}`);
   var Panel5_default = Panel5;
 
   // electron/renderer/components/Terminal.jsx
-  var import_react11 = __toESM(require_react());
+  var import_react12 = __toESM(require_react());
 
   // node_modules/@xterm/xterm/lib/xterm.mjs
   var zs = Object.defineProperty;
@@ -39096,12 +39668,12 @@ ${h2.join(`
 .xterm-selection div { background: #264f78 !important; opacity: 0.5; }
 .xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
 `;
-  var XtermStyle = () => /* @__PURE__ */ import_react11.default.createElement("style", null, XTERM_CUSTOM_CSS);
+  var XtermStyle = () => /* @__PURE__ */ import_react12.default.createElement("style", null, XTERM_CUSTOM_CSS);
   var TabContent = ({ tabId, cwd, writersRef }) => {
-    const elRef = (0, import_react11.useRef)(null);
-    const [initError, setInitError] = (0, import_react11.useState)(null);
+    const elRef = (0, import_react12.useRef)(null);
+    const [initError, setInitError] = (0, import_react12.useState)(null);
     const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "";
-    (0, import_react11.useEffect)(() => {
+    (0, import_react12.useEffect)(() => {
       let term;
       let fit;
       let ro2;
@@ -39190,9 +39762,9 @@ ${h2.join(`
       };
     }, [tabId, cwd]);
     if (initError) {
-      return /* @__PURE__ */ import_react11.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" } }, "Terminal init error: ", initError);
+      return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" } }, "Terminal init error: ", initError);
     }
-    return /* @__PURE__ */ import_react11.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%" } }, /* @__PURE__ */ import_react11.default.createElement("div", { ref: elRef, style: { flex: 1, minHeight: 0 } }), /* @__PURE__ */ import_react11.default.createElement("div", { style: {
+    return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%" } }, /* @__PURE__ */ import_react12.default.createElement("div", { ref: elRef, style: { flex: 1, minHeight: 0 } }), /* @__PURE__ */ import_react12.default.createElement("div", { style: {
       display: "flex",
       alignItems: "center",
       gap: 6,
@@ -39202,7 +39774,7 @@ ${h2.join(`
       fontSize: 11,
       color: "#666",
       flexShrink: 0
-    } }, /* @__PURE__ */ import_react11.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react11.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react11.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react11.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react11.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, dirName)));
+    } }, /* @__PURE__ */ import_react12.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, dirName)));
   };
   var MENU_STYLE = {
     padding: "5px 16px",
@@ -39214,20 +39786,20 @@ ${h2.join(`
   };
   var MENU_SEP = { height: 1, background: "#3c3c3c", margin: "4px 0" };
   var TerminalPanel = () => {
-    const [tabs, setTabs] = (0, import_react11.useState)([]);
-    const [activeTabId, setActiveTabId] = (0, import_react11.useState)(null);
-    const [contextMenu, setContextMenu] = (0, import_react11.useState)(null);
-    const [projectOpen, setProjectOpen] = (0, import_react11.useState)(false);
-    const [renamingTabId, setRenamingTabId] = (0, import_react11.useState)(null);
-    const renameRef = (0, import_react11.useRef)(null);
-    const nextId = (0, import_react11.useRef)(1);
-    const projPath = (0, import_react11.useRef)(null);
-    const writersRef = (0, import_react11.useRef)({});
-    const tabsRef = (0, import_react11.useRef)(tabs);
+    const [tabs, setTabs] = (0, import_react12.useState)([]);
+    const [activeTabId, setActiveTabId] = (0, import_react12.useState)(null);
+    const [contextMenu, setContextMenu] = (0, import_react12.useState)(null);
+    const [projectOpen, setProjectOpen] = (0, import_react12.useState)(false);
+    const [renamingTabId, setRenamingTabId] = (0, import_react12.useState)(null);
+    const renameRef = (0, import_react12.useRef)(null);
+    const nextId = (0, import_react12.useRef)(1);
+    const projPath = (0, import_react12.useRef)(null);
+    const writersRef = (0, import_react12.useRef)({});
+    const tabsRef = (0, import_react12.useRef)(tabs);
     tabsRef.current = tabs;
-    const activeRef = (0, import_react11.useRef)(activeTabId);
+    const activeRef = (0, import_react12.useRef)(activeTabId);
     activeRef.current = activeTabId;
-    (0, import_react11.useEffect)(() => {
+    (0, import_react12.useEffect)(() => {
       const unsub = window.electronAPI.onTerminalData(({ tabId, data }) => {
         const w = writersRef.current[tabId];
         if (w) try {
@@ -39237,7 +39809,7 @@ ${h2.join(`
       });
       return unsub;
     }, []);
-    (0, import_react11.useEffect)(() => {
+    (0, import_react12.useEffect)(() => {
       const unsub = window.electronAPI.onTerminalExit(({ tabId, code }) => {
         const w = writersRef.current[tabId];
         if (w) {
@@ -39251,7 +39823,7 @@ ${h2.join(`
       });
       return unsub;
     }, []);
-    const createTab = (0, import_react11.useCallback)((cwd) => {
+    const createTab = (0, import_react12.useCallback)((cwd) => {
       const dir = cwd || projPath.current;
       if (!dir) return;
       const num = nextId.current++;
@@ -39261,7 +39833,7 @@ ${h2.join(`
       setTabs((prev) => [...prev, { id, name, cwd: dir }]);
       setActiveTabId(id);
     }, []);
-    const closeTab = (0, import_react11.useCallback)((tabId) => {
+    const closeTab = (0, import_react12.useCallback)((tabId) => {
       setTabs((prev) => {
         const idx = prev.findIndex((t) => t.id === tabId);
         const next = prev.filter((t) => t.id !== tabId);
@@ -39271,7 +39843,7 @@ ${h2.join(`
         return next;
       });
     }, []);
-    const startRename = (0, import_react11.useCallback)((tabId, currentName) => {
+    const startRename = (0, import_react12.useCallback)((tabId, currentName) => {
       setRenamingTabId(tabId);
       requestAnimationFrame(() => {
         if (renameRef.current) {
@@ -39280,17 +39852,17 @@ ${h2.join(`
         }
       });
     }, []);
-    const commitRename = (0, import_react11.useCallback)(() => {
+    const commitRename = (0, import_react12.useCallback)(() => {
       if (!renamingTabId || !renameRef.current) return;
       const newName = renameRef.current.value.trim() || `Terminal ${renamingTabId.replace("term_", "")}`;
       setTabs((prev) => prev.map((t) => t.id === renamingTabId ? { ...t, name: newName } : t));
       setRenamingTabId(null);
     }, [renamingTabId]);
-    const cancelRename = (0, import_react11.useCallback)(() => {
+    const cancelRename = (0, import_react12.useCallback)(() => {
       setRenamingTabId(null);
     }, []);
-    const closeContextMenu = (0, import_react11.useCallback)(() => setContextMenu(null), []);
-    const execAction = (0, import_react11.useCallback)(async (action) => {
+    const closeContextMenu = (0, import_react12.useCallback)(() => setContextMenu(null), []);
+    const execAction = (0, import_react12.useCallback)(async (action) => {
       if (!contextMenu) return;
       const { tabId } = contextMenu;
       setContextMenu(null);
@@ -39326,19 +39898,20 @@ ${h2.join(`
           break;
       }
     }, [contextMenu, closeTab, startRename]);
-    (0, import_react11.useEffect)(() => {
+    (0, import_react12.useEffect)(() => {
       const handler = (e) => {
         const dir = e.detail.dir;
         if (dir) {
           projPath.current = dir;
           setProjectOpen(true);
           createTab(dir);
+          window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
         }
       };
       window.addEventListener("open-terminal", handler);
       return () => window.removeEventListener("open-terminal", handler);
     }, [createTab]);
-    (0, import_react11.useEffect)(() => {
+    (0, import_react12.useEffect)(() => {
       window.electronAPI.getProjectPath().then((p) => {
         if (p) {
           projPath.current = p;
@@ -39376,12 +39949,12 @@ ${h2.join(`
         u3();
       };
     }, [createTab]);
-    return /* @__PURE__ */ import_react11.default.createElement("div", { style: {
+    return /* @__PURE__ */ import_react12.default.createElement("div", { style: {
       display: "flex",
       flexDirection: "row",
       height: "100%",
       background: "#1e1e1e"
-    } }, /* @__PURE__ */ import_react11.default.createElement(XtermStyle, null), /* @__PURE__ */ import_react11.default.createElement("div", { style: { flex: 1, position: "relative", overflow: "hidden", zIndex: 1 } }, !projectOpen ? /* @__PURE__ */ import_react11.default.createElement("div", { style: {
+    } }, /* @__PURE__ */ import_react12.default.createElement(XtermStyle, null), /* @__PURE__ */ import_react12.default.createElement("div", { style: { flex: 1, position: "relative", overflow: "hidden", zIndex: 1 } }, !projectOpen ? /* @__PURE__ */ import_react12.default.createElement("div", { style: {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -39389,14 +39962,14 @@ ${h2.join(`
       color: "#666",
       fontSize: 13,
       fontStyle: "italic"
-    } }, "Open a project to use the terminal") : tabs.length === 0 ? /* @__PURE__ */ import_react11.default.createElement("div", { style: {
+    } }, "Open a project to use the terminal") : tabs.length === 0 ? /* @__PURE__ */ import_react12.default.createElement("div", { style: {
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
       height: "100%",
       gap: 14
-    } }, /* @__PURE__ */ import_react11.default.createElement("div", { style: { color: "#666", fontSize: 13 } }, "No open terminals"), /* @__PURE__ */ import_react11.default.createElement(
+    } }, /* @__PURE__ */ import_react12.default.createElement("div", { style: { color: "#666", fontSize: 13 } }, "No open terminals"), /* @__PURE__ */ import_react12.default.createElement(
       "button",
       {
         onClick: () => createTab(),
@@ -39414,12 +39987,12 @@ ${h2.join(`
         onMouseLeave: (e) => e.currentTarget.style.background = "#2d2d2d"
       },
       "+ Create Terminal"
-    )) : tabs.map((tab) => /* @__PURE__ */ import_react11.default.createElement("div", { key: tab.id, style: {
+    )) : tabs.map((tab) => /* @__PURE__ */ import_react12.default.createElement("div", { key: tab.id, style: {
       position: "absolute",
       inset: 0,
       zIndex: 2,
       display: tab.id === activeTabId ? "block" : "none"
-    } }, /* @__PURE__ */ import_react11.default.createElement(TabContent, { tabId: tab.id, cwd: tab.cwd, writersRef })))), projectOpen && /* @__PURE__ */ import_react11.default.createElement("div", { style: {
+    } }, /* @__PURE__ */ import_react12.default.createElement(TabContent, { tabId: tab.id, cwd: tab.cwd, writersRef })))), projectOpen && /* @__PURE__ */ import_react12.default.createElement("div", { style: {
       width: 110,
       flexShrink: 0,
       zIndex: 3,
@@ -39430,7 +40003,7 @@ ${h2.join(`
       overflowY: "auto"
     } }, tabs.map((tab, i) => {
       const active = tab.id === activeTabId;
-      return /* @__PURE__ */ import_react11.default.createElement(
+      return /* @__PURE__ */ import_react12.default.createElement(
         "div",
         {
           key: tab.id,
@@ -39460,8 +40033,8 @@ ${h2.join(`
             if (!active) e.currentTarget.style.background = "transparent";
           }
         },
-        /* @__PURE__ */ import_react11.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none", style: { flexShrink: 0 } }, /* @__PURE__ */ import_react11.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react11.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react11.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })),
-        renamingTabId === tab.id ? /* @__PURE__ */ import_react11.default.createElement(
+        /* @__PURE__ */ import_react12.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none", style: { flexShrink: 0 } }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })),
+        renamingTabId === tab.id ? /* @__PURE__ */ import_react12.default.createElement(
           "input",
           {
             ref: renameRef,
@@ -39485,7 +40058,7 @@ ${h2.join(`
               outline: "none"
             }
           }
-        ) : /* @__PURE__ */ import_react11.default.createElement(
+        ) : /* @__PURE__ */ import_react12.default.createElement(
           "span",
           {
             onDoubleClick: (e) => {
@@ -39502,7 +40075,7 @@ ${h2.join(`
           },
           tab.name
         ),
-        /* @__PURE__ */ import_react11.default.createElement(
+        /* @__PURE__ */ import_react12.default.createElement(
           "span",
           {
             onClick: (e) => {
@@ -39528,7 +40101,7 @@ ${h2.join(`
           "\u2715"
         )
       );
-    }), /* @__PURE__ */ import_react11.default.createElement(
+    }), /* @__PURE__ */ import_react12.default.createElement(
       "div",
       {
         onClick: () => createTab(),
@@ -39554,13 +40127,13 @@ ${h2.join(`
         }
       },
       "+"
-    )), contextMenu && /* @__PURE__ */ import_react11.default.createElement(
+    )), contextMenu && /* @__PURE__ */ import_react12.default.createElement(
       "div",
       {
         style: { position: "fixed", inset: 0, zIndex: 2147483647 },
         onClick: closeContextMenu
       },
-      /* @__PURE__ */ import_react11.default.createElement(
+      /* @__PURE__ */ import_react12.default.createElement(
         "div",
         {
           style: {
@@ -39576,7 +40149,7 @@ ${h2.join(`
           },
           onClick: (e) => e.stopPropagation()
         },
-        /* @__PURE__ */ import_react11.default.createElement(
+        /* @__PURE__ */ import_react12.default.createElement(
           "div",
           {
             style: MENU_STYLE,
@@ -39586,7 +40159,7 @@ ${h2.join(`
           },
           "Kill Terminal"
         ),
-        /* @__PURE__ */ import_react11.default.createElement(
+        /* @__PURE__ */ import_react12.default.createElement(
           "div",
           {
             style: MENU_STYLE,
@@ -39596,8 +40169,8 @@ ${h2.join(`
           },
           "Restart"
         ),
-        /* @__PURE__ */ import_react11.default.createElement("div", { style: MENU_SEP }),
-        /* @__PURE__ */ import_react11.default.createElement(
+        /* @__PURE__ */ import_react12.default.createElement("div", { style: MENU_SEP }),
+        /* @__PURE__ */ import_react12.default.createElement(
           "div",
           {
             style: MENU_STYLE,
@@ -39607,8 +40180,8 @@ ${h2.join(`
           },
           "Rename Tab"
         ),
-        /* @__PURE__ */ import_react11.default.createElement("div", { style: MENU_SEP }),
-        /* @__PURE__ */ import_react11.default.createElement(
+        /* @__PURE__ */ import_react12.default.createElement("div", { style: MENU_SEP }),
+        /* @__PURE__ */ import_react12.default.createElement(
           "div",
           {
             style: MENU_STYLE,
@@ -39670,7 +40243,7 @@ ${h2.join(`
               weight: 35,
               children: [
                 { type: "tab", name: "Project", component: "projectPanel" },
-                { type: "tab", name: "Terminal", component: "terminal" }
+                { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" }
               ]
             }
           ]
@@ -39688,21 +40261,28 @@ ${h2.join(`
   var factory = (node) => {
     switch (node.getComponent()) {
       case "panel1":
-        return /* @__PURE__ */ import_react12.default.createElement(Panel1_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Panel1_default, null);
       case "panel3":
-        return /* @__PURE__ */ import_react12.default.createElement(Panel3_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Panel3_default, null);
       case "projectPanel":
-        return /* @__PURE__ */ import_react12.default.createElement(ProjectPanel_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(ProjectPanel_default, null);
       case "panel5":
-        return /* @__PURE__ */ import_react12.default.createElement(Panel5_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Panel5_default, null);
       case "terminal":
-        return /* @__PURE__ */ import_react12.default.createElement(Terminal_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Terminal_default, null);
       default:
         return null;
     }
   };
-  var App = () => /* @__PURE__ */ import_react12.default.createElement(Layout, { model, factory });
-  import_client2.default.createRoot(document.getElementById("root")).render(/* @__PURE__ */ import_react12.default.createElement(App, null));
+  var App = () => {
+    import_react13.default.useEffect(() => {
+      const handler = () => model.doAction(Actions.selectTab("terminal-tab"));
+      window.addEventListener("focus-terminal-tab", handler);
+      return () => window.removeEventListener("focus-terminal-tab", handler);
+    }, []);
+    return /* @__PURE__ */ import_react13.default.createElement(Layout, { model, factory });
+  };
+  import_client2.default.createRoot(document.getElementById("root")).render(/* @__PURE__ */ import_react13.default.createElement(App, null));
 })();
 /*! Bundled license information:
 

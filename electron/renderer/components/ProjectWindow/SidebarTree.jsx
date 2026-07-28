@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import VscodeIcon from "../shared/VscodeIcon.jsx";
 import { useInputDialog } from "../shared/InputDialog.jsx";
+import { PreviewIcon } from "./ContentArea.jsx";
 
 const ArrowSvg = () => (
   <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
@@ -49,7 +50,9 @@ const FolderNode = ({
   entry, depth, selectedPath, expandedSet, childCache,
   onSelect, onToggle, loadChildren, onDrop,
   dropTarget, setDropTarget, onContextMenu,
-  showHidden,
+  showHidden, showFolders, showFiles, showPreview,
+  onFileClick, onFileDblClick, onFileCtxMenu,
+  onExternalDrop,
 }) => {
   const isOpen     = expandedSet.has(entry.path);
   const isSelected = selectedPath === entry.path;
@@ -70,7 +73,9 @@ const FolderNode = ({
   const hasChildren = !hasLoaded || (raw && raw.length > 0);
 
   const handleDragOver  = useCallback((e) => {
-    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setDropTarget(entry.path);
+    e.preventDefault(); e.stopPropagation();
+    e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
+    setDropTarget(entry.path);
     if (expandHoverRef.current !== entry.path) {
       expandHoverRef.current = entry.path;
       if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
@@ -84,13 +89,14 @@ const FolderNode = ({
     if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
     expandHoverRef.current = null;
   }, [entry.path, setDropTarget]);
-  const handleDrop      = useCallback((e) => {
+  const handleDrop      = useCallback(async (e) => {
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
     if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
     expandHoverRef.current = null;
+    if (await onExternalDrop?.(e, entry.path)) return;
     try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(entry.path, paths); } catch {}
-  }, [entry.path, onDrop, setDropTarget]);
-  const handleCtxMenu   = useCallback((e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(entry.path); }, [entry.path, onContextMenu]);
+  }, [entry.path, onDrop, setDropTarget, onExternalDrop]);
+  const handleCtxMenu   = useCallback((e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(entry.path, e.shiftKey); }, [entry.path, onContextMenu]);
 
   return (
     <>
@@ -110,7 +116,9 @@ const FolderNode = ({
         onDrop={handleDrop}
         onContextMenu={handleCtxMenu}
       />
-      {isOpen && hasLoaded && children && children.map((child) => (
+      {isOpen && hasLoaded && children && children
+        .filter((c) => c.isDir ? showFolders : showFiles)
+        .map((child) => child.isDir ? (
         <FolderNode
           key={child.path}
           entry={child}
@@ -125,6 +133,32 @@ const FolderNode = ({
           dropTarget={dropTarget}
           setDropTarget={setDropTarget}
           onContextMenu={onContextMenu}
+          showHidden={showHidden}
+          showFolders={showFolders}
+          showFiles={showFiles}
+          showPreview={showPreview}
+          onFileClick={onFileClick}
+          onFileDblClick={onFileDblClick}
+          onFileCtxMenu={onFileCtxMenu}
+          onExternalDrop={onExternalDrop}
+        />
+      ) : (
+        <TreeRow
+          key={child.path}
+          label={child.name}
+          iconEl={<PreviewIcon entry={child} showPreview={showPreview} size={16} />}
+          depth={depth + 1}
+          hasChildren={false}
+          isOpen={false}
+          isSelected={selectedPath === child.path}
+          isDropTarget={false}
+          onClick={() => onFileClick?.(child.path)}
+          onDoubleClick={() => onFileDblClick?.(child.path)}
+          onArrowClick={() => {}}
+          onDragOver={() => {}}
+          onDragLeave={() => {}}
+          onDrop={() => {}}
+          onContextMenu={(e) => onFileCtxMenu?.(e, child.path)}
         />
       ))}
       {isOpen && loading && (
@@ -139,12 +173,14 @@ const SidebarTree = ({
   rootPath, selectedPath, expandedSet, childCache,
   onSelect, onToggle, loadChildren, onDrop,
   clipboard, invalidateCache,
-  showHidden,
+  showHidden, showFolders, showFiles, showPreview,
+  onFileSelect,
 }) => {
   const [rootChildren, setRootChildren] = useState(null);
   const [dropTarget,   setDropTarget]   = useState(null);
   // Bump this to force a re-fetch of rootChildren after mutations
   const [localRefresh, setLocalRefresh] = useState(0);
+  const [pinned,       setPinned]       = useState([]);
   const { dialog: inputDialog, ask }    = useInputDialog();
 
   // Helper: find a rootPath that can host .trash (top-most ancestor of folderPath)
@@ -159,27 +195,112 @@ const SidebarTree = ({
   useEffect(() => {
     if (!rootPath) { setRootChildren(null); return; }
     // Always re-read from IPC (bypass in-component cache) so mutations are visible
-    window.electronAPI.readDir(rootPath).then(setRootChildren);
+    window.electronAPI.readDirAll(rootPath).then(setRootChildren);
   }, [rootPath, localRefresh]);
 
   // Also reload when childCache for rootPath is invalidated (chokidar trigger)
   useEffect(() => {
     if (!rootPath || childCache.has(rootPath)) return;
-    window.electronAPI.readDir(rootPath).then(setRootChildren);
+    window.electronAPI.readDirAll(rootPath).then(setRootChildren);
   }, [rootPath, childCache]);
 
   const rootName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).pop() : "";
 
+  const handleExternalDrop = useCallback(async (e, targetDir) => {
+    const dt = e.dataTransfer;
+    if (!dt) return false;
+    const hasFiles = dt.types?.includes("Files");
+    if (!hasFiles) return false;
+    const getPath = window.electronAPI.getPathForFile;
+    if (!getPath) return false;
+    const paths = [];
+    const items = dt.items;
+    if (items?.length) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === "file") {
+          try {
+            const f = items[i].getAsFile();
+            if (f) {
+              const p = getPath(f);
+              if (p) paths.push(p);
+            }
+          } catch {}
+        }
+      }
+    }
+    if (!paths.length) {
+      const files = dt.files;
+      if (files?.length) {
+        for (let i = 0; i < files.length; i++) {
+          try {
+            const p = getPath(files[i]);
+            if (p) paths.push(p);
+          } catch {}
+        }
+      }
+    }
+    if (!paths.length) return false;
+    const failed = [];
+    let copied = false;
+    for (const src of paths) {
+      try {
+        await window.electronAPI.copyItem(src, targetDir);
+        copied = true;
+      } catch { failed.push(src.split(/[\\/]/).pop()); }
+    }
+    if (failed.length) await window.electronAPI.showAlert(`Cannot import:\n${failed.join(", ")}`);
+    if (copied) { invalidateCache(targetDir); setLocalRefresh((k) => k + 1); }
+    return true;
+  }, [invalidateCache]);
+
   // ── Root row drag handlers ────────────────────────────────────────────────
-  const handleRootDragOver  = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootPath); };
+  const handleRootDragOver  = (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move"; setDropTarget(rootPath); };
   const handleRootDragLeave = ()  => setDropTarget((p) => p === rootPath ? null : p);
-  const handleRootDrop      = (e) => {
-    e.preventDefault(); setDropTarget(null);
+  const handleRootDrop      = async (e) => {
+    e.preventDefault(); e.stopPropagation(); setDropTarget(null);
+    // External files
+    if (await handleExternalDrop(e, rootPath)) return;
+    // Internal drag
     try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(rootPath, paths); } catch {}
   };
 
+  // ── Blank-area (sidebar empty space) drop handlers ────────────────────────
+  const handleSidebarDragOver = useCallback((e) => {
+    if (!rootPath) return;
+    if (!e.dataTransfer.types?.includes("Files")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  }, [rootPath]);
+
+  const handleSidebarDrop = useCallback(async (e) => {
+    if (!rootPath) return;
+    e.preventDefault();
+    e.stopPropagation();
+    await handleExternalDrop(e, rootPath);
+  }, [rootPath, handleExternalDrop]);
+
+  // ── Pin config ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!rootPath) { setPinned([]); return; }
+    window.electronAPI.readPinConfig(rootPath).then(setPinned);
+    const handler = () => window.electronAPI.readPinConfig(rootPath).then(setPinned);
+    window.addEventListener("pin-changed", handler);
+    return () => window.removeEventListener("pin-changed", handler);
+  }, [rootPath]);
+
+  const handlePinToggle = useCallback(async (folderName) => {
+    if (!rootPath) return;
+    let next;
+    if (pinned.includes(folderName)) next = pinned.filter((n) => n !== folderName);
+    else                              next = [...pinned, folderName];
+    setPinned(next);
+    await window.electronAPI.writePinConfig(rootPath, next);
+    window.dispatchEvent(new CustomEvent("pin-changed"));
+  }, [rootPath, pinned]);
+
   // ── Context menu for any sidebar folder ───────────────────────────────────
-  const handleContextMenu = useCallback(async (folderPath) => {
+  const handleContextMenu = useCallback(async (folderPath, shiftKey = false) => {
     if (folderPath !== selectedPath) onSelect(folderPath);
     const parentDir = folderPath.replace(/[\\/][^\\/]+$/, "") || folderPath;
     const result = await window.electronAPI.showContextMenu(
@@ -230,13 +351,24 @@ const SidebarTree = ({
       }
       case "delete": {
         const name = folderPath.replace(/.*[\\/]/, "");
-        const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
-        if (ok) {
-          try {
-            await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
-            invalidateCache(parentDir);
-            setLocalRefresh((k) => k + 1);
-          } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
+        if (shiftKey) {
+          const ok = await window.electronAPI.confirmDialog(`Permanently delete "${name}"?`);
+          if (ok) {
+            try {
+              await window.electronAPI.deleteItem(folderPath);
+              invalidateCache(parentDir);
+              setLocalRefresh((k) => k + 1);
+            } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
+          }
+        } else {
+          const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
+          if (ok) {
+            try {
+              await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
+              invalidateCache(parentDir);
+              setLocalRefresh((k) => k + 1);
+            } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
+          }
         }
         break;
       }
@@ -255,9 +387,103 @@ const SidebarTree = ({
         window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: folderPath } }));
         break;
       }
+      case "pinToSidebar": {
+        const relPath = folderPath.length > rootPath.length
+          ? folderPath.slice(rootPath.length + 1)
+          : folderPath.replace(/.*[\\/]/, "");
+        handlePinToggle(relPath);
+        break;
+      }
       case "refresh":  refresh(); break;
     }
-  }, [selectedPath, onSelect, clipboard, invalidateCache]);
+  }, [selectedPath, onSelect, clipboard, invalidateCache, handlePinToggle]);
+
+  // ── File handlers ────────────────────────────────────────────────────────
+  const handleFileClick = useCallback((filePath) => {
+    onFileSelect?.(filePath);
+  }, [onFileSelect]);
+
+  const handleFileDoubleClick = useCallback(async (filePath) => {
+    await window.electronAPI.openFile(filePath, "system");
+  }, []);
+
+  const handleFileContextMenu = useCallback(async (e, filePath) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const shiftKey = e.shiftKey;
+    if (filePath !== selectedPath) onSelect(filePath);
+    const parentDir = filePath.replace(/[\\/][^\\/]+$/, "") || filePath;
+    const result = await window.electronAPI.showContextMenu(
+      "file", [filePath], clipboard?.paths ?? null
+    );
+    if (!result) return;
+    switch (result.action) {
+      case "open":
+        await window.electronAPI.openFile(filePath, "system");
+        break;
+      case "openWith":
+        await window.electronAPI.openFile(filePath, "system");
+        break;
+      case "openInTerminal": {
+        window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: parentDir } }));
+        break;
+      }
+      case "rename": {
+        const oldName = filePath.replace(/.*[\\/]/, "");
+        const n = await ask("Rename to:", oldName);
+        if (n && n !== oldName) {
+          try {
+            await window.electronAPI.rename(filePath, n);
+            invalidateCache(parentDir);
+            setLocalRefresh((k) => k + 1);
+          } catch (err) { await window.electronAPI.showAlert(`Cannot rename:\n${err.message}`); }
+        }
+        break;
+      }
+      case "delete": {
+        const name = filePath.replace(/.*[\\/]/, "");
+        if (shiftKey) {
+          const ok = await window.electronAPI.confirmDialog(`Permanently delete "${name}"?`);
+          if (ok) {
+            try {
+              await window.electronAPI.deleteItem(filePath);
+              invalidateCache(parentDir);
+              setLocalRefresh((k) => k + 1);
+            } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
+          }
+        } else {
+          const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
+          if (ok) {
+            try {
+              await window.electronAPI.trashItem(filePath, findTrashRoot(filePath));
+              invalidateCache(parentDir);
+              setLocalRefresh((k) => k + 1);
+            } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
+          }
+        }
+        break;
+      }
+      case "duplicate": {
+        try {
+          await window.electronAPI.duplicate(filePath);
+          invalidateCache(parentDir);
+          setLocalRefresh((k) => k + 1);
+        } catch (err) { await window.electronAPI.showAlert(`Cannot duplicate:\n${err.message}`); }
+        break;
+      }
+      case "reveal":
+        window.electronAPI.revealInExplorer(filePath);
+        break;
+      case "copyPath":
+        navigator.clipboard.writeText(filePath);
+        break;
+      case "refresh": {
+        invalidateCache(parentDir);
+        setLocalRefresh((k) => k + 1);
+        break;
+      }
+    }
+  }, [selectedPath, onSelect, clipboard, invalidateCache, findTrashRoot]);
 
   // ── Blank area context menu (right-click empty space) ─────────────────────
   const handleBlankContext = useCallback(async (e) => {
@@ -316,11 +542,48 @@ const SidebarTree = ({
     <>
       {inputDialog}
       <div className="pw-sidebar__scroll" role="tree" aria-label="Project tree"
-        onContextMenu={handleBlankContext}>
+        onContextMenu={handleBlankContext}
+        onDragOver={handleSidebarDragOver}
+        onDrop={handleSidebarDrop}>
       {rootPath && (
         <>
+          {pinned.length > 0 && (
+            <>
+              <div className="pw-section">
+                <span className="pw-section__label">Pinned</span>
+              </div>
+              {pinned.map((name) => {
+                const sep = rootPath.includes("\\") ? "\\" : "/";
+                const fullPath = rootPath + sep + name;
+                return (
+                  <TreeRow
+                    key={name}
+                    label={name}
+                    iconEl={<VscodeIcon name={name} isDir={true} size={16} />}
+                    depth={0}
+                    hasChildren={false}
+                    isOpen={false}
+                    isSelected={selectedPath === fullPath}
+                    isDropTarget={false}
+                    onClick={() => onSelect(fullPath)}
+                    onDoubleClick={() => onToggle(fullPath)}
+                    onArrowClick={() => {}}
+                    onDragOver={() => {}}
+                    onDragLeave={() => {}}
+                    onDrop={() => {}}
+                    onContextMenu={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const result = await window.electronAPI.showContextMenu("pinned", [fullPath], clipboard?.paths ?? null);
+                      if (result?.action === "pinToSidebar") handlePinToggle(name);
+                    }}
+                  />
+                );
+              })}
+            </>
+          )}
           <div className="pw-section">
-            <span className="pw-section__label">Assets</span>
+            <span className="pw-section__label">Files</span>
           </div>
           <TreeRow
             label={rootName}
@@ -336,11 +599,12 @@ const SidebarTree = ({
             onDragOver={handleRootDragOver}
             onDragLeave={handleRootDragLeave}
             onDrop={handleRootDrop}
-            onContextMenu={() => handleContextMenu(rootPath)}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); handleContextMenu(rootPath, e.shiftKey); }}
           />
           {expandedSet.has(rootPath) && rootChildren && rootChildren
             .filter((c) => showHidden || !c.name.startsWith("."))
-            .map((entry) => (
+            .filter((c) => c.isDir ? showFolders : showFiles)
+            .map((entry) => entry.isDir ? (
             <FolderNode
               key={entry.path}
               entry={entry}
@@ -356,6 +620,31 @@ const SidebarTree = ({
               setDropTarget={setDropTarget}
               onContextMenu={handleContextMenu}
               showHidden={showHidden}
+              showFolders={showFolders}
+              showFiles={showFiles}
+              showPreview={showPreview}
+              onFileClick={handleFileClick}
+              onFileDblClick={handleFileDoubleClick}
+              onFileCtxMenu={handleFileContextMenu}
+              onExternalDrop={handleExternalDrop}
+            />
+          ) : (
+            <TreeRow
+              key={entry.path}
+              label={entry.name}
+              iconEl={<PreviewIcon entry={entry} showPreview={showPreview} size={16} />}
+              depth={1}
+              hasChildren={false}
+              isOpen={false}
+              isSelected={selectedPath === entry.path}
+              isDropTarget={false}
+              onClick={() => handleFileClick(entry.path)}
+              onDoubleClick={() => handleFileDoubleClick(entry.path)}
+              onArrowClick={() => {}}
+              onDragOver={() => {}}
+              onDragLeave={() => {}}
+              onDrop={() => {}}
+              onContextMenu={(e) => handleFileContextMenu(e, entry.path)}
             />
           ))}
         </>

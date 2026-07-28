@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Layout, Model } from "flexlayout-react";
+import { Layout, Model, Actions } from "flexlayout-react";
 import "flexlayout-react/style/dark.css";
 import "./layout.css";
 
@@ -67,7 +67,7 @@ const json = {
             weight: 35,
             children: [
               { type: "tab", name: "Project", component: "projectPanel" },
-              { type: "tab", name: "Terminal", component: "terminal" },
+              { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
             ],
           },
         ],
@@ -97,8 +97,14 @@ const factory = (node) => {
 };
 
 // ─── Root app ────────────────────────────────────────────────────────────────
-const App = () => (
-  <Layout model={model} factory={factory} />
-);
+const App = () => {
+  React.useEffect(() => {
+    const handler = () => model.doAction(Actions.selectTab("terminal-tab"));
+    window.addEventListener("focus-terminal-tab", handler);
+    return () => window.removeEventListener("focus-terminal-tab", handler);
+  }, []);
+
+  return <Layout model={model} factory={factory} />;
+};
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);

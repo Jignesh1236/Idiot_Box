@@ -1,10 +1,14 @@
 // Preload script entry point
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  // ── Drag & drop (external files) ───────────────────────────────────────────
+  getPathForFile: (file) => webUtils.getPathForFile(file),
+
   // ── Icons ──────────────────────────────────────────────────────────────────
-  getVscodeIcon: (name, isDir, isOpen) => ipcRenderer.invoke("fs:getVscodeIcon", { name, isDir, isOpen: !!isOpen }),
-  getIcon:       (filePath) => ipcRenderer.invoke("fs:getIcon", filePath),
+  getVscodeIcon:  (name, isDir, isOpen) => ipcRenderer.invoke("fs:getVscodeIcon", { name, isDir, isOpen: !!isOpen }),
+  getIcon:        (filePath) => ipcRenderer.invoke("fs:getIcon", filePath),
+  getFilePreview: (filePath) => ipcRenderer.invoke("fs:getFilePreview", filePath),
 
   // ── Directory access ───────────────────────────────────────────────────────
   openFolder:  ()      => ipcRenderer.invoke("dialog:openFolder"),
@@ -30,9 +34,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   showAlert:     (message) => ipcRenderer.invoke("dialog:alert",   message),
 
   // ── Context menu ──────────────────────────────────────────────────────────
-  // type: "none" | "file" | "folder" | "multi"
+  // type: "none" | "file" | "folder" | "multi" | "pinned" | "breadcrumb"
   showContextMenu: (type, selectedPaths, clipboardPaths) =>
     ipcRenderer.invoke("contextMenu:show", { type, selectedPaths, clipboardPaths }),
+
+  // ── Pin config ──────────────────────────────────────────────────────────────
+  readPinConfig:  (rootPath) => ipcRenderer.invoke("fs:readPinConfig", rootPath),
+  writePinConfig: (rootPath, data) => ipcRenderer.invoke("fs:writePinConfig", rootPath, data),
 
   // ── Settings ───────────────────────────────────────────────────────────────
   readSettings:  ()     => ipcRenderer.invoke("settings:read"),

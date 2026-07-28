@@ -23,6 +23,9 @@ const ProjectWindow = () => {
   const [refreshToken,  setRefreshToken]  = useState(0);
   const [zoom,          setZoom]          = useState(ZOOM_DEFAULT);
   const [showHidden,    setShowHidden]    = useState(false);
+  const [showFolders,   setShowFolders]   = useState(true);
+  const [showFiles,     setShowFiles]     = useState(true);
+  const [showPreview,   setShowPreview]   = useState(false);
   const draggingRef = useRef(false);
   const startXRef   = useRef(0);
   const startWRef   = useRef(SIDEBAR_DEFAULT);
@@ -67,7 +70,7 @@ const ProjectWindow = () => {
   // ── Cache ────────────────────────────────────────────────────────────────
   const loadChildren = useCallback(async (folderPath) => {
     if (childCache.has(folderPath)) return childCache.get(folderPath);
-    const entries = await window.electronAPI.readDir(folderPath);
+    const entries = await window.electronAPI.readDirAll(folderPath);
     setChildCache((prev) => new Map(prev).set(folderPath, entries));
     return entries;
   }, [childCache]);
@@ -267,6 +270,12 @@ const ProjectWindow = () => {
   const handleSetSelectedItems = useCallback((nextSet) => setSelectedItems(nextSet), []);
   const handleItemsLoaded      = useCallback((count)   => setItemCount(count),       []);
 
+  const handleSidebarFileSelect = useCallback((filePath) => {
+    setSelectedPath(filePath);
+    setCurrentPath(filePath.replace(/[\\/][^\\/]+$/, "") || filePath);
+    setSelectedItems(new Set([filePath]));
+  }, []);
+
   const handleSidebarDrop = useCallback(async (targetFolderPath, draggedPaths) => {
     const pairs = [];
     const sourceParents = new Set();
@@ -336,6 +345,10 @@ const ProjectWindow = () => {
             invalidateCache={invalidateCache}
             onDrop={handleSidebarDrop}
             showHidden={showHidden}
+            showFolders={showFolders}
+            showFiles={showFiles}
+            showPreview={showPreview}
+            onFileSelect={handleSidebarFileSelect}
           />
           <div className="pw-sidebar__resize" onMouseDown={onResizeStart} />
         </div>
@@ -358,6 +371,12 @@ const ProjectWindow = () => {
           zoom={zoom}
           showHidden={showHidden}
           onToggleHidden={() => setShowHidden((v) => !v)}
+          showFolders={showFolders}
+          onToggleFolders={() => setShowFolders((v) => !v)}
+          showFiles={showFiles}
+          onToggleFiles={() => setShowFiles((v) => !v)}
+          showPreview={showPreview}
+          onTogglePreview={() => setShowPreview((v) => !v)}
         />
       </div>
       <StatusBar

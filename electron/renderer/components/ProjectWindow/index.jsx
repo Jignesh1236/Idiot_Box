@@ -22,6 +22,7 @@ const ProjectWindow = () => {
   const [clipboard,     setClipboard]     = useState(null);
   const [refreshToken,  setRefreshToken]  = useState(0);
   const [zoom,          setZoom]          = useState(ZOOM_DEFAULT);
+  const [showHidden,    setShowHidden]    = useState(false);
   const draggingRef = useRef(false);
   const startXRef   = useRef(0);
   const startWRef   = useRef(SIDEBAR_DEFAULT);
@@ -99,23 +100,41 @@ const ProjectWindow = () => {
           for (const { from, to } of op.pairs) {
             const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
             const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
-            await window.electronAPI.moveItem(to, srcParent);
+            try { await window.electronAPI.moveItem(to, srcParent); } catch (err) {
+              await window.electronAPI.showAlert(`Undo move failed:\n${err.message}`);
+              continue;
+            }
             affected.add(srcParent);
             affected.add(destParent);
           }
           break;
         }
         case "create": {
-          await window.electronAPI.deleteItem(op.path, false);
+          try { await window.electronAPI.deleteItem(op.path, false); } catch (err) {
+            await window.electronAPI.showAlert(`Undo create failed:\n${err.message}`);
+            break;
+          }
           affected.add(op.parentDir);
           break;
         }
         case "rename": {
-          await window.electronAPI.rename(op.newPath, op.oldName);
+          try { await window.electronAPI.rename(op.newPath, op.oldName); } catch (err) {
+            await window.electronAPI.showAlert(`Undo rename failed:\n${err.message}`);
+            break;
+          }
           affected.add(op.parentDir);
           break;
         }
         case "delete": {
+          if (op.trashIds?.length) {
+            for (const { from, trashId } of op.trashIds) {
+              try { await window.electronAPI.restoreTrashItem(trashId, op.rootPath); } catch (err) {
+                await window.electronAPI.showAlert(`Undo delete failed:\n${err.message}`);
+                continue;
+              }
+              affected.add(from.replace(/[\\/][^\\/]+$/, "") || from);
+            }
+          }
           break;
         }
       }
@@ -139,24 +158,44 @@ const ProjectWindow = () => {
           for (const { from, to } of op.pairs) {
             const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
             const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
-            await window.electronAPI.moveItem(from, to);
+            try { await window.electronAPI.moveItem(from, to); } catch (err) {
+              await window.electronAPI.showAlert(`Redo move failed:\n${err.message}`);
+              continue;
+            }
             affected.add(srcParent);
             affected.add(destParent);
           }
           break;
         }
         case "create": {
-          if (op.isDir) await window.electronAPI.newFolder(op.parentDir, op.name);
-          else          await window.electronAPI.newFile(op.parentDir, op.name);
+          try {
+            if (op.isDir) await window.electronAPI.newFolder(op.parentDir, op.name);
+            else          await window.electronAPI.newFile(op.parentDir, op.name);
+          } catch (err) {
+            await window.electronAPI.showAlert(`Redo create failed:\n${err.message}`);
+            break;
+          }
           affected.add(op.parentDir);
           break;
         }
         case "rename": {
-          await window.electronAPI.rename(op.oldPath, op.newName);
+          try { await window.electronAPI.rename(op.oldPath, op.newName); } catch (err) {
+            await window.electronAPI.showAlert(`Redo rename failed:\n${err.message}`);
+            break;
+          }
           affected.add(op.parentDir);
           break;
         }
         case "delete": {
+          if (op.trashIds?.length) {
+            for (const { from, trashId } of op.trashIds) {
+              try { await window.electronAPI.trashItem(from, op.rootPath); } catch (err) {
+                await window.electronAPI.showAlert(`Redo delete failed:\n${err.message}`);
+                continue;
+              }
+              affected.add(from.replace(/[\\/][^\\/]+$/, "") || from);
+            }
+          }
           break;
         }
       }
@@ -231,12 +270,18 @@ const ProjectWindow = () => {
   const handleSidebarDrop = useCallback(async (targetFolderPath, draggedPaths) => {
     const pairs = [];
     const sourceParents = new Set();
+    const failedDrop = [];
     for (const src of draggedPaths) {
       if (src === targetFolderPath) continue;
       const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
       sourceParents.add(parentDir);
-      const dest = await window.electronAPI.moveItem(src, targetFolderPath);
-      if (dest) pairs.push({ from: src, to: dest });
+      try {
+        const dest = await window.electronAPI.moveItem(src, targetFolderPath);
+        if (dest) pairs.push({ from: src, to: dest });
+      } catch (err) { failedDrop.push(src.split(/[\\/]/).pop()); }
+    }
+    if (failedDrop.length) {
+      await window.electronAPI.showAlert(`Cannot move item(s):\n${failedDrop.join(", ")}`);
     }
     if (pairs.length) pushUndo({ type: "move", pairs });
     for (const p of sourceParents) invalidateCache(p);
@@ -250,11 +295,26 @@ const ProjectWindow = () => {
     return (
       <div className="pw-root">
         <div className="pw-empty">
-          <svg className="pw-empty__svg" width="40" height="40" viewBox="0 0 16 16" fill="none">
-            <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z" fill="#c8a84b"/>
-          </svg>
-          <span>No project open</span>
-          <span style={{ fontSize: 11, color: "#444" }}>File → Open Project</span>
+          <button
+            onClick={async () => {
+              await window.electronAPI.openFolder();
+            }}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+              padding: "20px 32px", background: "#2d2d2d",
+              border: "1px solid #3c3c3c", borderRadius: 2,
+              color: "#c8c8c8", fontSize: 13, fontFamily: "inherit",
+              cursor: "pointer", outline: "none",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#383838"; e.currentTarget.style.borderColor = "#5a9fd4"; e.currentTarget.style.color = "#e8e8e8"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#2d2d2d"; e.currentTarget.style.borderColor = "#3c3c3c"; e.currentTarget.style.color = "#c8c8c8"; }}
+          >
+            <svg width="28" height="28" viewBox="0 0 16 16" fill="none">
+              <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z" fill="#c8a84b"/>
+            </svg>
+            Open Folder
+          </button>
         </div>
       </div>
     );
@@ -275,6 +335,7 @@ const ProjectWindow = () => {
             loadChildren={loadChildren}
             invalidateCache={invalidateCache}
             onDrop={handleSidebarDrop}
+            showHidden={showHidden}
           />
           <div className="pw-sidebar__resize" onMouseDown={onResizeStart} />
         </div>
@@ -295,6 +356,8 @@ const ProjectWindow = () => {
           performUndo={performUndo}
           performRedo={performRedo}
           zoom={zoom}
+          showHidden={showHidden}
+          onToggleHidden={() => setShowHidden((v) => !v)}
         />
       </div>
       <StatusBar

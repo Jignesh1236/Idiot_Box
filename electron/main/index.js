@@ -2,7 +2,21 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
 const path    = require("path");
 const fs      = require("fs");
+const { spawn } = require("child_process");
 const chokidar = require("chokidar");
+const pty     = require("node-pty");
+
+// ─── Long path helper (Windows) ──────────────────────────────────────────────
+const toLongPath = (p) => {
+  if (process.platform !== "win32") return p;
+  // Only prepend \\?\ for absolute paths longer than 260 chars
+  const abs = path.resolve(p);
+  if (abs.length >= 260 && !abs.startsWith("\\\\?\\")) {
+    // Convert forward slashes to backslashes for \\?\ prefix
+    return "\\\\?\\" + abs.replace(/\//g, "\\");
+  }
+  return p;
+};
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
@@ -50,10 +64,24 @@ ipcMain.handle("dialog:confirm", async (event, message) => {
   return response === 1;
 });
 
+ipcMain.handle("dialog:alert", async (event, message) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  await dialog.showMessageBox(win, {
+    type: "error",
+    buttons: ["OK"],
+    defaultId: 0,
+    message,
+  });
+});
+
 // ─── Dialog ───────────────────────────────────────────────────────────────────
-ipcMain.handle("dialog:openFolder", async () => {
+ipcMain.handle("dialog:openFolder", async (event) => {
   const r = await dialog.showOpenDialog({ properties: ["openDirectory"] });
-  return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+  if (r.canceled || !r.filePaths.length) return null;
+  const folderPath = r.filePaths[0];
+  lastProjectPath = folderPath;
+  event.sender.send("menu:openProject", folderPath);
+  return folderPath;
 });
 
 // ─── Directory reads ──────────────────────────────────────────────────────────
@@ -61,7 +89,7 @@ const sortByName = (arr) => arr.sort((a, b) => a.name.localeCompare(b.name, unde
 
 ipcMain.handle("fs:readDir", async (_e, dirPath) => {
   try {
-    return sortByName(fs.readdirSync(dirPath, { withFileTypes: true })
+    return sortByName(fs.readdirSync(toLongPath(dirPath), { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => ({ name: e.name, path: path.join(dirPath, e.name) })));
   } catch { return []; }
@@ -69,7 +97,7 @@ ipcMain.handle("fs:readDir", async (_e, dirPath) => {
 
 ipcMain.handle("fs:readDirAll", async (_e, dirPath) => {
   try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = fs.readdirSync(toLongPath(dirPath), { withFileTypes: true });
     return [
       ...sortByName(entries.filter((e) => e.isDirectory()).map((e) => ({ name: e.name, path: path.join(dirPath, e.name), isDir: true }))),
       ...sortByName(entries.filter((e) => e.isFile()).map((e)      => ({ name: e.name, path: path.join(dirPath, e.name), isDir: false }))),
@@ -79,55 +107,168 @@ ipcMain.handle("fs:readDirAll", async (_e, dirPath) => {
 
 // ─── File system operations ───────────────────────────────────────────────────
 ipcMain.handle("fs:newFolder", async (_e, { parentPath, name }) => {
-  let target = path.join(parentPath, name || "New Folder"), i = 1, final = target;
+  const lp = toLongPath(parentPath);
+  let target = path.join(lp, name || "New Folder"), i = 1, final = target;
   while (fs.existsSync(final)) final = `${target} (${i++})`;
-  fs.mkdirSync(final, { recursive: true }); return final;
+  fs.mkdirSync(final, { recursive: true }); return path.join(parentPath, path.basename(final));
 });
 
 ipcMain.handle("fs:newFile", async (_e, { parentPath, name }) => {
-  let target = path.join(parentPath, name || "New File.txt"), i = 1, final = target;
-  while (fs.existsSync(final)) { const { name: n, ext } = path.parse(target); final = path.join(parentPath, `${n} (${i++})${ext}`); }
-  fs.writeFileSync(final, ""); return final;
+  const lp = toLongPath(parentPath);
+  let target = path.join(lp, name || "New File.txt"), i = 1, final = target;
+  while (fs.existsSync(final)) { const { name: n, ext } = path.parse(target); final = path.join(lp, `${n} (${i++})${ext}`); }
+  fs.writeFileSync(final, ""); return path.join(parentPath, path.basename(final));
 });
 
 ipcMain.handle("fs:rename", async (_e, { oldPath, newName }) => {
-  const newPath = path.join(path.dirname(oldPath), newName);
-  fs.renameSync(oldPath, newPath); return newPath;
+  const po = toLongPath(oldPath);
+  const np = path.join(path.dirname(po), newName);
+  try { fs.renameSync(po, np); return path.join(path.dirname(oldPath), newName); }
+  catch (err) { throw new Error(`Cannot rename "${path.basename(oldPath)}": ${err.code === "EBUSY" ? "file is in use by another process" : err.message}`); }
 });
 
-ipcMain.handle("fs:delete", async (_e, { itemPath, useTrash }) => {
-  if (useTrash !== false) await shell.trashItem(itemPath);
-  else { const s = fs.statSync(itemPath); if (s.isDirectory()) fs.rmSync(itemPath, { recursive: true, force: true }); else fs.unlinkSync(itemPath); }
-  return true;
+ipcMain.handle("fs:delete", async (_e, { itemPath }) => {
+  const lp = toLongPath(itemPath);
+  try {
+    const s = fs.statSync(lp);
+    if (s.isDirectory()) fs.rmSync(lp, { recursive: true, force: true });
+    else fs.unlinkSync(lp);
+    return true;
+  } catch (err) {
+    throw new Error(`Cannot delete "${path.basename(itemPath)}": ${err.code === "EBUSY" ? "item is in use by another process" : err.message}`);
+  }
+});
+
+// ─── Local trash (project-level recycle bin) ──────────────────────────────
+const TRASH_DIR = ".trash";
+const MANIFEST  = "manifest.json";
+
+function trashDir(rootPath) {
+  return path.join(rootPath, TRASH_DIR);
+}
+
+function manifestPath(rootPath) {
+  return path.join(trashDir(rootPath), MANIFEST);
+}
+
+function readManifest(rootPath) {
+  try { return JSON.parse(fs.readFileSync(manifestPath(rootPath), "utf8")); }
+  catch { return {}; }
+}
+
+function writeManifest(rootPath, manifest) {
+  const td = trashDir(rootPath);
+  if (!fs.existsSync(td)) fs.mkdirSync(td, { recursive: true });
+  fs.writeFileSync(manifestPath(rootPath), JSON.stringify(manifest, null, 2));
+}
+
+ipcMain.handle("fs:trashItem", async (_e, { itemPath, rootPath }) => {
+  const lpItem = toLongPath(itemPath);
+  const lpRoot = toLongPath(rootPath);
+  try {
+    const name = path.basename(lpItem);
+    const td   = trashDir(lpRoot);
+    if (!fs.existsSync(td)) fs.mkdirSync(td, { recursive: true });
+
+    let trashId = `${Date.now()}_${name}`;
+    let dest    = path.join(td, trashId);
+    let i = 1;
+    while (fs.existsSync(dest)) {
+      trashId = `${Date.now()}_${i++}_${name}`;
+      dest    = path.join(td, trashId);
+    }
+
+    // If the item is inside .trash itself, skip (shouldn't happen, but safety)
+    if (lpItem === td || lpItem.startsWith(td + path.sep)) {
+      throw new Error("Cannot trash item inside .trash folder");
+    }
+
+    fs.renameSync(lpItem, dest);
+
+    const manifest = readManifest(lpRoot);
+    manifest[trashId] = { originalPath: itemPath, timestamp: Date.now(), isDir: fs.statSync(dest).isDirectory() };
+    writeManifest(lpRoot, manifest);
+
+    return { trashId, originalPath: itemPath };
+  } catch (err) {
+    throw new Error(`Cannot trash "${path.basename(itemPath)}": ${err.message}`);
+  }
+});
+
+ipcMain.handle("fs:restoreTrashItem", async (_e, { trashId, rootPath }) => {
+  const lpRoot = toLongPath(rootPath);
+  const manifest = readManifest(lpRoot);
+  const entry = manifest[trashId];
+  if (!entry) throw new Error(`Trash entry "${trashId}" not found`);
+
+  const src = path.join(trashDir(lpRoot), trashId);
+  const dst = toLongPath(entry.originalPath);
+
+  // If original location is occupied, add suffix
+  let finalDst = dst, i = 1;
+  while (fs.existsSync(finalDst)) {
+    const { dir, name, ext } = path.parse(dst);
+    finalDst = path.join(dir, `${name} (${i++})${ext}`);
+  }
+
+  // Ensure parent directory exists
+  const parentDir = path.dirname(finalDst);
+  if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+
+  fs.renameSync(src, finalDst);
+
+  // Remove from manifest
+  delete manifest[trashId];
+  writeManifest(lpRoot, manifest);
+
+  return finalDst;
 });
 
 ipcMain.handle("fs:duplicate", async (_e, { itemPath }) => {
-  const { dir, name, ext } = path.parse(itemPath);
-  let dest = path.join(dir, `${name} copy${ext}`), i = 2;
-  while (fs.existsSync(dest)) dest = path.join(dir, `${name} copy ${i++}${ext}`);
-  const s = fs.statSync(itemPath);
-  if (s.isDirectory()) fs.cpSync(itemPath, dest, { recursive: true }); else fs.copyFileSync(itemPath, dest);
-  return dest;
+  const lp = toLongPath(itemPath);
+  try {
+    const { dir, name, ext } = path.parse(lp);
+    let dest = path.join(dir, `${name} copy${ext}`), i = 2;
+    while (fs.existsSync(dest)) dest = path.join(dir, `${name} copy ${i++}${ext}`);
+    const s = fs.statSync(lp);
+    if (s.isDirectory()) fs.cpSync(lp, dest, { recursive: true }); else fs.copyFileSync(lp, dest);
+    return path.join(path.dirname(itemPath), path.basename(dest));
+  } catch (err) {
+    throw new Error(`Cannot duplicate "${path.basename(itemPath)}": ${err.message}`);
+  }
 });
 
 ipcMain.handle("fs:copyItem", async (_e, { srcPath, destDir }) => {
-  const name = path.basename(srcPath);
-  let dest = path.join(destDir, name), i = 2;
-  while (fs.existsSync(dest)) dest = path.join(destDir, `${path.parse(name).name} (${i++})${path.extname(name)}`);
-  const s = fs.statSync(srcPath);
-  if (s.isDirectory()) fs.cpSync(srcPath, dest, { recursive: true }); else fs.copyFileSync(srcPath, dest);
-  return dest;
+  const lpSrc = toLongPath(srcPath);
+  const lpDst = toLongPath(destDir);
+  try {
+    const name = path.basename(lpSrc);
+    let dest = path.join(lpDst, name), i = 2;
+    while (fs.existsSync(dest)) dest = path.join(lpDst, `${path.parse(name).name} (${i++})${path.extname(name)}`);
+    const s = fs.statSync(lpSrc);
+    if (s.isDirectory()) fs.cpSync(lpSrc, dest, { recursive: true }); else fs.copyFileSync(lpSrc, dest);
+    return path.join(destDir, path.basename(dest));
+  } catch (err) {
+    throw new Error(`Cannot copy "${path.basename(srcPath)}": ${err.code === "EBUSY" ? "item is in use by another process" : err.message}`);
+  }
 });
 
 ipcMain.handle("fs:moveItem", async (_e, { srcPath, destDir }) => {
-  const dest = path.join(destDir, path.basename(srcPath));
-  fs.renameSync(srcPath, dest); return dest;
+  const lpSrc = toLongPath(srcPath);
+  const lpDst = toLongPath(destDir);
+  try {
+    const dest = path.join(lpDst, path.basename(lpSrc));
+    fs.renameSync(lpSrc, dest);
+    return path.join(destDir, path.basename(srcPath));
+  } catch (err) {
+    throw new Error(`Cannot move "${path.basename(srcPath)}": ${err.code === "EBUSY" ? "item is in use by another process" : err.message}`);
+  }
 });
 
 ipcMain.handle("fs:revealInExplorer", (_e, { itemPath }) => shell.showItemInFolder(itemPath));
 
 ipcMain.handle("fs:stat", async (_e, itemPath) => {
-  try { const s = fs.statSync(itemPath); return { isDir: s.isDirectory(), exists: true }; }
+  try { const s = fs.statSync(toLongPath(itemPath)); return { isDir: s.isDirectory(), exists: true }; }
   catch { return { isDir: false, exists: false }; }
 });
 
@@ -237,6 +378,8 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
         { label: "New Folder",              accelerator: "Ctrl+Shift+N", click: () => act("newFolder") },
         { label: "New File",                accelerator: "Ctrl+N",       click: () => act("newFile")   },
         sep,
+        { label: "Open in Terminal",                                     click: () => act("openInTerminal") },
+        sep,
         { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
         { label: "Delete",                  accelerator: "Delete",       click: () => act("delete")    },
         { label: "Duplicate",               accelerator: "Ctrl+D",       click: () => act("duplicate") },
@@ -253,6 +396,8 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
       items = [
         { label: "Open",                    accelerator: "Enter",        click: () => act("open")     },
         { label: "Open With...",            accelerator: "Ctrl+Enter",   click: () => act("openWith") },
+        sep,
+        { label: "Open in Terminal",                                     click: () => act("openInTerminal") },
         sep,
         { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
         { label: "Delete",                  accelerator: "Delete",       click: () => act("delete")    },
@@ -271,6 +416,77 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
     const win  = BrowserWindow.fromWebContents(event.sender);
     menu.popup({ window: win, callback: () => resolve(null) });
   });
+});
+
+// ─── Terminal ─────────────────────────────────────────────────────────────────
+// One shell process per tabId
+const termProcesses = new Map();
+let lastProjectPath = null; // track last opened project for terminal
+
+function detectShell() {
+  if (process.platform !== "win32") return process.env.SHELL || "/bin/bash";
+  try { require("child_process").execSync("pwsh -c exit", { stdio: "ignore" }); return "pwsh.exe"; } catch {}
+  try { require("child_process").execSync("powershell -c exit", { stdio: "ignore" }); return "powershell.exe"; } catch {}
+  return process.env.COMSPEC || "cmd.exe";
+}
+
+let cachedShell = null;
+function getShell() {
+  if (!cachedShell) cachedShell = detectShell();
+  return cachedShell;
+}
+
+function getShellArgs(shell) {
+  if (shell === "pwsh.exe" || shell === "powershell.exe") return ["-NoLogo"];
+  return [];
+}
+
+ipcMain.handle("terminal:getProjectPath", () => lastProjectPath);
+
+ipcMain.handle("terminal:open", async (event, { tabId, cwd }) => {
+  // Kill existing terminal for this tabId
+  if (termProcesses.has(tabId)) {
+    termProcesses.get(tabId).kill();
+    termProcesses.delete(tabId);
+  }
+
+  const shell = getShell();
+  const shellArgs = getShellArgs(shell);
+  const p = pty.spawn(shell, shellArgs, {
+    name: "xterm-256color",
+    cols: 80,
+    rows: 24,
+    cwd: cwd || process.cwd(),
+    env: { ...process.env },
+  });
+
+  termProcesses.set(tabId, p);
+
+  p.onData((data) => {
+    try { event.sender.send("terminal:data", { tabId, data }); } catch {}
+  });
+
+  p.onExit(({ exitCode, signal }) => {
+    if (termProcesses.get(tabId) === p) termProcesses.delete(tabId);
+    try { event.sender.send("terminal:exit", { tabId, code: exitCode, signal }); } catch {}
+  });
+
+  return true;
+});
+
+ipcMain.handle("terminal:write", async (event, { tabId, data }) => {
+  const p = termProcesses.get(tabId);
+  if (p) p.write(data);
+});
+
+ipcMain.handle("terminal:resize", async (event, { tabId, cols, rows }) => {
+  const p = termProcesses.get(tabId);
+  if (p && cols > 0 && rows > 0) p.resize(cols, rows);
+});
+
+ipcMain.handle("terminal:close", async (event, { tabId }) => {
+  const p = termProcesses.get(tabId);
+  if (p) { p.kill(); termProcesses.delete(tabId); }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -300,12 +516,12 @@ function buildMenu() {
   return Menu.buildFromTemplate([
     {
       label: "File", submenu: [
-        { label: "Open Project", accelerator: "CmdOrCtrl+O",       click: async () => { const r = await dialog.showOpenDialog({ title: "Open Project", properties: ["openDirectory"] }); if (!r.canceled && r.filePaths.length) sendToRenderer("menu:openProject", r.filePaths[0]); } },
-        { label: "New Project",  accelerator: "CmdOrCtrl+Shift+N", click: async () => { const r = await dialog.showOpenDialog({ title: "Select folder for new project", properties: ["openDirectory","createDirectory"] }); if (!r.canceled && r.filePaths.length) sendToRenderer("menu:newProject", r.filePaths[0]); } },
+        { label: "Open Project", accelerator: "CmdOrCtrl+O",       click: async () => { const r = await dialog.showOpenDialog({ title: "Open Project", properties: ["openDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:openProject", r.filePaths[0]); } } },
+        { label: "New Project",  accelerator: "CmdOrCtrl+Shift+N", click: async () => { const r = await dialog.showOpenDialog({ title: "Select folder for new project", properties: ["openDirectory","createDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:newProject", r.filePaths[0]); } } },
         { type: "separator" },
         { label: "Save Project",  accelerator: "CmdOrCtrl+S", click: () => sendToRenderer("menu:saveProject", null) },
         { type: "separator" },
-        { label: "Close Project", accelerator: "CmdOrCtrl+W", click: () => sendToRenderer("menu:closeProject", null) },
+        { label: "Close Project", accelerator: "CmdOrCtrl+W", click: () => { lastProjectPath = null; sendToRenderer("menu:closeProject", null); } },
         { label: "Close App",     accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
       ],
     },
@@ -323,6 +539,6 @@ function createWindow() {
   win.webContents.openDevTools();
 }
 
-app.whenReady().then(() => { Menu.setApplicationMenu(buildMenu()); createWindow(); });
+app.whenReady().then(() => { getShell(); Menu.setApplicationMenu(buildMenu()); createWindow(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });

@@ -3,12 +3,12 @@ import React, {
 } from "react";
 import VscodeIcon  from "../shared/VscodeIcon.jsx";
 import useSettings from "../shared/useSettings.jsx";
-import { useInputDialog } from "../shared/InputDialog.jsx";
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
 const IcoFolder = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z"/></svg>);
 const IcoFile   = () => (<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4Zm5.5 1.5v3A1.5 1.5 0 0 0 11 6h3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5Z"/></svg>);
 const IcoEye    = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg>);
+const IcoHidden = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.36 2.64a.5.5 0 0 1 0 .707l-10 10a.5.5 0 0 1-.707-.707l10-10a.5.5 0 0 1 .707 0zm-.277 3.754A12.09 12.09 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-.746 0-1.444-.13-2.083-.354l1.05-1.05A2.5 2.5 0 0 0 9.904 8.967l1.18-1.18c.226-.241.444-.5.64-.78zM4.917 5.623l-1.17 1.17c-.226.242-.444.5-.64.78A12.09 12.09 0 0 0 1.172 8c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.746 0 1.444-.13 2.083-.354l.792.792A9.996 9.996 0 0 1 8 14C3 14 0 8 0 8s1.128-2.303 3.122-3.78l1.795 1.795zm1.479-1.015A8.534 8.534 0 0 1 8 4c5 0 8 4 8 4s-1.128 2.303-3.122 3.78L10.3 9.202A2.5 2.5 0 0 0 6.396 5.402l.707-.707z"/><path d="M8 5.5a2.53 2.53 0 0 1 .794.13l-1.552 1.552A.5.5 0 0 1 6.5 6.5v-.001a2.5 2.5 0 0 1 1.5-.999z"/></svg>);
 
 const IconBtn = ({ title, active, onClick, children }) => (
   <button className={`pw-bar-btn${active ? " pw-bar-btn--active" : ""}`} title={title} onClick={onClick}>{children}</button>
@@ -44,7 +44,7 @@ const RenameInput = ({ initialValue, onCommit, onCancel }) => {
 };
 
 // ── Toolbar bar ───────────────────────────────────────────────────────────────
-const Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, itemCount, selectedCount, onCrumbsDragOver, onCrumbsDragLeave, onCrumbsDrop }) => {
+const Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, onToggleFolders, showFiles, onToggleFiles, showHidden, onToggleHidden, itemCount, selectedCount, onCrumbsDragOver, onCrumbsDragLeave, onCrumbsDrop }) => {
   const crumbs = [];
   if (rootPath && currentPath) {
     const rootName = rootPath.split(/[\\/]/).filter(Boolean).pop();
@@ -82,6 +82,7 @@ const Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, o
         <div className="pw-bar__divider"/>
         <IconBtn title="Show folders" active={showFolders} onClick={onToggleFolders}><IcoFolder/></IconBtn>
         <IconBtn title="Show files"   active={showFiles}   onClick={onToggleFiles}><IcoFile/></IconBtn>
+        <IconBtn title={`${showHidden ? "Hide" : "Show"} hidden files (Ctrl+H)`} active={showHidden} onClick={onToggleHidden}><IcoHidden/></IconBtn>
         <div className="pw-bar-count" title={eyeLabel}>
           <IcoEye/>
           {eyeLabel && <span className="pw-bar-count__label">{selectedCount > 0 ? selectedCount : itemCount}</span>}
@@ -100,6 +101,7 @@ const ContentArea = ({
   invalidateCache,
   pushUndo, performUndo, performRedo,
   zoom,
+  showHidden, onToggleHidden,
 }) => {
   const [entries,     setEntries]     = useState([]);
   const [loading,     setLoading]     = useState(false);
@@ -108,8 +110,6 @@ const ContentArea = ({
   const [showFiles,   setShowFiles]   = useState(true);
   const [band,        setBand]        = useState(null);
   const [renamingPath, setRenamingPath] = useState(null);
-
-  const { dialog: inputDialog, ask } = useInputDialog();
 
   const gridRef    = useRef(null);
   const contentRef = useRef(null);
@@ -122,6 +122,7 @@ const ContentArea = ({
   const selectedItemsRef  = useRef(selectedItems);
   const clipboardRef      = useRef(clipboard);
   const currentPathRef    = useRef(currentPath);
+  const rootPathRef       = useRef(rootPath);
   const visibleRef        = useRef([]);
   const pushUndoRef       = useRef(pushUndo);
   const performUndoRef    = useRef(performUndo);
@@ -130,6 +131,7 @@ const ContentArea = ({
   useEffect(() => { selectedItemsRef.current = selectedItems; }, [selectedItems]);
   useEffect(() => { clipboardRef.current     = clipboard; },     [clipboard]);
   useEffect(() => { currentPathRef.current   = currentPath; },   [currentPath]);
+  useEffect(() => { rootPathRef.current      = rootPath; },      [rootPath]);
   useEffect(() => { pushUndoRef.current      = pushUndo; },      [pushUndo]);
   useEffect(() => { performUndoRef.current   = performUndo; },   [performUndo]);
   useEffect(() => { performRedoRef.current   = performRedo; },   [performRedo]);
@@ -144,12 +146,18 @@ const ContentArea = ({
   const itemW      = isListView ? 0 : Math.round(zoom * 0.76);
   const itemP      = isListView ? "2px 6px" : `${Math.round(zoom * 0.06)}px ${Math.round(zoom * 0.04)}px ${Math.round(zoom * 0.04)}px`;
 
+  // ── Error alert helper ────────────────────────────────────────────────────
+  const alertErr = useCallback(async (label, err) => {
+    const msg = err?.message || String(err || "Unknown error");
+    await window.electronAPI.showAlert(`${label}:\n${msg}`);
+  }, []);
+
   // ── Load entries ─────────────────────────────────────────────────────────
   const loadEntries = useCallback(() => {
     const cp = currentPathRef.current;
-    if (!cp) { setEntries([]); return; }
+    if (!cp) { setEntries([]); return Promise.resolve(); }
     setLoading(true);
-    window.electronAPI.readDirAll(cp)
+    return window.electronAPI.readDirAll(cp)
       .then((data) => { setEntries(data); if (onItemsLoaded) onItemsLoaded(data.length); })
       .finally(() => setLoading(false));
   }, [onItemsLoaded]);
@@ -160,11 +168,12 @@ const ContentArea = ({
 
   const visible = useMemo(() => {
     let r = entries;
-    if (!showFolders) r = r.filter((e) => !e.isDir);  // hide folders → keep only files
-    if (!showFiles)   r = r.filter((e) => e.isDir);   // hide files   → keep only folders
+    if (!showFolders) r = r.filter((e) => !e.isDir);
+    if (!showFiles)   r = r.filter((e) => e.isDir);
+    if (!showHidden)  r = r.filter((e) => !e.name.startsWith("."));
     if (query.trim()) { const q = query.trim().toLowerCase(); r = r.filter((e) => e.name.toLowerCase().includes(q)); }
     return r;
-  }, [entries, showFolders, showFiles, query]);
+  }, [entries, showFolders, showFiles, showHidden, query]);
 
   useEffect(() => { visibleRef.current = visible; }, [visible]);
 
@@ -188,23 +197,35 @@ const ContentArea = ({
         for (const p of targetPaths) await window.electronAPI.openFile(p, "system");
         return;
       }
-      // ── Create ──────────────────────────────────────────────────────────
-      case "newFolder": {
-        const n = await ask("Folder name:", "New Folder");
-        if (n) {
-          const created = await window.electronAPI.newFolder(dir, n);
-          if (created) pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: n, isDir: true });
-          loadEntries();
+      case "openInTerminal": {
+        for (const p of targetPaths) {
+          const s = await window.electronAPI.stat(p);
+          const dir = s.isDir ? p : p.replace(/[\\/][^\\/]*$/, "");
+          window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir } }));
         }
         return;
       }
+      // ── Create ──────────────────────────────────────────────────────────
+      case "newFolder": {
+        try {
+          const created = await window.electronAPI.newFolder(dir, "New Folder");
+          if (created) {
+            pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: created.split(/[\\/]/).pop(), isDir: true });
+            await loadEntries();
+            setRenamingPath(created);
+          }
+        } catch (err) { await alertErr("Cannot create folder", err); }
+        return;
+      }
       case "newFile": {
-        const n = await ask("File name:", "New File.txt");
-        if (n) {
-          const created = await window.electronAPI.newFile(dir, n);
-          if (created) pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: n, isDir: false });
-          loadEntries();
-        }
+        try {
+          const created = await window.electronAPI.newFile(dir, "New File.txt");
+          if (created) {
+            pushUndoRef.current?.({ type: "create", path: created, parentDir: dir, name: created.split(/[\\/]/).pop(), isDir: false });
+            await loadEntries();
+            setRenamingPath(created);
+          }
+        } catch (err) { await alertErr("Cannot create file", err); }
         return;
       }
       // ── Rename — trigger inline UI ──────────────────────────────────────
@@ -212,7 +233,7 @@ const ContentArea = ({
         if (targetPaths.length === 1) setRenamingPath(targetPaths[0]);
         return;
       }
-      // ── Delete ──────────────────────────────────────────────────────────
+      // ── Delete (move to local .trash) ────────────────────────────────────
       case "delete": {
         const names = targetPaths.map((p) => p.replace(/.*[\\/]/, ""));
         const label = targetPaths.length === 1
@@ -220,16 +241,53 @@ const ContentArea = ({
           : `Move ${targetPaths.length} items to Trash?`;
         const ok = await window.electronAPI.confirmDialog(label);
         if (!ok) return;
-        for (const p of targetPaths) await window.electronAPI.deleteItem(p, true);
-        pushUndoRef.current?.({ type: "delete", paths: targetPaths, parentDir: dir });
+        const failed = [];
+        const trashIds = [];
+        const rp = rootPathRef.current;
+        for (const p of targetPaths) {
+          try {
+            const result = await window.electronAPI.trashItem(p, rp);
+            if (result?.trashId) trashIds.push({ from: p, trashId: result.trashId });
+          } catch (err) { failed.push(p.split(/[\\/]/).pop()); }
+        }
+        if (failed.length) await alertErr("Delete failed for", new Error(failed.join(", ")));
+        if (failed.length === targetPaths.length) return;
+        pushUndoRef.current?.({ type: "delete", trashIds, parentDir: dir, rootPath: rp });
         onSetSelectedItems(new Set());
         invalidateCache(dir);
+        await loadEntries();
+        return;
+      }
+      // ── Permanent delete (Shift+Delete) ─────────────────────────────────
+      case "permaDelete": {
+        const pnames = targetPaths.map((p) => p.replace(/.*[\\/]/, ""));
+        const plabel = targetPaths.length === 1
+          ? `Permanently delete "${pnames[0]}"?`
+          : `Permanently delete ${targetPaths.length} items?`;
+        const pok = await window.electronAPI.confirmDialog(plabel);
+        if (!pok) return;
+        const pfailed = [];
+        for (const p of targetPaths) {
+          try { await window.electronAPI.deleteItem(p); }
+          catch (err) { pfailed.push(p.split(/[\\/]/).pop()); }
+        }
+        if (pfailed.length) await alertErr("Permanent delete failed for", new Error(pfailed.join(", ")));
+        if (pfailed.length === targetPaths.length) return;
+        onSetSelectedItems(new Set());
+        invalidateCache(dir);
+        await loadEntries();
         return;
       }
       // ── Duplicate ────────────────────────────────────────────────────────
       case "duplicate": {
-        for (const p of targetPaths) await window.electronAPI.duplicate(p);
-        invalidateCache(dir);
+        const failedDup = [];
+        for (const p of targetPaths) {
+          try { await window.electronAPI.duplicate(p); }
+          catch (err) { failedDup.push(p.split(/[\\/]/).pop()); }
+        }
+        if (failedDup.length) await alertErr("Cannot duplicate", new Error(failedDup.join(", ")));
+        if (failedDup.length < targetPaths.length) invalidateCache(dir);
+        if (failedDup.length < targetPaths.length) await loadEntries();
         return;
       }
       // ── Clipboard ────────────────────────────────────────────────────────
@@ -243,22 +301,27 @@ const ContentArea = ({
         if (!clip?.paths?.length) return;
         const sourceParents = new Set();
         const pairs = [];
+        const failedPaste = [];
         for (const src of clip.paths) {
           if (clip.mode === "copy") {
-            await window.electronAPI.copyItem(src, dir);
+            try { await window.electronAPI.copyItem(src, dir); }
+            catch (err) { failedPaste.push(src.split(/[\\/]/).pop()); }
           } else {
             const srcParent = src.replace(/[\\/][^\\/]+$/, "") || src;
             sourceParents.add(srcParent);
-            const dest = await window.electronAPI.moveItem(src, dir);
-            if (dest) pairs.push({ from: src, to: dest });
+            try {
+              const dest = await window.electronAPI.moveItem(src, dir);
+              if (dest) pairs.push({ from: src, to: dest });
+            } catch (err) { failedPaste.push(src.split(/[\\/]/).pop()); }
           }
         }
+        if (failedPaste.length) await alertErr("Cannot paste", new Error(failedPaste.join(", ")));
         if (clip.mode === "cut") {
           if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
           onClipboardChange(null);
         }
         for (const p of sourceParents) invalidateCache(p);
-        invalidateCache(dir);
+        if (pairs.length || failedPaste.length < clip.paths.length) { invalidateCache(dir); await loadEntries(); }
         return;
       }
       // ── Misc ─────────────────────────────────────────────────────────────
@@ -283,11 +346,17 @@ const ContentArea = ({
     if (!oldPath || !newName) return;
     const parentDir = oldPath.replace(/[\\/][^\\/]+$/, "") || oldPath;
     const oldName = oldPath.split(/[\\/]/).pop();
-    await window.electronAPI.rename(oldPath, newName);
-    const newPath = parentDir + "/" + newName;
-    pushUndoRef.current?.({ type: "rename", oldPath, oldName, newPath, newName, parentDir });
-    invalidateCache(parentDir);
-  }, [invalidateCache]);
+    try {
+      const result = await window.electronAPI.rename(oldPath, newName);
+      const newPath = result || parentDir + (parentDir.includes("\\") ? "\\" : "/") + newName;
+      pushUndoRef.current?.({ type: "rename", oldPath, oldName, newPath, newName, parentDir });
+      invalidateCache(parentDir);
+      await loadEntries();
+    } catch (err) {
+      await alertErr("Rename failed", err);
+      invalidateCache(parentDir);
+    }
+  }, [invalidateCache, alertErr, loadEntries]);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
@@ -302,6 +371,11 @@ const ContentArea = ({
     if (e.key === "F2") {
       e.preventDefault();
       if (paths.length === 1) setRenamingPath(paths[0]);
+      return;
+    }
+    if (e.key === "Delete" && e.shiftKey) {
+      e.preventDefault();
+      if (paths.length) execAction("permaDelete", paths, cp);
       return;
     }
     if (e.key === "Delete") {
@@ -332,6 +406,11 @@ const ContentArea = ({
     if ((e.ctrlKey || e.metaKey) && e.key === "a") {
       e.preventDefault();
       onSetSelectedItems(new Set(vis.map((v) => v.path)));
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "h") {
+      e.preventDefault();
+      onToggleHidden();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "z") {
@@ -369,7 +448,7 @@ const ContentArea = ({
         onSetSelectedItems(new Set([allPaths[next]]));
       }
     }
-  }, [renamingPath, execAction, onSetSelectedItems]);
+  }, [renamingPath, execAction, onSetSelectedItems, onToggleHidden]);
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const handleItemClick = useCallback((e, entry) => {
@@ -496,25 +575,28 @@ const ContentArea = ({
     e.stopPropagation();
     if (crumbsTimerRef.current) { clearTimeout(crumbsTimerRef.current); crumbsTimerRef.current = null; }
     crumbsHoverRef.current = null;
-    try {
-      const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-      if (!paths?.length) return;
-      const pairs = [];
-      const sourceParents = new Set();
-      for (const src of paths) {
-        if (src === path) continue;
-        const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
-        sourceParents.add(parentDir);
+    let paths;
+    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch { return; }
+    if (!paths?.length) return;
+    const pairs = [];
+    const sourceParents = new Set();
+    const failedCrumb = [];
+    for (const src of paths) {
+      if (src === path) continue;
+      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+      sourceParents.add(parentDir);
+      try {
         const dest = await window.electronAPI.moveItem(src, path);
         if (dest) pairs.push({ from: src, to: dest });
-      }
-      if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
-      for (const p of sourceParents) invalidateCache(p);
-      invalidateCache(path);
-      onSetSelectedItems(new Set());
-      onNavigate(path);
-    } catch {}
-  }, [invalidateCache, onNavigate, onSetSelectedItems]);
+      } catch (err) { failedCrumb.push(src.split(/[\\/]/).pop()); }
+    }
+    if (failedCrumb.length) await alertErr("Cannot move item(s)", new Error(failedCrumb.join(", ")));
+    if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+    for (const p of sourceParents) invalidateCache(p);
+    invalidateCache(path);
+    onSetSelectedItems(new Set());
+    onNavigate(path);
+  }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr]);
 
   // ── Content-area drop target (folder items) ──────────────────────────────
   const [dropTargetPath, setDropTargetPath] = useState(null);
@@ -549,25 +631,28 @@ const ContentArea = ({
     e.stopPropagation();
     setDropTargetPath(null);
     if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
-    try {
-      const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-      if (!paths?.length) return;
-      const pairs = [];
-      const sourceParents = new Set();
-      for (const src of paths) {
-        if (src === entry.path) continue;
-        const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
-        sourceParents.add(parentDir);
+    let paths;
+    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch { return; }
+    if (!paths?.length) return;
+    const pairs = [];
+    const sourceParents = new Set();
+    const failedDrop = [];
+    for (const src of paths) {
+      if (src === entry.path) continue;
+      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+      sourceParents.add(parentDir);
+      try {
         const dest = await window.electronAPI.moveItem(src, entry.path);
         if (dest) pairs.push({ from: src, to: dest });
-      }
-      if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
-      for (const p of sourceParents) invalidateCache(p);
-      invalidateCache(entry.path);
-      onSetSelectedItems(new Set());
-      onNavigate(entry.path);
-    } catch {}
-  }, [invalidateCache, onNavigate, onSetSelectedItems]);
+      } catch (err) { failedDrop.push(src.split(/[\\/]/).pop()); }
+    }
+    if (failedDrop.length) await alertErr("Cannot move item(s)", new Error(failedDrop.join(", ")));
+    if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+    for (const p of sourceParents) invalidateCache(p);
+    invalidateCache(entry.path);
+    onSetSelectedItems(new Set());
+    onNavigate(entry.path);
+  }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr]);
 
   // ── Context menus ─────────────────────────────────────────────────────────
   const handleBlankContextMenu = useCallback(async (e) => {
@@ -606,11 +691,11 @@ const ContentArea = ({
       onKeyDown={handleKeyDown}
       style={{ outline: "none" }}
     >
-      {inputDialog}
       <Bar rootPath={rootPath} currentPath={currentPath} onNavigate={onNavigate}
         query={query} onQuery={setQuery}
         showFolders={showFolders} onToggleFolders={() => setShowFolders((v) => !v)}
         showFiles={showFiles}    onToggleFiles={() => setShowFiles((v) => !v)}
+        showHidden={showHidden}  onToggleHidden={onToggleHidden}
         itemCount={itemCount}    selectedCount={selectedItems.size}
         onCrumbsDragOver={handleCrumbsDragOver}
         onCrumbsDragLeave={handleCrumbsDragLeave}

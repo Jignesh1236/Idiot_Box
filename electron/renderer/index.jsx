@@ -6,8 +6,9 @@ import "./layout.css";
 
 import Panel1 from "./components/Panel1.jsx";
 import Panel3 from "./components/Panel3.jsx";
-import Panel4 from "./components/Panel4.jsx";
+import ProjectPanel from "./components/ProjectPanel.jsx";
 import Panel5 from "./components/Panel5.jsx";
+import TerminalPanel from "./components/Terminal.jsx";
 
 // ─── FlexLayout JSON Model ────────────────────────────────────────────────────
 //
@@ -17,7 +18,8 @@ import Panel5 from "./components/Panel5.jsx";
 //  │   ├── Panel3  — center main area   (weight 53)
 //  │   └── Panel5  — right full-height  (weight 25)
 //  └── Bottom row  (weight 35)
-//      └── Panel4  — spans full width (left + center + right)
+//      ├── Project Panel  — left + center
+//      └── Terminal Panel — left + center
 //
 const json = {
   global: {
@@ -35,7 +37,7 @@ const json = {
     type: "row",
     weight: 100,
     children: [
-      // ── Left + Center column (stacked: top panels + bottom Panel4) ───────
+      // ── Left + Center column (stacked: top panels + bottom tabs) ────────
       {
         type: "row",
         weight: 75,
@@ -59,11 +61,14 @@ const json = {
               },
             ],
           },
-          // Bottom section: Panel4 spans full left+center width
+          // Bottom tabs: Project Panel & Terminal
           {
             type: "tabset",
             weight: 35,
-            children: [{ type: "tab", name: "Project", component: "panel4" }],
+            children: [
+              { type: "tab", name: "Project", component: "projectPanel" },
+              { type: "tab", name: "Terminal", component: "terminal" },
+            ],
           },
         ],
       },
@@ -82,11 +87,12 @@ const model = Model.fromJson(json);
 // ─── Component factory ───────────────────────────────────────────────────────
 const factory = (node) => {
   switch (node.getComponent()) {
-    case "panel1": return <Panel1 />;
-    case "panel3": return <Panel3 />;
-    case "panel4": return <Panel4 />;
-    case "panel5": return <Panel5 />;
-    default:       return null;
+    case "panel1":        return <Panel1 />;
+    case "panel3":        return <Panel3 />;
+    case "projectPanel":  return <ProjectPanel />;
+    case "panel5":        return <Panel5 />;
+    case "terminal":      return <TerminalPanel />;
+    default:              return null;
   }
 };
 

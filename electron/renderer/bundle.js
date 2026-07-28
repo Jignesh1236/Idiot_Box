@@ -39671,7 +39671,9 @@ ${h2.join(`
   var XtermStyle = () => /* @__PURE__ */ import_react12.default.createElement("style", null, XTERM_CUSTOM_CSS);
   var TabContent = ({ tabId, cwd, writersRef }) => {
     const elRef = (0, import_react12.useRef)(null);
+    const termRef = (0, import_react12.useRef)(null);
     const [initError, setInitError] = (0, import_react12.useState)(null);
+    const [ctxMenu, setCtxMenu] = (0, import_react12.useState)(null);
     const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "";
     (0, import_react12.useEffect)(() => {
       let term;
@@ -39723,6 +39725,7 @@ ${h2.join(`
           term.onData((data) => {
             window.electronAPI.writeToTerminal(tabId, data);
           });
+          termRef.current = term;
           writersRef.current[tabId] = (data) => term.write(data);
           ro2 = new ResizeObserver(() => {
             if (fit && term) {
@@ -39758,13 +39761,27 @@ ${h2.join(`
         delete writersRef.current[tabId];
         window.electronAPI.closeTerminal(tabId);
         if (term) term.dispose();
+        termRef.current = null;
         if (ro2 && el2) ro2.disconnect();
       };
     }, [tabId, cwd]);
     if (initError) {
       return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" } }, "Terminal init error: ", initError);
     }
-    return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%" } }, /* @__PURE__ */ import_react12.default.createElement("div", { ref: elRef, style: { flex: 1, minHeight: 0 } }), /* @__PURE__ */ import_react12.default.createElement("div", { style: {
+    return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%" } }, /* @__PURE__ */ import_react12.default.createElement(
+      "div",
+      {
+        ref: elRef,
+        style: { flex: 1, minHeight: 0 },
+        onContextMenu: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const term = termRef.current;
+          const hasSelection = term && term.getSelection().trim();
+          setCtxMenu({ x: e.clientX, y: e.clientY, hasSelection: !!hasSelection });
+        }
+      }
+    ), /* @__PURE__ */ import_react12.default.createElement("div", { style: {
       display: "flex",
       alignItems: "center",
       gap: 6,
@@ -39774,7 +39791,85 @@ ${h2.join(`
       fontSize: 11,
       color: "#666",
       flexShrink: 0
-    } }, /* @__PURE__ */ import_react12.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, dirName)));
+    } }, /* @__PURE__ */ import_react12.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, dirName)), ctxMenu && /* @__PURE__ */ import_react12.default.createElement(
+      "div",
+      {
+        style: { position: "fixed", inset: 0, zIndex: 2147483647 },
+        onClick: () => setCtxMenu(null)
+      },
+      /* @__PURE__ */ import_react12.default.createElement(
+        "div",
+        {
+          style: {
+            position: "absolute",
+            left: ctxMenu.x,
+            top: ctxMenu.y,
+            background: "#2d2d2d",
+            border: "1px solid #444",
+            borderRadius: 6,
+            padding: "4px 0",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
+            minWidth: 140
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        ctxMenu.hasSelection && /* @__PURE__ */ import_react12.default.createElement(
+          "div",
+          {
+            style: MENU_STYLE,
+            onClick: async () => {
+              const sel = termRef.current?.getSelection();
+              if (sel) window.electronAPI.clipboardWrite(sel);
+              setCtxMenu(null);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
+            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
+          },
+          "Copy"
+        ),
+        /* @__PURE__ */ import_react12.default.createElement(
+          "div",
+          {
+            style: MENU_STYLE,
+            onClick: async () => {
+              const text = window.electronAPI.clipboardRead();
+              if (text) window.electronAPI.writeToTerminal(tabId, text);
+              setCtxMenu(null);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
+            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
+          },
+          "Paste"
+        ),
+        /* @__PURE__ */ import_react12.default.createElement("div", { style: MENU_SEP }),
+        /* @__PURE__ */ import_react12.default.createElement(
+          "div",
+          {
+            style: MENU_STYLE,
+            onClick: () => {
+              setCtxMenu(null);
+              window.electronAPI.closeTerminal(tabId);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
+            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
+          },
+          "Kill Terminal"
+        ),
+        /* @__PURE__ */ import_react12.default.createElement(
+          "div",
+          {
+            style: MENU_STYLE,
+            onClick: () => {
+              setCtxMenu(null);
+              window.electronAPI.openTerminal(tabId, cwd);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
+            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
+          },
+          "Restart"
+        )
+      )
+    ));
   };
   var MENU_STYLE = {
     padding: "5px 16px",

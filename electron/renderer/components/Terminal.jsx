@@ -31,7 +31,9 @@ const XtermStyle = () => <style>{XTERM_CUSTOM_CSS}</style>;
 // ─── TabContent — owns one xterm.js instance + shell ────────────────────────
 const TabContent = ({ tabId, cwd, writersRef }) => {
   const elRef = useRef(null);
+  const termRef = useRef(null);
   const [initError, setInitError] = useState(null);
+  const [ctxMenu, setCtxMenu] = useState(null);
   const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "";
 
   useEffect(() => {
@@ -78,6 +80,8 @@ const TabContent = ({ tabId, cwd, writersRef }) => {
           window.electronAPI.writeToTerminal(tabId, data);
         });
 
+        termRef.current = term;
+
         writersRef.current[tabId] = (data) => term.write(data);
 
         ro = new ResizeObserver(() => {
@@ -115,6 +119,7 @@ const TabContent = ({ tabId, cwd, writersRef }) => {
       delete writersRef.current[tabId];
       window.electronAPI.closeTerminal(tabId);
       if (term) term.dispose();
+      termRef.current = null;
       if (ro && el) ro.disconnect();
     };
   }, [tabId, cwd]);
@@ -129,7 +134,15 @@ const TabContent = ({ tabId, cwd, writersRef }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div ref={elRef} style={{ flex: 1, minHeight: 0 }} />
+      <div ref={elRef} style={{ flex: 1, minHeight: 0 }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const term = termRef.current;
+          const hasSelection = term && term.getSelection().trim();
+          setCtxMenu({ x: e.clientX, y: e.clientY, hasSelection: !!hasSelection });
+        }}
+      />
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         padding: "3px 10px", background: "#252525",
@@ -145,6 +158,57 @@ const TabContent = ({ tabId, cwd, writersRef }) => {
           {dirName}
         </span>
       </div>
+
+      {ctxMenu && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 2147483647 }}
+          onClick={() => setCtxMenu(null)}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: ctxMenu.x, top: ctxMenu.y,
+              background: "#2d2d2d", border: "1px solid #444",
+              borderRadius: 6, padding: "4px 0",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
+              minWidth: 140,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {ctxMenu.hasSelection && (
+              <div style={MENU_STYLE}
+                onClick={async () => {
+                  const sel = termRef.current?.getSelection();
+                  if (sel) window.electronAPI.clipboardWrite(sel);
+                  setCtxMenu(null);
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >Copy</div>
+            )}
+            <div style={MENU_STYLE}
+              onClick={async () => {
+                const text = window.electronAPI.clipboardRead();
+                if (text) window.electronAPI.writeToTerminal(tabId, text);
+                setCtxMenu(null);
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            >Paste</div>
+            <div style={MENU_SEP} />
+            <div style={MENU_STYLE}
+              onClick={() => { setCtxMenu(null); window.electronAPI.closeTerminal(tabId); }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            >Kill Terminal</div>
+            <div style={MENU_STYLE}
+              onClick={() => { setCtxMenu(null); window.electronAPI.openTerminal(tabId, cwd); }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            >Restart</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

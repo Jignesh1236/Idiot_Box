@@ -1,7 +1,11 @@
 // Preload script entry point
-const { contextBridge, ipcRenderer, webUtils } = require("electron");
+const { contextBridge, ipcRenderer, webUtils, clipboard } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  // ── Clipboard ─────────────────────────────────────────────────────────────
+  clipboardRead:  ()  => clipboard.readText(),
+  clipboardWrite: (t) => clipboard.writeText(t),
+
   // ── Drag & drop (external files) ───────────────────────────────────────────
   getPathForFile: (file) => webUtils.getPathForFile(file),
 

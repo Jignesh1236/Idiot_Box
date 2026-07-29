@@ -44,6 +44,34 @@ const ProjectWindow = () => {
     });
   }, []);
 
+  // ── Navigation history (back/forward) ────────────────────────────────────
+  const navHistoryRef = useRef({ stack: [], cursor: -1 });
+
+  const pushNavHistory = useCallback((path) => {
+    const h = navHistoryRef.current;
+    // Don't push duplicate consecutive entries
+    if (h.stack.length > 0 && h.stack[h.cursor] === path) return;
+    const trimmed = h.stack.slice(0, h.cursor + 1);
+    trimmed.push(path);
+    navHistoryRef.current = { stack: trimmed, cursor: trimmed.length - 1 };
+  }, []);
+
+  const handleBack = useCallback(() => {
+    const h = navHistoryRef.current;
+    if (h.cursor <= 0) return;
+    h.cursor--;
+    const path = h.stack[h.cursor];
+    setSelectedPath(path); setCurrentPath(path); setSelectedItems(new Set());
+  }, []);
+
+  const handleForward = useCallback(() => {
+    const h = navHistoryRef.current;
+    if (h.cursor >= h.stack.length - 1) return;
+    h.cursor++;
+    const path = h.stack[h.cursor];
+    setSelectedPath(path); setCurrentPath(path); setSelectedItems(new Set());
+  }, []);
+
   // ── Undo / Redo stacks ───────────────────────────────────────────────────
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
@@ -209,6 +237,19 @@ const ProjectWindow = () => {
     }
   }, [refreshAll]);
 
+  // ── Mouse back/forward buttons ────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.button === 3) { e.preventDefault(); handleBack(); }
+      if (e.button === 4) { e.preventDefault(); handleForward(); }
+    };
+    document.addEventListener("mouseup", handler);
+    document.addEventListener("mousedown", (e) => {
+      if (e.button === 3 || e.button === 4) e.preventDefault();
+    });
+    return () => document.removeEventListener("mouseup", handler);
+  }, [handleBack, handleForward]);
+
   // ── Chokidar watcher ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!rootPath) return;
@@ -236,6 +277,7 @@ const ProjectWindow = () => {
     setRefreshToken(0);
     undoStackRef.current = [];
     redoStackRef.current = [];
+    navHistoryRef.current = { stack: [folderPath], cursor: 0 };
   }, []);
 
   const closeProject = useCallback(() => {
@@ -244,6 +286,7 @@ const ProjectWindow = () => {
     setChildCache(new Map()); setItemCount(null); setClipboard(null);
     undoStackRef.current = [];
     redoStackRef.current = [];
+    navHistoryRef.current = { stack: [], cursor: -1 };
   }, []);
 
   useEffect(() => {
@@ -257,7 +300,8 @@ const ProjectWindow = () => {
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleSidebarSelect = useCallback((folderPath) => {
     setSelectedPath(folderPath); setCurrentPath(folderPath); setSelectedItems(new Set());
-  }, []);
+    pushNavHistory(folderPath);
+  }, [pushNavHistory]);
 
   const handleToggle = useCallback((folderPath) => {
     setExpandedSet((prev) => { const n = new Set(prev); n.has(folderPath) ? n.delete(folderPath) : n.add(folderPath); return n; });
@@ -265,7 +309,8 @@ const ProjectWindow = () => {
 
   const handleNavigate = useCallback((folderPath) => {
     setCurrentPath(folderPath); setSelectedPath(folderPath); setSelectedItems(new Set());
-  }, []);
+    pushNavHistory(folderPath);
+  }, [pushNavHistory]);
 
   const handleSetSelectedItems = useCallback((nextSet) => setSelectedItems(nextSet), []);
   const handleItemsLoaded      = useCallback((count)   => setItemCount(count),       []);
@@ -369,6 +414,7 @@ const ProjectWindow = () => {
           performUndo={performUndo}
           performRedo={performRedo}
           zoom={zoom}
+          onZoom={handleZoom}
           showHidden={showHidden}
           onToggleHidden={() => setShowHidden((v) => !v)}
           showFolders={showFolders}

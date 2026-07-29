@@ -421,8 +421,11 @@ const SidebarTree = ({
       case "open":
         await window.electronAPI.openFile(filePath, "system");
         break;
-      case "openWith":
+      case "openWithSystem":
         await window.electronAPI.openFile(filePath, "system");
+        break;
+      case "openInMediaViewer":
+        window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: filePath } }));
         break;
       case "openInTerminal": {
         window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: parentDir } }));
@@ -555,11 +558,12 @@ const SidebarTree = ({
               {pinned.map((name) => {
                 const sep = rootPath.includes("\\") ? "\\" : "/";
                 const fullPath = rootPath + sep + name;
+                const folderName = name.split(/[\\/]/).pop();
                 return (
                   <TreeRow
                     key={name}
-                    label={name}
-                    iconEl={<VscodeIcon name={name} isDir={true} size={16} />}
+                    label={folderName}
+                    iconEl={<VscodeIcon name={folderName} isDir={true} size={16} />}
                     depth={0}
                     hasChildren={false}
                     isOpen={false}
@@ -576,6 +580,7 @@ const SidebarTree = ({
                       e.stopPropagation();
                       const result = await window.electronAPI.showContextMenu("pinned", [fullPath], clipboard?.paths ?? null);
                       if (result?.action === "pinToSidebar") handlePinToggle(name);
+                      else if (result?.action === "refresh") { invalidateCache(fullPath); setLocalRefresh((k) => k + 1); }
                     }}
                   />
                 );

@@ -2,20 +2,25 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
 const path    = require("path");
 const fs      = require("fs");
+const net     = require("net");
 const { spawn } = require("child_process");
 const chokidar = require("chokidar");
 const pty     = require("node-pty");
 
 // ─── Long path helper (Windows) ──────────────────────────────────────────────
 const toLongPath = (p) => {
-  if (process.platform !== "win32") return p;
-  // Only prepend \\?\ for absolute paths longer than 260 chars
-  const abs = path.resolve(p);
-  if (abs.length >= 260 && !abs.startsWith("\\\\?\\")) {
-    // Convert forward slashes to backslashes for \\?\ prefix
-    return "\\\\?\\" + abs.replace(/\//g, "\\");
+  if (process.platform !== "win32" || !p) return p;
+  // Normalize forward slashes to backslashes
+  let n = p.replace(/\//g, "\\");
+  // Already has long-path prefix
+  if (n.startsWith("\\\\?\\")) return n;
+  // UNC path: \\server\share\... → \\?\UNC\server\share\...
+  if (n.startsWith("\\\\")) return "\\\\?\\UNC\\" + n.slice(2);
+  // Only apply \\?\ prefix for absolute paths longer than ~250 chars
+  if (n.length >= 250 && path.isAbsolute(n) && !n.startsWith("\\\\?\\")) {
+    return "\\\\?\\" + n;
   }
-  return p;
+  return n;
 };
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -24,6 +29,13 @@ const readSettings  = () => { try { return JSON.parse(fs.readFileSync(SETTINGS_F
 const writeSettings = (d) => { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(d, null, 2)); return true; } catch { return false; } };
 ipcMain.handle("settings:read",  () => readSettings());
 ipcMain.handle("settings:write", (_e, data) => writeSettings(data));
+
+// ─── Browser extensions ─────────────────────────────────────────────────────────
+const EXTENSIONS_FILE = path.join(app.getPath("userData"), "browser-extensions.json");
+const readExtensions  = () => { try { return JSON.parse(fs.readFileSync(EXTENSIONS_FILE, "utf8")); } catch { return []; } };
+const writeExtensions = (d) => { try { fs.writeFileSync(EXTENSIONS_FILE, JSON.stringify(d, null, 2)); return true; } catch { return false; } };
+ipcMain.handle("extensions:read",   () => readExtensions());
+ipcMain.handle("extensions:write",  (_e, data) => writeExtensions(data));
 
 // ─── Editors ─────────────────────────────────────────────────────────────────
 const KNOWN_EDITORS = [
@@ -322,6 +334,26 @@ ipcMain.handle("fs:getFilePreview", async (_e, filePath) => {
   return null;
 });
 
+ipcMain.handle("fs:readTextFile", async (_e, filePath) => {
+  try { return fs.readFileSync(toLongPath(filePath), "utf8"); } catch { return null; }
+});
+
+ipcMain.handle("fs:readFileAsDataUrl", async (_e, filePath) => {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    const data = fs.readFileSync(toLongPath(filePath));
+    if (data.length > 10 * 1024 * 1024) return null;
+    const mime = ext === ".svg" ? "image/svg+xml"
+      : ext === ".ico" ? "image/x-icon"
+      : ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".gif" || ext === ".bmp" || ext === ".webp" ? `image/${ext.slice(1)}`
+      : ext === ".mp4" ? "video/mp4"
+      : ext === ".webm" ? "video/webm"
+      : null;
+    if (!mime) return null;
+    return `data:${mime};base64,${data.toString("base64")}`;
+  } catch { return null; }
+});
+
 // ─── Chokidar filesystem watcher ─────────────────────────────────────────────
 // Map: watchKey (rootPath:webContentsId) → chokidar.FSWatcher
 const watchers = new Map();
@@ -467,7 +499,10 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
     } else {
       items = [
         { label: "Open",                    accelerator: "Enter",        click: () => act("open")     },
-        { label: "Open With...",            accelerator: "Ctrl+Enter",   click: () => act("openWith") },
+        { label: "Open with", submenu: [
+          { label: "System Default",        accelerator: "Ctrl+Enter",   click: () => act("openWithSystem") },
+          { label: "Media Viewer",                                     click: () => act("openInMediaViewer") },
+        ]},
         sep,
         { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
         { label: "Delete",                  accelerator: "Delete",       click: () => act("delete")    },
@@ -489,7 +524,7 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
 });
 
 // ─── Terminal ─────────────────────────────────────────────────────────────────
-// One shell process per tabId
+// Each terminal process is keyed by senderId:tabId so multiple windows don't collide
 const termProcesses = new Map();
 let lastProjectPath = null; // track last opened project for terminal
 
@@ -511,13 +546,15 @@ function getShellArgs(shell) {
   return [];
 }
 
+function termKey(sender, tabId) { return `${sender.id}:${tabId}`; }
+
 ipcMain.handle("terminal:getProjectPath", () => lastProjectPath);
 
 ipcMain.handle("terminal:open", async (event, { tabId, cwd }) => {
-  // Kill existing terminal for this tabId
-  if (termProcesses.has(tabId)) {
-    termProcesses.get(tabId).kill();
-    termProcesses.delete(tabId);
+  const key = termKey(event.sender, tabId);
+  if (termProcesses.has(key)) {
+    termProcesses.get(key).kill();
+    termProcesses.delete(key);
   }
 
   const shell = getShell();
@@ -530,14 +567,14 @@ ipcMain.handle("terminal:open", async (event, { tabId, cwd }) => {
     env: { ...process.env },
   });
 
-  termProcesses.set(tabId, p);
+  termProcesses.set(key, p);
 
   p.onData((data) => {
     try { event.sender.send("terminal:data", { tabId, data }); } catch {}
   });
 
   p.onExit(({ exitCode, signal }) => {
-    if (termProcesses.get(tabId) === p) termProcesses.delete(tabId);
+    if (termProcesses.get(key) === p) termProcesses.delete(key);
     try { event.sender.send("terminal:exit", { tabId, code: exitCode, signal }); } catch {}
   });
 
@@ -545,18 +582,90 @@ ipcMain.handle("terminal:open", async (event, { tabId, cwd }) => {
 });
 
 ipcMain.handle("terminal:write", async (event, { tabId, data }) => {
-  const p = termProcesses.get(tabId);
+  const p = termProcesses.get(termKey(event.sender, tabId));
   if (p) p.write(data);
 });
 
 ipcMain.handle("terminal:resize", async (event, { tabId, cols, rows }) => {
-  const p = termProcesses.get(tabId);
+  const p = termProcesses.get(termKey(event.sender, tabId));
   if (p && cols > 0 && rows > 0) p.resize(cols, rows);
 });
 
 ipcMain.handle("terminal:close", async (event, { tabId }) => {
-  const p = termProcesses.get(tabId);
-  if (p) { p.kill(); termProcesses.delete(tabId); }
+  const key = termKey(event.sender, tabId);
+  const p = termProcesses.get(key);
+  if (p) { p.kill(); termProcesses.delete(key); }
+});
+
+ipcMain.handle("terminal:contextMenu", (event, { hasSelection }) => {
+  return new Promise((resolve) => {
+    const act = (action) => resolve({ action });
+    const items = [
+      { label: "Copy",      accelerator: "Ctrl+Shift+C", enabled: hasSelection, click: () => act("copy") },
+      { label: "Paste",     accelerator: "Ctrl+Shift+V",                       click: () => act("paste") },
+      { type: "separator" },
+      { label: "Kill Terminal",                                                 click: () => act("kill") },
+      { label: "Restart",                                                       click: () => act("restart") },
+    ];
+    const menu = Menu.buildFromTemplate(items);
+    const win = BrowserWindow.fromWebContents(event.sender);
+    menu.popup({ window: win, callback: () => resolve(null) });
+  });
+});
+
+ipcMain.handle("terminal:tabContextMenu", (event) => {
+  return new Promise((resolve) => {
+    const act = (action) => resolve({ action });
+    const items = [
+      { label: "Kill Terminal",   click: () => act("kill") },
+      { label: "Restart",         click: () => act("restart") },
+      { type: "separator" },
+      { label: "Rename Tab",      click: () => act("rename") },
+      { type: "separator" },
+      { label: "Close Tab",       click: () => act("close") },
+    ];
+    const menu = Menu.buildFromTemplate(items);
+    const win = BrowserWindow.fromWebContents(event.sender);
+    menu.popup({ window: win, callback: () => resolve(null) });
+  });
+});
+
+// ─── Port scanner ────────────────────────────────────────────────────────────
+const COMMON_PORTS = [3000, 3001, 5000, 5173, 8080, 8081, 4200, 8000, 3005, 3006];
+function scanPorts() {
+  return new Promise((resolve) => {
+    const active = [];
+    let remaining = COMMON_PORTS.length;
+    if (!remaining) { resolve(active); return; }
+    for (const port of COMMON_PORTS) {
+      const s = net.createConnection({ port, host: "127.0.0.1", timeout: 600 });
+      s.on("connect", () => { s.destroy(); active.push(port); checkDone(); });
+      s.on("error", () => { s.destroy(); checkDone(); });
+      s.on("timeout", () => { s.destroy(); checkDone(); });
+      function checkDone() { if (--remaining <= 0) resolve(active.sort((a, b) => a - b)); }
+    }
+  });
+}
+
+ipcMain.handle("panel:addMenu", async (event) => {
+  const ports = await scanPorts();
+  return new Promise((resolve) => {
+    const act = (action) => resolve({ action });
+    const items = [
+      { label: "Browser", click: () => act("browser") },
+      { label: "Terminal", click: () => act("terminal") },
+    ];
+    if (ports.length) {
+      items.push({ type: "separator" });
+      items.push({ label: "Running Ports", enabled: false });
+      for (const p of ports) {
+        items.push({ label: `  http://localhost:${p}`, click: () => act(`port:${p}`) });
+      }
+    }
+    const menu = Menu.buildFromTemplate(items);
+    const win = BrowserWindow.fromWebContents(event.sender);
+    menu.popup({ window: win, callback: () => resolve(null) });
+  });
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -564,6 +673,17 @@ const sendToRenderer = (channel, payload) => {
   const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
   if (win) win.webContents.send(channel, payload);
 };
+
+// ─── Session restore ───────────────────────────────────────────────────────────
+const SESSION_FILE = path.join(app.getPath("userData"), "session.json");
+
+ipcMain.handle("session:save", (_e, data) => {
+  try { fs.writeFileSync(SESSION_FILE, JSON.stringify(data, null, 2)); return true; } catch { return false; }
+});
+
+ipcMain.handle("session:load", () => {
+  try { return JSON.parse(fs.readFileSync(SESSION_FILE, "utf8")); } catch { return null; }
+});
 
 // ─── Settings window ──────────────────────────────────────────────────────────
 let settingsWin = null;
@@ -592,21 +712,60 @@ function buildMenu() {
         { label: "Save Project",  accelerator: "CmdOrCtrl+S", click: () => sendToRenderer("menu:saveProject", null) },
         { type: "separator" },
         { label: "Close Project", accelerator: "CmdOrCtrl+W", click: () => { lastProjectPath = null; sendToRenderer("menu:closeProject", null); } },
-        { label: "Close App",     accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
+        { type: "separator" },
+        { label: "Open New Window", accelerator: "CmdOrCtrl+Shift+W", click: () => createWindow() },
+        { label: "Close App",        accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
       ],
     },
     { label: "Settings", click: openSettingsWindow },
+    {
+      label: "Window", submenu: [
+        { label: "Reset Window", accelerator: "CmdOrCtrl+R", click: () => sendToRenderer("menu:resetLayout", null) },
+      ],
+    },
   ]);
 }
 
 // ─── Main window ──────────────────────────────────────────────────────────────
 function createWindow() {
+  // Restore window state from session
+  let winState = { width: 1280, height: 720 };
+  let wasMaximized = false;
+  try {
+    const s = JSON.parse(fs.readFileSync(SESSION_FILE, "utf8"));
+    if (s.window) {
+      winState = { width: s.window.width || 1280, height: s.window.height || 720, x: s.window.x, y: s.window.y };
+      wasMaximized = s.window.maximized || false;
+    }
+  } catch {}
+
   const win = new BrowserWindow({
-    width: 1280, height: 720, backgroundColor: "#0d0d0d",
+    ...winState,
+    backgroundColor: "#0d0d0d",
+    show: false,
     webPreferences: { preload: path.join(__dirname, "../preload/index.js"), contextIsolation: true, nodeIntegration: false, webviewTag: true },
   });
+
+  if (wasMaximized) win.maximize();
+  win.show();
+
   win.loadFile(path.join(__dirname, "../renderer/index.html"));
   win.webContents.openDevTools();
+
+  // Save session on close — grabs layout JSON from renderer first
+  win.on("close", async () => {
+    try {
+      const bounds = win.getBounds();
+      const maximized = win.isMaximized();
+      let layout = null;
+      try { layout = await win.webContents.executeJavaScript("window.__getLayoutJSON()"); } catch {}
+      const data = {
+        window: { width: bounds.width, height: bounds.height, x: bounds.x, y: bounds.y, maximized },
+        layout,
+      };
+      fs.writeFileSync(SESSION_FILE, JSON.stringify(data, null, 2));
+    } catch {}
+  });
 }
 
 app.whenReady().then(() => { getShell(); Menu.setApplicationMenu(buildMenu()); createWindow(); });

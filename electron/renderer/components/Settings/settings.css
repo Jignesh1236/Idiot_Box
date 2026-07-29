@@ -1,14 +1,14 @@
 /* ─── Settings Window ─────────────────────────────────────────────────────── */
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Fredoka', sans-serif; }
 
 html, body, #settings-root {
   width: 100%; height: 100%;
-  background: #1a1a1a;
+  background: var(--bg-header);
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: 'Fredoka', sans-serif;
   font-size: 13px;
-  color: #c8c8c8;
+  color: var(--text-primary);
 }
 
 /* ── Shell ───────────────────────────────────────────────────────────────── */
@@ -22,7 +22,7 @@ html, body, #settings-root {
 .sw-sidebar {
   width: 180px;
   background: #202020;
-  border-right: 1px solid #2e2e2e;
+  border-right: 1px solid var(--bg-subtle);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -34,7 +34,7 @@ html, body, #settings-root {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #555;
+  color: var(--text-placeholder);
   padding: 10px 14px 6px;
 }
 
@@ -45,7 +45,7 @@ html, body, #settings-root {
   padding: 0 14px;
   cursor: pointer;
   font-size: 12.5px;
-  color: #a0a0a0;
+  color: var(--text-nav);
   border-left: 2px solid transparent;
   gap: 8px;
   white-space: nowrap;
@@ -53,12 +53,12 @@ html, body, #settings-root {
   transition: background 0.08s, color 0.08s;
 }
 
-.sw-nav-item:hover { background: #2a2a2a; color: #d0d0d0; }
+.sw-nav-item:hover { background: var(--bg-hover); color: #d0d0d0; }
 
 .sw-nav-item--active {
-  background: #2a2a2a;
-  color: #e0e0e0;
-  border-left-color: #5a9fd4;
+  background: var(--bg-hover);
+  color: var(--text-input);
+  border-left-color: var(--accent-light);
 }
 
 /* ── Content panel ───────────────────────────────────────────────────────── */
@@ -74,15 +74,15 @@ html, body, #settings-root {
   padding: 0 20px;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid #2e2e2e;
-  background: #1e1e1e;
+  border-bottom: 1px solid var(--bg-subtle);
+  background: var(--bg-surface);
   flex-shrink: 0;
 }
 
 .sw-content__title {
   font-size: 13.5px;
   font-weight: 600;
-  color: #d0d0d0;
+  color: #d0d0d0; /* keep — distinct page title */
 }
 
 .sw-content__body {
@@ -93,7 +93,7 @@ html, body, #settings-root {
 
 .sw-content__body::-webkit-scrollbar       { width: 6px; }
 .sw-content__body::-webkit-scrollbar-track { background: transparent; }
-.sw-content__body::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 2px; }
+.sw-content__body::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
 
 /* ── Settings rows ───────────────────────────────────────────────────────── */
 .sw-row {
@@ -103,14 +103,14 @@ html, body, #settings-root {
 .sw-row__label {
   font-size: 12px;
   font-weight: 600;
-  color: #b0b0b0;
+  color: var(--text-label);
   margin-bottom: 6px;
   display: block;
 }
 
 .sw-row__desc {
   font-size: 11px;
-  color: #555;
+  color: var(--text-placeholder);
   margin-bottom: 8px;
 }
 
@@ -118,18 +118,18 @@ html, body, #settings-root {
 .sw-search {
   width: 100%;
   height: 28px;
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
   border-radius: 2px;
-  color: #c8c8c8;
+  color: var(--text-primary);
   font-size: 12px;
   padding: 0 8px;
   outline: none;
   margin-bottom: 6px;
 }
 
-.sw-search:focus { border-color: #5a9fd4; }
-.sw-search::placeholder { color: #555; }
+.sw-search:focus { border-color: var(--accent-light); }
+.sw-search::placeholder { color: var(--text-placeholder); }
 
 /* ── Editor list ─────────────────────────────────────────────────────────── */
 .sw-editor-list {
@@ -138,14 +138,14 @@ html, body, #settings-root {
   gap: 2px;
   max-height: 320px;
   overflow-y: auto;
-  border: 1px solid #2e2e2e;
+  border: 1px solid var(--bg-subtle);
   border-radius: 2px;
   background: #242424;
 }
 
 .sw-editor-list::-webkit-scrollbar       { width: 5px; }
 .sw-editor-list::-webkit-scrollbar-track { background: transparent; }
-.sw-editor-list::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 2px; }
+.sw-editor-list::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
 
 .sw-editor-item {
   display: flex;
@@ -158,9 +158,9 @@ html, body, #settings-root {
   user-select: none;
 }
 
-.sw-editor-item:hover              { background: #2e2e2e; }
-.sw-editor-item--selected          { background: #2b4f72; }
-.sw-editor-item--selected .sw-editor-item__label { color: #fff; }
+.sw-editor-item:hover              { background: var(--bg-subtle); }
+.sw-editor-item--selected          { background: var(--selection-bg); }
+.sw-editor-item--selected .sw-editor-item__label { color: var(--text-inverse); }
 .sw-editor-item--unavailable       { opacity: 0.4; cursor: default; }
 
 .sw-editor-item__dot {
@@ -168,21 +168,21 @@ html, body, #settings-root {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: #3a3a3a;
+  background: var(--scrollbar);
 }
 
-.sw-editor-item__dot--available    { background: #4caf50; }
-.sw-editor-item__dot--selected     { background: #5a9fd4; }
+.sw-editor-item__dot--available    { background: var(--success); }
+.sw-editor-item__dot--selected     { background: var(--accent-light); }
 
 .sw-editor-item__label {
   font-size: 12px;
-  color: #b0b0b0;
+  color: var(--text-label);
   flex: 1;
 }
 
 .sw-editor-item__badge {
   font-size: 10px;
-  color: #4caf50;
+  color: var(--success);
   background: rgba(76,175,80,0.12);
   padding: 1px 5px;
   border-radius: 2px;
@@ -193,21 +193,21 @@ html, body, #settings-root {
   margin-top: 16px;
   height: 28px;
   padding: 0 16px;
-  background: #2b4f72;
-  border: 1px solid #3a6a9a;
+  background: var(--selection-bg);
+  border: 1px solid var(--accent-border);
   border-radius: 2px;
-  color: #d0d0d0;
+  color: #d0d0d0; /* keep — button text distinct */
   font-size: 12px;
   cursor: pointer;
   transition: background 0.12s;
 }
 
-.sw-save-btn:hover  { background: #326080; }
-.sw-save-btn:active { background: #254460; }
+.sw-save-btn:hover  { background: var(--accent-hover); }
+.sw-save-btn:active { background: var(--accent-active); }
 
 .sw-saved-hint {
   display: inline-block;
   margin-left: 10px;
   font-size: 11px;
-  color: #4caf50;
+  color: var(--success);
 }

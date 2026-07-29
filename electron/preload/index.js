@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getVscodeIcon:  (name, isDir, isOpen) => ipcRenderer.invoke("fs:getVscodeIcon", { name, isDir, isOpen: !!isOpen }),
   getIcon:        (filePath) => ipcRenderer.invoke("fs:getIcon", filePath),
   getFilePreview: (filePath) => ipcRenderer.invoke("fs:getFilePreview", filePath),
+  readTextFile:   (filePath) => ipcRenderer.invoke("fs:readTextFile", filePath),
+  readFileAsDataUrl: (filePath) => ipcRenderer.invoke("fs:readFileAsDataUrl", filePath),
 
   // ── Directory access ───────────────────────────────────────────────────────
   openFolder:  ()      => ipcRenderer.invoke("dialog:openFolder"),
@@ -51,6 +53,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeSettings: (data) => ipcRenderer.invoke("settings:write", data),
   listEditors:   ()     => ipcRenderer.invoke("editors:list"),
 
+  // ── Browser extensions ─────────────────────────────────────────────────────
+  readExtensions:  ()     => ipcRenderer.invoke("extensions:read"),
+  writeExtensions: (data) => ipcRenderer.invoke("extensions:write", data),
+
   // ── Filesystem watcher ─────────────────────────────────────────────────────
   watchDir:   (rootPath) => ipcRenderer.invoke("fs:watch",   rootPath),
   unwatchDir: (rootPath) => ipcRenderer.invoke("fs:unwatch", rootPath),
@@ -63,7 +69,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ── Menu events ────────────────────────────────────────────────────────────
   onMenuEvent: (channel, callback) => {
-    const valid = ["menu:openProject","menu:newProject","menu:saveProject","menu:closeProject"];
+    const valid = ["menu:openProject","menu:newProject","menu:saveProject","menu:closeProject","menu:resetLayout"];
     if (!valid.includes(channel)) return () => {};
     const handler = (_e, payload) => callback(payload);
     ipcRenderer.on(channel, handler);
@@ -86,4 +92,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("terminal:exit", handler);
     return () => ipcRenderer.removeListener("terminal:exit", handler);
   },
+  showTerminalContextMenu: (hasSelection) => ipcRenderer.invoke("terminal:contextMenu", { hasSelection }),
+  showTerminalTabContextMenu: () => ipcRenderer.invoke("terminal:tabContextMenu"),
+
+  // ── Panel Add Menu ──────────────────────────────────────────────────────────
+  showPanelAddMenu: () => ipcRenderer.invoke("panel:addMenu"),
+
+  // ── Session ─────────────────────────────────────────────────────────────────
+  saveSession:   (data) => ipcRenderer.invoke("session:save", data),
+  loadSession:   ()     => ipcRenderer.invoke("session:load"),
 });

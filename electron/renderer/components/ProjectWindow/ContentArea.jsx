@@ -136,7 +136,7 @@ const ContentArea = ({
   clipboard, onClipboardChange,
   invalidateCache,
   pushUndo, performUndo, performRedo,
-  zoom,
+  zoom, onZoom,
   showHidden, onToggleHidden,
   showFolders, onToggleFolders,
   showFiles, onToggleFiles,
@@ -173,6 +173,10 @@ const ContentArea = ({
   useEffect(() => { pushUndoRef.current      = pushUndo; },      [pushUndo]);
   useEffect(() => { performUndoRef.current   = performUndo; },   [performUndo]);
   useEffect(() => { performRedoRef.current   = performRedo; },   [performRedo]);
+  const onZoomRef = useRef(onZoom);
+  useEffect(() => { onZoomRef.current = onZoom; }, [onZoom]);
+  const zoomRef = useRef(zoom);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
   const [settings] = useSettings();
   const settingsRef = useRef(settings);
@@ -231,8 +235,12 @@ const ContentArea = ({
         }
         return;
       }
-      case "openWith": {
+      case "openWithSystem": {
         for (const p of targetPaths) await window.electronAPI.openFile(p, "system");
+        return;
+      }
+      case "openInMediaViewer": {
+        for (const p of targetPaths) window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: p } }));
         return;
       }
       case "openInTerminal": {
@@ -375,14 +383,15 @@ const ContentArea = ({
         loadEntries();
         return;
       case "pinToSidebar": {
+        const rp = rootPathRef.current;
         for (const p of targetPaths) {
           const s = await window.electronAPI.stat(p);
           if (s.isDir) {
-            const name = p.replace(/.*[\\/]/, "");
-            const existing = await window.electronAPI.readPinConfig(rootPathRef.current);
-            if (!existing.includes(name)) {
-              existing.push(name);
-              await window.electronAPI.writePinConfig(rootPathRef.current, existing);
+            const relPath = p.length > rp.length ? p.slice(rp.length + 1) : p.replace(/.*[\\/]/, "");
+            const existing = await window.electronAPI.readPinConfig(rp);
+            if (!existing.includes(relPath)) {
+              existing.push(relPath);
+              await window.electronAPI.writePinConfig(rp, existing);
             }
           }
         }
@@ -502,6 +511,21 @@ const ContentArea = ({
       }
     }
   }, [renamingPath, execAction, onSetSelectedItems, onToggleHidden]);
+
+  // ── Ctrl+Scroll zoom ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const step = e.deltaY > 0 ? -10 : 10;
+      const current = onZoomRef.current;
+      if (current) current(Math.max(30, Math.min(300, zoomRef.current + step)));
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, []);
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const handleItemClick = useCallback((e, entry) => {

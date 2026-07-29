@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import ReactDOM from "react-dom/client";
-import { Layout, Model, Actions } from "flexlayout-react";
+import { Layout, Model, Actions, DockLocation } from "flexlayout-react";
+import "./variables.css";
 import "flexlayout-react/style/dark.css";
 import "./layout.css";
 
@@ -9,19 +10,9 @@ import Panel3 from "./components/Panel3.jsx";
 import ProjectPanel from "./components/ProjectPanel.jsx";
 import Panel5 from "./components/Panel5.jsx";
 import TerminalPanel from "./components/Terminal.jsx";
+import BlankPanel from "./components/BlankPanel.jsx";
 
-// ─── FlexLayout JSON Model ────────────────────────────────────────────────────
-//
-//  Root column
-//  ├── Top row  (weight 65)
-//  │   ├── Panel1  — left full-height   (weight 22)
-//  │   ├── Panel3  — center main area   (weight 53)
-//  │   └── Panel5  — right full-height  (weight 25)
-//  └── Bottom row  (weight 35)
-//      ├── Project Panel  — left + center
-//      └── Terminal Panel — left + center
-//
-const json = {
+const DEFAULT_JSON = {
   global: {
     tabEnableClose: false,
     tabEnableRename: false,
@@ -37,34 +28,18 @@ const json = {
     type: "row",
     weight: 100,
     children: [
-      // ── Left + Center column (stacked: top panels + bottom tabs) ────────
       {
-        type: "row",
-        weight: 75,
+        type: "row", weight: 75,
         children: [
-          // Top section: Panel1 (left) + Panel3 (center)
           {
-            type: "row",
-            weight: 65,
+            type: "row", weight: 65,
             children: [
-              // Panel1 — left
-              {
-                type: "tabset",
-                weight: 30,
-                children: [{ type: "tab", name: "panel1", component: "panel1" }],
-              },
-              // Panel3 — center main
-              {
-                type: "tabset",
-                weight: 70,
-                children: [{ type: "tab", name: "panel3", component: "panel3" }],
-              },
+              { type: "tabset", weight: 30, children: [{ type: "tab", name: "Media Viewer", component: "mediaViewer" }] },
+              { type: "tabset", weight: 70, children: [{ type: "tab", name: "Browser", component: "panel3", config: { type: "browser", title: "Browser" } }] },
             ],
           },
-          // Bottom tabs: Project Panel & Terminal
           {
-            type: "tabset",
-            weight: 35,
+            type: "tabset", weight: 35,
             children: [
               { type: "tab", name: "Project", component: "projectPanel" },
               { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
@@ -72,39 +47,139 @@ const json = {
           },
         ],
       },
-      // ── Right column — Panel5 full height ────────────────────────────────
       {
-        type: "tabset",
-        weight: 25,
+        type: "tabset", weight: 25,
         children: [{ type: "tab", name: "panel5", component: "panel5" }],
       },
     ],
   },
 };
 
-const model = Model.fromJson(json);
-
-// ─── Component factory ───────────────────────────────────────────────────────
 const factory = (node) => {
   switch (node.getComponent()) {
-    case "panel1":        return <Panel1 />;
-    case "panel3":        return <Panel3 />;
+    case "mediaViewer":   return <Panel1 />;
+    case "panel3":        return <Panel3 config={node.getConfig()} nodeId={node.getId()} />;
     case "projectPanel":  return <ProjectPanel />;
     case "panel5":        return <Panel5 />;
     case "terminal":      return <TerminalPanel />;
+    case "blank":         return <BlankPanel />;
     default:              return null;
   }
 };
 
-// ─── Root app ────────────────────────────────────────────────────────────────
 const App = () => {
-  React.useEffect(() => {
-    const handler = () => model.doAction(Actions.selectTab("terminal-tab"));
+  const modelRef = useRef(null);
+  const readyRef = useRef(false);
+  const [, setTick] = useState(0);
+
+  // Expose layout JSON for main process to grab on close, and model for Panel3 to update tabs
+  useEffect(() => {
+    window.__flexModel = modelRef;
+    window.__getLayoutJSON = () => modelRef.current ? modelRef.current.toJson() : null;
+    return () => { delete window.__flexModel; delete window.__getLayoutJSON; };
+  }, []);
+
+  // Load session → create model → render
+  useEffect(() => {
+    window.electronAPI.loadSession().then((session) => {
+      const json = (session && session.layout) ? JSON.parse(JSON.stringify(session.layout)) : DEFAULT_JSON;
+      // Migrate old "panel1" → "mediaViewer" component and "panel1" → "Media Viewer" name
+      if (session && session.layout) {
+        (function migrate(node) {
+          if (node.type === "tab") {
+            if (node.component === "panel1") node.component = "mediaViewer";
+            if (node.name === "panel1") node.name = "Media Viewer";
+          }
+          if (node.children) node.children.forEach(migrate);
+        })(json);
+      }
+      modelRef.current = Model.fromJson(json);
+      readyRef.current = true;
+      setTick((t) => t + 1);
+    });
+  }, []);
+
+  useEffect(() => {
+    const handler = () => { if (modelRef.current) modelRef.current.doAction(Actions.selectTab("terminal-tab")); };
     window.addEventListener("focus-terminal-tab", handler);
     return () => window.removeEventListener("focus-terminal-tab", handler);
   }, []);
 
-  return <Layout model={model} factory={factory} />;
+  // Reset panels to default layout
+  useEffect(() => {
+    const unsub = window.electronAPI.onMenuEvent("menu:resetLayout", () => {
+      modelRef.current = Model.fromJson(DEFAULT_JSON);
+      setTick((t) => t + 1);
+    });
+    return unsub;
+  }, []);
+
+  if (!readyRef.current) return null;
+
+  return (
+    <Layout
+      model={modelRef.current}
+      factory={factory}
+      onRenderTab={(node, renderValues) => {
+        const cfg = node.getConfig();
+        if (cfg?.type === "browser") {
+          const title = cfg.title || "Browser";
+          const favicon = cfg.favicon;
+          renderValues.content = (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+              {favicon ? (
+                <img src={favicon} width={14} height={14} style={{ flexShrink: 0 }}
+                  onError={(e) => { e.target.style.display = "none"; }} />
+              ) : (
+                <svg width={14} height={14} viewBox="0 0 16 16" fill="#888" style={{ flexShrink: 0 }}>
+                  <circle cx="8" cy="8" r="7" />
+                </svg>
+              )}
+              <span title={title} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{title.slice(0, 10)}</span>
+            </div>
+          );
+        }
+      }}
+      onRenderTabSet={(node, renderValues) => {
+        renderValues.buttons.push(
+          <button key="add" className="flexlayout__tab_toolbar_button"
+            onClick={async () => {
+              const result = await window.electronAPI.showPanelAddMenu();
+              if (!result) return;
+              const m = modelRef.current;
+              switch (result.action) {
+                case "browser":
+                  m.doAction(Actions.addNode({
+                    type: "tab", component: "panel3", name: "Browser", enableClose: true,
+                    config: { type: "browser", title: "Browser" },
+                  }, node.getId(), DockLocation.CENTER));
+                  break;
+                case "terminal":
+                  m.doAction(Actions.selectTab("terminal-tab"));
+                  window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
+                  break;
+                default:
+                  if (result.action.startsWith("port:")) {
+                    const port = result.action.slice(5);
+                    m.doAction(Actions.addNode({
+                      type: "tab", component: "panel3", name: `localhost:${port}`, enableClose: true,
+                      config: { type: "browser", title: `localhost:${port}`, url: `http://localhost:${port}` },
+                    }, node.getId(), DockLocation.CENTER));
+                  }
+                  break;
+              }
+            }}
+            title="Add Panel"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="#fff">
+              <rect x="7" y="1" width="2" height="14" rx="1"/>
+              <rect x="1" y="7" width="14" height="2" rx="1"/>
+            </svg>
+          </button>
+        );
+      }}
+    />
+  );
 };
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);

@@ -115,7 +115,7 @@ const ProjectExplorer = () => {
     if (!selectedPaths.has(itemPath)) setSelectedPaths(new Set([itemPath]));
 
     const clipPath = clipboard?.paths?.[0] ?? null;
-    const result = await window.electronAPI.showContextMenu("folder", itemPath, clipPath);
+    const result = await window.electronAPI.showContextMenu("folder", [itemPath], clipPath ? [clipPath] : null);
     if (!result) return;
 
     const parentDir = itemPath.replace(/[\\/][^\\/]+$/, "") || itemPath;
@@ -174,6 +174,8 @@ const ProjectExplorer = () => {
       }
       case "reveal": window.electronAPI.revealInExplorer(itemPath); break;
       case "copyPath": navigator.clipboard.writeText(itemPath); break;
+      case "copyName": navigator.clipboard.writeText(itemPath.split(/[\\/]/).pop()); break;
+      case "openInTerminal": window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: itemPath } })); break;
       case "refresh": handleRefresh(); break;
     }
   }, [selectedPaths, clipboard, expandedSet, handleToggle, handleRefresh, invalidateCache]);

@@ -11,30 +11,86 @@ const ACCENTS = [
 
 // ─── Custom xterm CSS overrides (injected once) ────────────────────────────
 const XTERM_CUSTOM_CSS = `
-.xterm { height: 100%; padding: 0 6px; background: #1e1e1e; }
+.xterm { height: 100%; padding: 0 6px; background: var(--bg-surface); }
 .xterm-viewport { scrollbar-width: thin; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
-.xterm-viewport::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
-.xterm-viewport::-webkit-scrollbar-thumb:hover { background: #555; }
+.xterm-viewport::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+.xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 .xterm-cursor { outline: none !important; }
-.xterm-cursor-block { background: #d4d4d4 !important; opacity: 0.9; }
+.xterm-cursor-block { background: var(--text-highlight) !important; opacity: 0.9; }
 .xterm-cursor-blink { animation: xterm-cursor-blink 1s step-end infinite; }
 @keyframes xterm-cursor-blink { 50% { opacity: 0; } }
-.xterm-selection div { background: #264f78 !important; opacity: 0.5; }
+.xterm-selection div { background: var(--selection) !important; opacity: 0.5; }
 .xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
+.term-xterm .xterm { pointer-events: auto; }
+.term-xterm .xterm-viewport { pointer-events: auto; }
 `;
 
-// ─── Inline <style> component ──────────────────────────────────────────────
-const XtermStyle = () => <style>{XTERM_CUSTOM_CSS}</style>;
+// ─── Terminal panel CSS ═══════════════════════════════════════════════════
+const TERMINAL_PANEL_CSS = `
+.term-panel { display:flex; flex-direction:row; height:100%; background:var(--bg-surface); }
+.term-content { flex:1; position:relative; overflow:hidden; z-index:1; }
+.term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; }
+.term-empty-center { flex-direction:column; gap:14px; }
+.term-empty-btn { background:var(--bg-active); color:var(--text-primary); border:1px solid #3c3c3c; border-radius:4px; padding:6px 20px; cursor:pointer; font-size:12px; }
+.term-empty-btn:hover { background:#383838; }
+.term-pane { position:absolute; inset:0; z-index:2; }
+.term-status { display:flex; align-items:center; gap:6px; padding:3px 10px; background:var(--bg-raised); border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); flex-shrink:0; }
+.term-status-icon { flex-shrink:0; }
+.term-status-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ── Side tab bar ─────────────────────────────────────── */
+.term-tabs { width:120px; flex-shrink:0; z-index:3; background:var(--bg-raised); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+.term-tab { display:flex; align-items:center; gap:4px; padding:6px 6px 6px 8px; cursor:pointer; font-size:12px; user-select:none; transition:background 0.08s; }
+.term-tab:hover { background:var(--bg-hover); }
+.term-tab--active { background:var(--bg-surface); }
+.term-tab-icon { flex-shrink:0; }
+.term-tab-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.term-tab-input { flex:1; min-width:0; font-size:12px; background:var(--bg-header); border:1px solid var(--accent-light); border-radius:2px; color:var(--text-highlight); padding:1px 4px; outline:none; }
+.term-tab-close { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:3px; cursor:pointer; font-size:10px; line-height:16px; flex-shrink:0; color:var(--text-secondary); visibility:hidden; }
+.term-tab:hover .term-tab-close { visibility:visible; }
+.term-tab-close:hover { background:var(--scrollbar); color:var(--text-highlight); }
+.term-tab-add { display:flex; align-items:center; justify-content:center; padding:8px 0; cursor:pointer; color:var(--text-secondary); font-size:18px; line-height:1; transition:background 0.08s,color 0.08s; }
+.term-tab-add:hover { background:var(--bg-hover); color:var(--text-highlight); }
+`;
+
+const TerminalStyle = () => <style>{XTERM_CUSTOM_CSS}{TERMINAL_PANEL_CSS}</style>;
 
 // ─── TabContent — owns one xterm.js instance + shell ────────────────────────
 const TabContent = ({ tabId, cwd, writersRef }) => {
   const elRef = useRef(null);
   const termRef = useRef(null);
   const [initError, setInitError] = useState(null);
-  const [ctxMenu, setCtxMenu] = useState(null);
   const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "";
+
+  const handleContextMenu = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const term = termRef.current;
+    let selText = term?.getSelection() || "";
+    // fallback: try DOM selection in case xterm's API returns empty
+    if (!selText) { try { const ds = document.getSelection()?.toString(); if (ds) selText = ds; } catch {} }
+    const hasSelection = !!selText;
+    const result = await window.electronAPI.showTerminalContextMenu(hasSelection);
+    if (!result) return;
+    switch (result.action) {
+      case "copy": {
+        if (selText) {
+          try { window.electronAPI.clipboardWrite(selText); }
+          catch { try { navigator.clipboard.writeText(selText); } catch {} }
+        }
+        break;
+      }
+      case "paste": {
+        const text = window.electronAPI.clipboardRead();
+        if (text) window.electronAPI.writeToTerminal(tabId, text);
+        break;
+      }
+      case "kill": window.electronAPI.closeTerminal(tabId); break;
+      case "restart": window.electronAPI.openTerminal(tabId, cwd); break;
+    }
+  }, [tabId, cwd]);
 
   useEffect(() => {
     let term;
@@ -134,97 +190,26 @@ const TabContent = ({ tabId, cwd, writersRef }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div ref={elRef} style={{ flex: 1, minHeight: 0 }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const term = termRef.current;
-          const hasSelection = term && term.getSelection().trim();
-          setCtxMenu({ x: e.clientX, y: e.clientY, hasSelection: !!hasSelection });
-        }}
+      <div ref={elRef} className="term-xterm"
+        style={{ flex: 1, minHeight: 0 }}
+        onContextMenu={handleContextMenu}
       />
-      <div style={{
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "3px 10px", background: "#252525",
-        borderTop: "1px solid #333",
-        fontSize: 11, color: "#666", flexShrink: 0,
-      }}>
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+      <div className="term-status">
+        <svg className="term-status-icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
           <rect x="2" y="3" width="12" height="10" rx="1" stroke="#777" strokeWidth="1.2" fill="none" />
           <path d="M5 7L7 9L5 11" stroke="#777" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M9 7L11 9L9 11" stroke="#777" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {dirName}
-        </span>
+        <span className="term-status-path">{dirName}</span>
       </div>
-
-      {ctxMenu && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 2147483647 }}
-          onClick={() => setCtxMenu(null)}
-        >
-          <div
-            style={{
-              position: "absolute",
-              left: ctxMenu.x, top: ctxMenu.y,
-              background: "#2d2d2d", border: "1px solid #444",
-              borderRadius: 6, padding: "4px 0",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
-              minWidth: 140,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {ctxMenu.hasSelection && (
-              <div style={MENU_STYLE}
-                onClick={async () => {
-                  const sel = termRef.current?.getSelection();
-                  if (sel) window.electronAPI.clipboardWrite(sel);
-                  setCtxMenu(null);
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-              >Copy</div>
-            )}
-            <div style={MENU_STYLE}
-              onClick={async () => {
-                const text = window.electronAPI.clipboardRead();
-                if (text) window.electronAPI.writeToTerminal(tabId, text);
-                setCtxMenu(null);
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-            >Paste</div>
-            <div style={MENU_SEP} />
-            <div style={MENU_STYLE}
-              onClick={() => { setCtxMenu(null); window.electronAPI.closeTerminal(tabId); }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-            >Kill Terminal</div>
-            <div style={MENU_STYLE}
-              onClick={() => { setCtxMenu(null); window.electronAPI.openTerminal(tabId, cwd); }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-            >Restart</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
-
-// ─── Context menu styling ───────────────────────────────────────────────────
-const MENU_STYLE = {
-  padding: "5px 16px", cursor: "pointer", fontSize: 12, color: "#c8c8c8",
-  whiteSpace: "nowrap", transition: "background 0.08s",
-};
-const MENU_SEP = { height: 1, background: "#3c3c3c", margin: "4px 0" };
 
 // ─── Main TerminalPanel ─────────────────────────────────────────────────────
 const TerminalPanel = () => {
   const [tabs, setTabs] = useState([]);
   const [activeTabId, setActiveTabId] = useState(null);
-  const [contextMenu, setContextMenu] = useState(null);
   const [projectOpen, setProjectOpen] = useState(false);
   const [renamingTabId, setRenamingTabId] = useState(null);
   const renameRef = useRef(null);
@@ -304,14 +289,11 @@ const TerminalPanel = () => {
   }, []);
 
   // ── Context menu ──────────────────────────────────────────────────────
-  const closeContextMenu = useCallback(() => setContextMenu(null), []);
-
-  const execAction = useCallback(async (action) => {
-    if (!contextMenu) return;
-    const { tabId } = contextMenu;
-    setContextMenu(null);
-
-    switch (action) {
+  const handleTabContextMenu = useCallback(async (e, tabId) => {
+    e.preventDefault();
+    const result = await window.electronAPI.showTerminalTabContextMenu();
+    if (!result) return;
+    switch (result.action) {
       case "kill":
         try { await window.electronAPI.closeTerminal(tabId); } catch {}
         break;
@@ -323,7 +305,7 @@ const TerminalPanel = () => {
       case "rename": {
         const tab = tabsRef.current.find((t) => t.id === tabId);
         startRename(tabId, tab?.name || "");
-        return;
+        break;
       }
       case "close":
         delete writersRef.current[tabId];
@@ -331,7 +313,7 @@ const TerminalPanel = () => {
         closeTab(tabId);
         break;
     }
-  }, [contextMenu, closeTab, startRename]);
+  }, [closeTab, startRename]);
 
   // ── Listen for "Open in Terminal" from file explorer ──────────────────
   useEffect(() => {
@@ -376,47 +358,30 @@ const TerminalPanel = () => {
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div style={{
-      display: "flex", flexDirection: "row", height: "100%",
-      background: "#1e1e1e",
-    }}>
-      <XtermStyle />
+    <div className="term-panel">
+      <TerminalStyle />
 
       {/* ── Terminal content area ─────────────────────────────────── */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden", zIndex: 1 }}>
+      <div className="term-content">
         {!projectOpen ? (
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            height: "100%", color: "#666", fontSize: 13, fontStyle: "italic",
-          }}>
+          <div className="term-empty">
             Open a project to use the terminal
           </div>
         ) : tabs.length === 0 ? (
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center",
-            justifyContent: "center", height: "100%", gap: 14,
-          }}>
-            <div style={{ color: "#666", fontSize: 13 }}>No open terminals</div>
+          <div className="term-empty term-empty-center">
+            <div className="term-empty">No open terminals</div>
             <button
               onClick={() => createTab()}
-              style={{
-                background: "#2d2d2d", color: "#c8c8c8",
-                border: "1px solid #3c3c3c", borderRadius: 3,
-                padding: "6px 20px", cursor: "pointer", fontSize: 12,
-                transition: "background 0.1s",
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#383838"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "#2d2d2d"}
+              className="term-empty-btn"
             >
               + Create Terminal
             </button>
           </div>
         ) : (
           tabs.map((tab) => (
-            <div key={tab.id} style={{
-              position: "absolute", inset: 0, zIndex: 2,
-              display: tab.id === activeTabId ? "block" : "none",
-            }}>
+            <div key={tab.id} className="term-pane"
+              style={{ display: tab.id === activeTabId ? "block" : "none" }}
+            >
               <TabContent tabId={tab.id} cwd={tab.cwd} writersRef={writersRef} />
             </div>
           ))
@@ -425,13 +390,7 @@ const TerminalPanel = () => {
 
       {/* ── Side tab bar (right side, like VS Code) ───────────────── */}
       {projectOpen && (
-        <div style={{
-          width: 110, flexShrink: 0, zIndex: 3,
-          background: "#252525",
-          borderLeft: "1px solid #333",
-          display: "flex", flexDirection: "column",
-          overflowY: "auto",
-        }}>
+        <div className="term-tabs">
           {tabs.map((tab, i) => {
             const active = tab.id === activeTabId;
             return (
@@ -439,23 +398,11 @@ const TerminalPanel = () => {
                 key={tab.id}
                 data-term-tab=""
                 onClick={() => setActiveTabId(tab.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "7px 8px", cursor: "pointer",
-                  borderLeft: `3px solid ${active ? ACCENTS[i % ACCENTS.length] : "transparent"}`,
-                  background: active ? "#1e1e1e" : "transparent",
-                  color: active ? "#d4d4d4" : "#999",
-                  fontSize: 12, userSelect: "none",
-                  transition: "background 0.08s",
-                }}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#2a2a2a"; }}
-                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
+                className={"term-tab" + (active ? " term-tab--active" : "")}
+                style={{ borderLeft: `3px solid ${active ? ACCENTS[i % ACCENTS.length] : "transparent"}` }}
               >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                <svg className="term-tab-icon" width="10" height="10" viewBox="0 0 16 16" fill="none">
                   <rect x="2" y="3" width="12" height="10" rx="1" stroke={active ? "#aaa" : "#666"} strokeWidth="1.2" fill="none" />
                   <path d="M5 7L7 9L5 11" stroke={active ? "#aaa" : "#666"} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M9 7L11 9L9 11" stroke={active ? "#aaa" : "#666"} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -471,12 +418,7 @@ const TerminalPanel = () => {
                     }}
                     onBlur={commitRename}
                     onClick={(e) => e.stopPropagation()}
-                    style={{
-                      flex: 1, minWidth: 0, fontSize: 12,
-                      background: "#1a1a1a", border: "1px solid #5a9fd4",
-                      borderRadius: 2, color: "#d4d4d4", padding: "1px 4px",
-                      outline: "none",
-                    }}
+                    className="term-tab-input"
                   />
                 ) : (
                   <span
@@ -484,23 +426,14 @@ const TerminalPanel = () => {
                       e.stopPropagation();
                       startRename(tab.id, tab.name);
                     }}
-                    style={{
-                      flex: 1, overflow: "hidden", textOverflow: "ellipsis",
-                      whiteSpace: "nowrap", cursor: "pointer",
-                    }}
+                    className="term-tab-name"
                   >
                     {tab.name}
                   </span>
                 )}
                 <span
                   onClick={(e) => { e.stopPropagation(); window.electronAPI.closeTerminal(tab.id); closeTab(tab.id); }}
-                  className="term-side-close"
-                  style={{
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    width: 16, height: 16, borderRadius: 3, cursor: "pointer",
-                    fontSize: 10, lineHeight: "16px", flexShrink: 0,
-                    color: "#999",
-                  }}
+                  className="term-tab-close"
                 >
                   ✕
                 </span>
@@ -511,70 +444,13 @@ const TerminalPanel = () => {
           <div
             onClick={() => createTab()}
             title="New Terminal"
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "8px 0", cursor: "pointer",
-              color: "#999", fontSize: 18, lineHeight: 1,
-              transition: "background 0.08s, color 0.08s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#2a2a2a"; e.currentTarget.style.color = "#d4d4d4"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#999"; }}
+            className="term-tab-add"
           >
             +
           </div>
         </div>
       )}
 
-      {/* ── Context menu ──────────────────────────────────────────── */}
-      {contextMenu && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 2147483647 }}
-          onClick={closeContextMenu}
-        >
-          <div
-            style={{
-              position: "absolute",
-              left: contextMenu.x, top: contextMenu.y,
-              background: "#2d2d2d", border: "1px solid #444",
-              borderRadius: 6, padding: "4px 0",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
-              minWidth: 150,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={MENU_STYLE}
-              onClick={() => execAction("kill")}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-            >
-              Kill Terminal
-            </div>
-            <div style={MENU_STYLE}
-              onClick={() => execAction("restart")}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-            >
-              Restart
-            </div>
-            <div style={MENU_SEP} />
-            <div style={MENU_STYLE}
-              onClick={() => execAction("rename")}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-            >
-              Rename Tab
-            </div>
-            <div style={MENU_SEP} />
-            <div style={MENU_STYLE}
-              onClick={() => execAction("close")}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#3a3a3a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-            >
-              Close Tab
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

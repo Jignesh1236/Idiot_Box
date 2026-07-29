@@ -21755,8 +21755,8 @@
     static empty() {
       return new _Rect(0, 0, 0, 0);
     }
-    static fromJson(json2) {
-      return new _Rect(json2.x, json2.y, json2.width, json2.height);
+    static fromJson(json) {
+      return new _Rect(json.x, json.y, json.width, json.height);
     }
     x;
     y;
@@ -22115,9 +22115,9 @@
      * @param select (optional) whether to select the new tab, overriding autoSelectTab
      * @returns {Action} the action
      */
-    static addNode(json2, toNodeId, location, index, select) {
+    static addNode(json, toNodeId, location, index, select) {
       return new Action(_Actions.ADD_NODE, {
-        json: json2,
+        json,
         toNode: toNodeId,
         location: location.getName(),
         index,
@@ -22443,9 +22443,9 @@
   };
   var BorderSet = class _BorderSet {
     /** @internal */
-    static fromJson(json2, model2) {
-      const borderSet = new _BorderSet(model2);
-      borderSet.borders = json2.map((borderJson) => BorderNode.fromJson(borderJson, model2));
+    static fromJson(json, model) {
+      const borderSet = new _BorderSet(model);
+      borderSet.borders = json.map((borderJson) => BorderNode.fromJson(borderJson, model));
       for (const border of borderSet.borders) {
         borderSet.borderMap.set(border.getLocation(), border);
       }
@@ -22729,8 +22729,8 @@
   var TabNode = class _TabNode extends Node2 {
     static TYPE = "tab";
     /** @internal */
-    static fromJson(json2, model2, addToModel = true) {
-      const newLayoutNode = new _TabNode(model2, json2, addToModel);
+    static fromJson(json, model, addToModel = true) {
+      const newLayoutNode = new _TabNode(model, json, addToModel);
       return newLayoutNode;
     }
     /** @internal */
@@ -22752,16 +22752,16 @@
     /** @internal */
     scrollLeft;
     /** @internal */
-    constructor(model2, json2, addToModel = true) {
-      super(model2);
+    constructor(model, json, addToModel = true) {
+      super(model);
       this.extra = {};
       this.moveableElement = null;
       this.tabStamp = null;
       this.rendered = false;
       this.visible = false;
-      _TabNode.attributeDefinitions.fromJson(json2, this.attributes);
+      _TabNode.attributeDefinitions.fromJson(json, this.attributes);
       if (addToModel === true) {
-        model2.addNode(this);
+        model.addNode(this);
       }
     }
     getName() {
@@ -22864,9 +22864,9 @@
       return this.visible;
     }
     toJson() {
-      const json2 = {};
-      _TabNode.attributeDefinitions.toJson(json2, this.attributes);
-      return json2;
+      const json = {};
+      _TabNode.attributeDefinitions.toJson(json, this.attributes);
+      return json;
     }
     /** @internal */
     saveScrollPosition() {
@@ -22972,8 +22972,8 @@
       this.fireEvent("close", {});
     }
     /** @internal */
-    updateAttrs(json2) {
-      _TabNode.attributeDefinitions.update(json2, this.attributes);
+    updateAttrs(json) {
+      _TabNode.attributeDefinitions.update(json, this.attributes);
     }
     /** @internal */
     getAttributeDefinitions() {
@@ -23195,21 +23195,21 @@
   var TabSetNode = class _TabSetNode extends Node2 {
     static TYPE = "tabset";
     /** @internal */
-    static fromJson(json2, model2, layoutWindow) {
-      const newLayoutNode = new _TabSetNode(model2, json2);
-      if (json2.children != null) {
-        for (const jsonChild of json2.children) {
-          const child = TabNode.fromJson(jsonChild, model2);
+    static fromJson(json, model, layoutWindow) {
+      const newLayoutNode = new _TabSetNode(model, json);
+      if (json.children != null) {
+        for (const jsonChild of json.children) {
+          const child = TabNode.fromJson(jsonChild, model);
           newLayoutNode.addChild(child);
         }
       }
       if (newLayoutNode.children.length === 0) {
         newLayoutNode.setSelected(-1);
       }
-      if (json2.maximized && json2.maximized === true) {
+      if (json.maximized && json.maximized === true) {
         layoutWindow.maximizedTabSet = newLayoutNode;
       }
-      if (json2.active && json2.active === true) {
+      if (json.active && json.active === true) {
         layoutWindow.activeTabSet = newLayoutNode;
       }
       return newLayoutNode;
@@ -23229,14 +23229,14 @@
     /** @internal */
     calculatedMaxWidth;
     /** @internal */
-    constructor(model2, json2) {
-      super(model2);
+    constructor(model, json) {
+      super(model);
       this.calculatedMinHeight = 0;
       this.calculatedMinWidth = 0;
       this.calculatedMaxHeight = 0;
       this.calculatedMaxWidth = 0;
-      _TabSetNode.attributeDefinitions.fromJson(json2, this.attributes);
-      model2.addNode(this);
+      _TabSetNode.attributeDefinitions.fromJson(json, this.attributes);
+      model.addNode(this);
     }
     getName() {
       return this.getAttr("name");
@@ -23357,16 +23357,16 @@
       return this.getAttr("tabLocation");
     }
     toJson() {
-      const json2 = {};
-      _TabSetNode.attributeDefinitions.toJson(json2, this.attributes);
-      json2.children = this.children.map((child) => child.toJson());
+      const json = {};
+      _TabSetNode.attributeDefinitions.toJson(json, this.attributes);
+      json.children = this.children.map((child) => child.toJson());
       if (this.isActive()) {
-        json2.active = true;
+        json.active = true;
       }
       if (this.isMaximized()) {
-        json2.maximized = true;
+        json.maximized = true;
       }
-      return json2;
+      return json;
     }
     /** @internal */
     calcMinMaxSize() {
@@ -23581,8 +23581,8 @@
       this.model.tidy();
     }
     /** @internal */
-    updateAttrs(json2) {
-      _TabSetNode.attributeDefinitions.update(json2, this.attributes);
+    updateAttrs(json) {
+      _TabSetNode.attributeDefinitions.update(json, this.attributes);
     }
     /** @internal */
     getAttributeDefinitions() {
@@ -23669,15 +23669,15 @@
   var RowNode = class _RowNode extends Node2 {
     static TYPE = "row";
     /** @internal */
-    static fromJson(json2, model2, layoutWindow) {
-      const newLayoutNode = new _RowNode(model2, layoutWindow.windowId, json2);
-      if (json2.children != null) {
-        for (const jsonChild of json2.children) {
+    static fromJson(json, model, layoutWindow) {
+      const newLayoutNode = new _RowNode(model, layoutWindow.windowId, json);
+      if (json.children != null) {
+        for (const jsonChild of json.children) {
           if (jsonChild.type === TabSetNode.TYPE) {
-            const child = TabSetNode.fromJson(jsonChild, model2, layoutWindow);
+            const child = TabSetNode.fromJson(jsonChild, model, layoutWindow);
             newLayoutNode.addChild(child);
           } else {
-            const child = _RowNode.fromJson(jsonChild, model2, layoutWindow);
+            const child = _RowNode.fromJson(jsonChild, model, layoutWindow);
             newLayoutNode.addChild(child);
           }
         }
@@ -23697,28 +23697,28 @@
     /** @internal */
     maxWidth;
     /** @internal */
-    constructor(model2, windowId, json2) {
-      super(model2);
+    constructor(model, windowId, json) {
+      super(model);
       this.windowId = windowId;
       this.minHeight = DefaultMin;
       this.minWidth = DefaultMin;
       this.maxHeight = DefaultMax;
       this.maxWidth = DefaultMax;
-      _RowNode.attributeDefinitions.fromJson(json2, this.attributes);
+      _RowNode.attributeDefinitions.fromJson(json, this.attributes);
       this.normalizeWeights();
-      model2.addNode(this);
+      model.addNode(this);
     }
     getWeight() {
       return this.attributes.weight;
     }
     toJson() {
-      const json2 = {};
-      _RowNode.attributeDefinitions.toJson(json2, this.attributes);
-      json2.children = [];
+      const json = {};
+      _RowNode.attributeDefinitions.toJson(json, this.attributes);
+      json.children = [];
       for (const child of this.children) {
-        json2.children.push(child.toJson());
+        json.children.push(child.toJson());
       }
-      return json2;
+      return json;
     }
     /** @internal */
     getWindowId() {
@@ -24092,8 +24092,8 @@
       return _RowNode.attributeDefinitions;
     }
     /** @internal */
-    updateAttrs(json2) {
-      _RowNode.attributeDefinitions.update(json2, this.attributes);
+    updateAttrs(json) {
+      _RowNode.attributeDefinitions.update(json, this.attributes);
     }
     /** @internal */
     static getAttributeDefinitions() {
@@ -24208,12 +24208,12 @@
       }
       return { layout: this.root.toJson(), rect: this.rect.toJson() };
     }
-    static fromJson(windowJson, model2, windowId) {
-      const count = model2.getwindowsMap().size;
+    static fromJson(windowJson, model, windowId) {
+      const count = model.getwindowsMap().size;
       const rect = windowJson.rect ? Rect.fromJson(windowJson.rect) : new Rect(50 + 50 * count, 50 + 50 * count, 600, 400);
       rect.snap(10);
       const layoutWindow = new _LayoutWindow(windowId, rect);
-      layoutWindow.root = RowNode.fromJson(windowJson.layout, model2, layoutWindow);
+      layoutWindow.root = RowNode.fromJson(windowJson.layout, model, layoutWindow);
       return layoutWindow;
     }
   };
@@ -24318,11 +24318,11 @@
             const oldLayoutWindow = this.windows.get(node.getWindowId());
             const windowId = randomUUID();
             const layoutWindow = new LayoutWindow(windowId, oldLayoutWindow.toScreenRectFunction(node.getRect()));
-            const json2 = {
+            const json = {
               type: "row",
               children: []
             };
-            const row = RowNode.fromJson(json2, this, layoutWindow);
+            const row = RowNode.fromJson(json, this, layoutWindow);
             layoutWindow.root = row;
             this.windows.set(windowId, layoutWindow);
             row.drop(node, DockLocation.CENTER, 0);
@@ -24346,13 +24346,13 @@
             const oldLayoutWindow = this.windows.get(node.getWindowId());
             const layoutWindow = new LayoutWindow(windowId, oldLayoutWindow.toScreenRectFunction(r));
             const tabsetId = randomUUID();
-            const json2 = {
+            const json = {
               type: "row",
               children: [
                 { type: "tabset", id: tabsetId }
               ]
             };
-            const row = RowNode.fromJson(json2, this, layoutWindow);
+            const row = RowNode.fromJson(json, this, layoutWindow);
             layoutWindow.root = row;
             this.windows.set(windowId, layoutWindow);
             const tabset = this.idMap.get(tabsetId);
@@ -24554,22 +24554,22 @@
     * @param json the json model to load
     * @returns {Model} a new Model object
     */
-    static fromJson(json2) {
-      const model2 = new _Model();
-      _Model.attributeDefinitions.fromJson(json2.global, model2.attributes);
-      if (json2.borders) {
-        model2.borders = BorderSet.fromJson(json2.borders, model2);
+    static fromJson(json) {
+      const model = new _Model();
+      _Model.attributeDefinitions.fromJson(json.global, model.attributes);
+      if (json.borders) {
+        model.borders = BorderSet.fromJson(json.borders, model);
       }
-      if (json2.popouts) {
-        for (const windowId in json2.popouts) {
-          const windowJson = json2.popouts[windowId];
-          const layoutWindow = LayoutWindow.fromJson(windowJson, model2, windowId);
-          model2.windows.set(windowId, layoutWindow);
+      if (json.popouts) {
+        for (const windowId in json.popouts) {
+          const windowJson = json.popouts[windowId];
+          const layoutWindow = LayoutWindow.fromJson(windowJson, model, windowId);
+          model.windows.set(windowId, layoutWindow);
         }
       }
-      model2.rootWindow.root = RowNode.fromJson(json2.layout, model2, model2.getwindowsMap().get(_Model.MAIN_WINDOW_ID));
-      model2.tidy();
-      return model2;
+      model.rootWindow.root = RowNode.fromJson(json.layout, model, model.getwindowsMap().get(_Model.MAIN_WINDOW_ID));
+      model.tidy();
+      return model;
     }
     /**
      * Converts the model to a json object
@@ -24707,8 +24707,8 @@
       }
     }
     /** @internal */
-    updateAttrs(json2) {
-      _Model.attributeDefinitions.update(json2, this.attributes);
+    updateAttrs(json) {
+      _Model.attributeDefinitions.update(json, this.attributes);
     }
     /** @internal */
     nextUniqueId() {
@@ -24811,12 +24811,12 @@
   var BorderNode = class _BorderNode extends Node2 {
     static TYPE = "border";
     /** @internal */
-    static fromJson(json2, model2) {
-      const location = DockLocation.getByName(json2.location);
-      const border = new _BorderNode(location, json2, model2);
-      if (json2.children) {
-        border.children = json2.children.map((jsonChild) => {
-          const child = TabNode.fromJson(jsonChild, model2);
+    static fromJson(json, model) {
+      const location = DockLocation.getByName(json.location);
+      const border = new _BorderNode(location, json, model);
+      if (json.children) {
+        border.children = json.children.map((jsonChild) => {
+          const child = TabNode.fromJson(jsonChild, model);
           child.setParent(border);
           return child;
         });
@@ -24832,12 +24832,12 @@
     /** @internal */
     location;
     /** @internal */
-    constructor(location, json2, model2) {
-      super(model2);
+    constructor(location, json, model) {
+      super(model);
       this.location = location;
       this.attributes.id = `border_${location.getName()}`;
-      _BorderNode.attributeDefinitions.fromJson(json2, this.attributes);
-      model2.addNode(this);
+      _BorderNode.attributeDefinitions.fromJson(json, this.attributes);
+      model.addNode(this);
     }
     getLocation() {
       return this.location;
@@ -24913,11 +24913,11 @@
       return this.attributes.show;
     }
     toJson() {
-      const json2 = {};
-      _BorderNode.attributeDefinitions.toJson(json2, this.attributes);
-      json2.location = this.location.getName();
-      json2.children = this.children.map((child) => child.toJson());
-      return json2;
+      const json = {};
+      _BorderNode.attributeDefinitions.toJson(json, this.attributes);
+      json.location = this.location.getName();
+      json.children = this.children.map((child) => child.toJson());
+      return json;
     }
     /** @internal */
     isAutoSelectTab(whenOpen) {
@@ -24981,8 +24981,8 @@
       }
     }
     /** @internal */
-    updateAttrs(json2) {
-      _BorderNode.attributeDefinitions.update(json2, this.attributes);
+    updateAttrs(json) {
+      _BorderNode.attributeDefinitions.update(json, this.attributes);
     }
     /** @internal */
     remove(node) {
@@ -27212,8 +27212,8 @@
      * @param json the json for the new tab node
      * @returns the added tab node or undefined
      */
-    addTabToTabSet(tabsetId, json2) {
-      return this.selfRef.current.addTabToTabSet(tabsetId, json2);
+    addTabToTabSet(tabsetId, json) {
+      return this.selfRef.current.addTabToTabSet(tabsetId, json);
     }
     /**
      * Adds a new tab by dragging an item to the drop location, must be called from within an HTML
@@ -27223,8 +27223,8 @@
      * @param json the json for the new tab node
      * @param onDrop a callback to call when the drag is complete
      */
-    addTabWithDragAndDrop(event, json2, onDrop) {
-      this.selfRef.current.addTabWithDragAndDrop(event, json2, onDrop);
+    addTabWithDragAndDrop(event, json, onDrop) {
+      this.selfRef.current.addTabWithDragAndDrop(event, json, onDrop);
     }
     /**
      * Move a tab/tabset using drag and drop, must be called from within an HTML
@@ -27240,8 +27240,8 @@
      * @param json the json for the new tab node
      * @returns the added tab node or undefined
      */
-    addTabToActiveTabSet(json2) {
-      return this.selfRef.current.addTabToActiveTabSet(json2);
+    addTabToActiveTabSet(json) {
+      return this.selfRef.current.addTabToActiveTabSet(json);
     }
     /**
      * Sets the drag image from a react component for a drag event
@@ -27394,10 +27394,10 @@
           this.renderMetricsElements()
         ] });
       }
-      const model2 = this.props.model;
-      model2.getRoot(this.windowId).calcMinMaxSize();
-      model2.getRoot(this.windowId).setPaths("");
-      model2.getBorderSet().setPaths();
+      const model = this.props.model;
+      model.getRoot(this.windowId).calcMinMaxSize();
+      model.getRoot(this.windowId).setPaths("");
+      model.getBorderSet().setPaths();
       const inner = this.renderLayout();
       const outer = this.renderBorders(inner);
       const tabs = this.renderTabs();
@@ -27813,18 +27813,18 @@
       rect.width += navWidth;
       return rect;
     }
-    addTabToTabSet(tabsetId, json2) {
+    addTabToTabSet(tabsetId, json) {
       const tabsetNode = this.props.model.getNodeById(tabsetId);
       if (tabsetNode !== void 0) {
-        const node = this.doAction(Actions.addNode(json2, tabsetId, DockLocation.CENTER, -1));
+        const node = this.doAction(Actions.addNode(json, tabsetId, DockLocation.CENTER, -1));
         return node;
       }
       return void 0;
     }
-    addTabToActiveTabSet(json2) {
+    addTabToActiveTabSet(json) {
       const tabsetNode = this.props.model.getActiveTabset(this.windowId);
       if (tabsetNode !== void 0) {
-        const node = this.doAction(Actions.addNode(json2, tabsetNode.getId(), DockLocation.CENTER, -1));
+        const node = this.doAction(Actions.addNode(json, tabsetNode.getId(), DockLocation.CENTER, -1));
         return node;
       }
       return void 0;
@@ -27883,9 +27883,9 @@
       enablePointerOnIFrames(!show, this.currentDocument);
     }
     // *************************** Start Drag Drop *************************************
-    addTabWithDragAndDrop(event, json2, onDrop) {
-      const tempNode = TabNode.fromJson(json2, this.props.model, false);
-      _LayoutInternal.dragState = new DragState(this.mainLayout, "add", tempNode, json2, onDrop);
+    addTabWithDragAndDrop(event, json, onDrop) {
+      const tempNode = TabNode.fromJson(json, this.props.model, false);
+      _LayoutInternal.dragState = new DragState(this.mainLayout, "add", tempNode, json, onDrop);
     }
     moveTabWithDragAndDrop(event, node) {
       this.setDragNode(event, node);
@@ -28123,61 +28123,343 @@
 
   // electron/renderer/components/Panel1.jsx
   var import_react2 = __toESM(require_react());
+  var TEXT_EXTS = [".txt", ".md", ".json", ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".py", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".log", ".sh", ".bat", ".ps1", ".sql", ".rb", ".php", ".c", ".cpp", ".h", ".hpp", ".java", ".rs", ".go", ".toml"];
+  var IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico"];
+  var VIDEO_EXTS = [".mp4", ".webm", ".avi", ".mov", ".mkv", ".wmv", ".flv"];
+  var ext = (p) => {
+    try {
+      return p.slice(p.lastIndexOf(".")).toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+  var fileName = (p) => {
+    try {
+      return p.split(/[\\/]/).pop();
+    } catch {
+      return p;
+    }
+  };
   var Panel1 = () => {
-    return /* @__PURE__ */ import_react2.default.createElement("div", { className: "panel" });
+    const [filePath, setFilePath] = (0, import_react2.useState)(null);
+    const [content, setContent] = (0, import_react2.useState)(null);
+    const [type, setType] = (0, import_react2.useState)(null);
+    const [error, setError] = (0, import_react2.useState)(null);
+    const dropRef = (0, import_react2.useRef)(null);
+    const openFile = (0, import_react2.useCallback)(async (fp) => {
+      setError(null);
+      setContent(null);
+      setType(null);
+      const e = ext(fp);
+      if (IMAGE_EXTS.includes(e)) {
+        const data = await window.electronAPI.readFileAsDataUrl(fp);
+        if (data) {
+          setContent(data);
+          setType("image");
+          setFilePath(fp);
+        } else setError("Failed to load image");
+      } else if (VIDEO_EXTS.includes(e)) {
+        const data = await window.electronAPI.readFileAsDataUrl(fp);
+        if (data) {
+          setContent(data);
+          setType("video");
+          setFilePath(fp);
+        } else setError("Failed to load video");
+      } else if (TEXT_EXTS.includes(e)) {
+        const text = await window.electronAPI.readTextFile(fp);
+        if (text !== null) {
+          setContent(text);
+          setType("text");
+          setFilePath(fp);
+        } else setError("Failed to read file");
+      } else {
+        setError(`Unsupported file type: ${e}`);
+      }
+    }, []);
+    (0, import_react2.useEffect)(() => {
+      const handler = (e) => {
+        openFile(e.detail.path);
+      };
+      window.addEventListener("media-viewer:open", handler);
+      return () => window.removeEventListener("media-viewer:open", handler);
+    }, [openFile]);
+    const handleDragOver = (0, import_react2.useCallback)((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, []);
+    const handleDrop = (0, import_react2.useCallback)((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const files = Array.from(e.dataTransfer.files);
+      const file = files[0];
+      if (!file) return;
+      const path = window.electronAPI.getPathForFile(file);
+      if (path) openFile(path);
+    }, [openFile]);
+    const handlePaste = (0, import_react2.useCallback)((e) => {
+      const text = (e.clipboardData || window.clipboardData)?.getData("text");
+      if (text && /^[a-zA-Z]:[\\/]/.test(text)) openFile(text);
+    }, [openFile]);
+    return /* @__PURE__ */ import_react2.default.createElement(
+      "div",
+      {
+        className: "panel",
+        ref: dropRef,
+        onDragOver: handleDragOver,
+        onDrop: handleDrop,
+        onPaste: handlePaste,
+        tabIndex: 0,
+        style: { display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }
+      },
+      !filePath && !error && /* @__PURE__ */ import_react2.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#555", fontSize: 13, flexDirection: "column", gap: 8 } }, /* @__PURE__ */ import_react2.default.createElement("svg", { width: "32", height: "32", viewBox: "0 0 16 16", fill: "#444" }, /* @__PURE__ */ import_react2.default.createElement("path", { d: "M2 2h5l2 2h5v9H2V2z" })), /* @__PURE__ */ import_react2.default.createElement("span", null, "Drop files here or right-click a file \u2192 Open in Media Viewer")),
+      filePath && /* @__PURE__ */ import_react2.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", background: "#1a1a1a", borderBottom: "1px solid #2a2a2a", flexShrink: 0, fontSize: 12, color: "#999" } }, /* @__PURE__ */ import_react2.default.createElement(
+        "svg",
+        {
+          width: "12",
+          height: "12",
+          viewBox: "0 0 16 16",
+          fill: "#888",
+          style: { cursor: "pointer" },
+          onClick: () => {
+            setFilePath(null);
+            setContent(null);
+            setType(null);
+            setError(null);
+          },
+          title: "Close"
+        },
+        /* @__PURE__ */ import_react2.default.createElement("path", { d: "M4 4l8 8M12 4l-8 8" })
+      ), /* @__PURE__ */ import_react2.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }, title: filePath }, fileName(filePath))),
+      /* @__PURE__ */ import_react2.default.createElement("div", { style: { flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: "#0d0d0d" } }, error && /* @__PURE__ */ import_react2.default.createElement("div", { style: { color: "#f44747", fontSize: 13 } }, error), type === "image" && content && /* @__PURE__ */ import_react2.default.createElement("img", { src: content, style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }, alt: "" }), type === "video" && content && /* @__PURE__ */ import_react2.default.createElement("video", { controls: true, style: { maxWidth: "100%", maxHeight: "100%" }, src: content }), type === "text" && content !== null && /* @__PURE__ */ import_react2.default.createElement("pre", { style: { margin: 0, padding: 12, color: "#c8c8c8", fontSize: 12, fontFamily: 'Consolas, "Courier New", monospace', whiteSpace: "pre-wrap", wordBreak: "break-word", width: "100%", height: "100%" } }, content))
+    );
   };
   var Panel1_default = Panel1;
 
   // electron/renderer/components/Panel3.jsx
   var import_react3 = __toESM(require_react());
-  var Panel3 = () => {
-    const [url, setUrl] = (0, import_react3.useState)("https://www.google.com");
-    const [inputValue, setInputValue] = (0, import_react3.useState)("https://www.google.com");
-    const webviewRef = (0, import_react3.useRef)(null);
+  var LOCK_ICON = "M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm-2 6V5a2 2 0 1 1 4 0v2H6z";
+  var UNLOCK_ICON = "M8 1a4 4 0 0 1 4 4v1h-1V5a3 3 0 0 0-5.7-1.37l-.78-.62A4 4 0 0 1 8 1zm-5.65.09l12 14-.7.6L1.65 1.7zM6 7.49l-1.82.01a1 1 0 0 0-.18 0v3.85L2.35 9.7l-.7.6L4 13.2V14a1 1 0 0 0 1 1h6.15l-1-1H5v-4.5l1.85.01zm4.56-.57A1 1 0 0 1 12 7.5V8h1a1 1 0 0 1 1 1v3.15l-1-1V9h-1.44z";
+  var LOCAL_ICON = "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm-1 12.93A6 6 0 0 1 2 8c0-.33.03-.66.07-1H4v1h2v1H5v1h1v2l1 1zm5.1-3.83A4.9 4.9 0 0 0 13 8c0-2.5-1.83-4.55-4.2-4.96L9 4v1H7V4h-.44l3.55 5.1zm-9.4.14A5 5 0 0 1 2 8c0 1.72.87 3.23 2.2 4.14l.83-1.04z";
+  var PUZZLE_ICON = "M12.5 2A2.5 2.5 0 0 0 10 4.5c0 .28.05.55.14.8L8.8 6.65a2.77 2.77 0 0 0-.8-.15H6.5v1.5h1.5c.77 0 1.5.28 2.07.86l.79.79-.79.79a2.78 2.78 0 0 0-.85 2.01v1.5h1.5v-1.5c0-.28.05-.55.14-.8l1.35-1.35c.24.09.51.14.79.14a2.5 2.5 0 0 0 0-5zM3 5.5A1.5 1.5 0 0 1 4.5 4H6V2H4.5a3.5 3.5 0 0 0-3.5 3.5V7h2V5.5zM1 8v4.5A3.5 3.5 0 0 0 4.5 16H7v-2H4.5A1.5 1.5 0 0 1 3 12.5V8H1z";
+  var extIdCounter = 1;
+  var newExtId = () => "ext_" + Date.now() + "_" + extIdCounter++;
+  var Panel3 = (props) => {
+    const { nodeId, config } = props || {};
+    const initialUrl = config?.url || "https://www.google.com";
+    const [url, setUrl] = (0, import_react3.useState)(initialUrl);
+    const [inputValue, setInputValue] = (0, import_react3.useState)(initialUrl);
     const [canGoBack, setCanGoBack] = (0, import_react3.useState)(false);
     const [canGoForward, setCanGoForward] = (0, import_react3.useState)(false);
     const [isLoading, setIsLoading] = (0, import_react3.useState)(false);
+    const [focused, setFocused] = (0, import_react3.useState)(false);
+    const [lockOpen, setLockOpen] = (0, import_react3.useState)(false);
+    const [barHidden, setBarHidden] = (0, import_react3.useState)(false);
+    const [popupStyle, setPopupStyle] = (0, import_react3.useState)({});
+    const [extOpen, setExtOpen] = (0, import_react3.useState)(false);
+    const [extAddOpen, setExtAddOpen] = (0, import_react3.useState)(false);
+    const [extensions, setExtensions] = (0, import_react3.useState)([]);
+    const [newExtName, setNewExtName] = (0, import_react3.useState)("");
+    const [newExtType, setNewExtType] = (0, import_react3.useState)("css");
+    const [newExtCode, setNewExtCode] = (0, import_react3.useState)("");
+    const webviewRef = (0, import_react3.useRef)(null);
+    const attachedRef = (0, import_react3.useRef)(false);
+    const lockRef = (0, import_react3.useRef)(null);
+    const extLoadedRef = (0, import_react3.useRef)(false);
+    (0, import_react3.useEffect)(() => {
+      window.electronAPI.readExtensions().then((ex) => {
+        if (Array.isArray(ex)) setExtensions(ex);
+      });
+    }, []);
+    const saveExtensions = (0, import_react3.useCallback)((ex) => {
+      setExtensions(ex);
+      window.electronAPI.writeExtensions(ex);
+    }, []);
+    let hostname = "";
+    let protocol = "";
+    try {
+      const u = new URL(url);
+      hostname = u.hostname;
+      protocol = u.protocol;
+    } catch {
+    }
+    const isLocal = !hostname || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname.startsWith("192.168.") || hostname.startsWith("10.");
+    const isHttps = protocol === "https:";
+    const iconPath = isLocal ? LOCAL_ICON : isHttps ? LOCK_ICON : UNLOCK_ICON;
+    const iconColor = isLocal ? "#888" : isHttps ? "#4ec9b0" : "#e6a23c";
     const goToUrl = (0, import_react3.useCallback)((u) => {
       let fixed = u.trim();
-      if (fixed && !/^https?:\/\//i.test(fixed)) fixed = "https://" + fixed;
+      if (!fixed) return;
+      if (/^https?:\/\//i.test(fixed)) {
+      } else if (/^[^\s]+\.[^\s]+/.test(fixed) || fixed.startsWith("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(fixed)) {
+        fixed = "https://" + fixed;
+      } else {
+        fixed = "https://www.google.com/search?q=" + encodeURIComponent(fixed);
+      }
       setUrl(fixed);
       setInputValue(fixed);
+      setLockOpen(false);
     }, []);
     const handleKeyDown = (0, import_react3.useCallback)((e) => {
       if (e.key === "Enter") goToUrl(inputValue);
     }, [inputValue, goToUrl]);
-    (0, import_react3.useEffect)(() => {
-      const wv = webviewRef.current;
-      if (!wv) return;
+    const injectExtensions = (0, import_react3.useCallback)((wv) => {
+      const currentUrl = wv.getURL();
+      const enabled = extensions.filter((ex) => ex.enabled && ex.code.trim());
+      for (const ex of enabled) {
+        try {
+          if (ex.type === "css") wv.insertCSS(ex.code);
+          else wv.executeJavaScript(ex.code);
+        } catch {
+        }
+      }
+    }, [extensions]);
+    const attachListeners = (0, import_react3.useCallback)((wv) => {
+      if (attachedRef.current) return;
+      attachedRef.current = true;
       const onStart = () => setIsLoading(true);
       const onStop = () => setIsLoading(false);
-      const onNavigate = (e) => {
-        setInputValue(e.url);
-        setUrl(e.url);
-        setCanGoBack(wv.canGoBack());
-        setCanGoForward(wv.canGoForward());
+      const onNavigate = () => {
+        setInputValue(wv.getURL());
+        setUrl(wv.getURL());
+        try {
+          setCanGoBack(wv.canGoBack());
+          setCanGoForward(wv.canGoForward());
+        } catch {
+        }
+      };
+      const onLoaded = () => injectExtensions(wv);
+      const onTitle = (e) => {
+        const m = window.__flexModel?.current;
+        if (m) {
+          const tabNode = m.getNodeById(nodeId);
+          if (tabNode) {
+            const cfg = { ...tabNode.getConfig() || {}, title: e.title };
+            m.doAction(Actions.updateNodeAttributes(nodeId, { config: cfg }));
+          }
+        }
+      };
+      const onFavicon = (e) => {
+        const favicons = e.favicons;
+        if (favicons && favicons.length > 0) {
+          const m = window.__flexModel?.current;
+          if (m) {
+            const tabNode = m.getNodeById(nodeId);
+            if (tabNode) {
+              const cfg = { ...tabNode.getConfig() || {}, favicon: favicons[0] };
+              m.doAction(Actions.updateNodeAttributes(nodeId, { config: cfg }));
+            }
+          }
+        }
       };
       wv.addEventListener("did-start-loading", onStart);
       wv.addEventListener("did-stop-loading", onStop);
       wv.addEventListener("did-navigate", onNavigate);
       wv.addEventListener("did-navigate-in-page", onNavigate);
-      return () => {
-        wv.removeEventListener("did-start-loading", onStart);
-        wv.removeEventListener("did-stop-loading", onStop);
-        wv.removeEventListener("did-navigate", onNavigate);
-        wv.removeEventListener("did-navigate-in-page", onNavigate);
-      };
-    }, [url]);
-    return /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__bar" }, /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", disabled: !canGoBack, onClick: () => webviewRef.current?.goBack(), title: "Back" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M10 12L6 8l4-4" }))), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", disabled: !canGoForward, onClick: () => webviewRef.current?.goForward(), title: "Forward" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M6 4l4 4-4 4" }))), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", onClick: () => webviewRef.current?.reload(), title: "Refresh" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M2 8a6 6 0 0 1 10.47-4M14 8a6 6 0 0 1-10.47 4M9 1l3 3-3 3M7 15l-3-3 3-3" }))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__url-wrap" }, isLoading && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__spinner" }), /* @__PURE__ */ import_react3.default.createElement(
+      wv.addEventListener("did-finish-load", onLoaded);
+      wv.addEventListener("page-title-updated", onTitle);
+      wv.addEventListener("page-favicon-updated", onFavicon);
+      setIsLoading(false);
+    }, [injectExtensions, nodeId]);
+    const webviewRefCb = (0, import_react3.useCallback)((el2) => {
+      if (el2) {
+        webviewRef.current = el2;
+        attachListeners(el2);
+      }
+    }, [attachListeners]);
+    const handleLockClick = (0, import_react3.useCallback)((e) => {
+      e.stopPropagation();
+      const next = !lockOpen;
+      setLockOpen(next);
+      if (next && lockRef.current) {
+        const r = lockRef.current.getBoundingClientRect();
+        setPopupStyle({ left: Math.max(8, r.left - 10), top: r.bottom + 6 });
+      }
+    }, [lockOpen]);
+    const handleExtToggle = (0, import_react3.useCallback)((id) => {
+      saveExtensions(extensions.map((ex) => ex.id === id ? { ...ex, enabled: !ex.enabled } : ex));
+    }, [extensions, saveExtensions]);
+    const handleExtDelete = (0, import_react3.useCallback)((id) => {
+      saveExtensions(extensions.filter((ex) => ex.id !== id));
+    }, [extensions, saveExtensions]);
+    const handleExtAdd = (0, import_react3.useCallback)(() => {
+      const name = newExtName.trim();
+      const code = newExtCode.trim();
+      if (!name || !code) return;
+      saveExtensions([...extensions, {
+        id: newExtId(),
+        name,
+        type: newExtType,
+        code,
+        enabled: true,
+        addedAt: Date.now()
+      }]);
+      setNewExtName("");
+      setNewExtCode("");
+      setNewExtType("css");
+      setExtAddOpen(false);
+    }, [newExtName, newExtType, newExtCode, extensions, saveExtensions]);
+    return /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser" }, !barHidden && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__bar" }, /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", disabled: !canGoBack, onClick: () => webviewRef.current?.goBack(), title: "Back" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M10 12L6 8l4-4" }))), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", disabled: !canGoForward, onClick: () => webviewRef.current?.goForward(), title: "Forward" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M6 4l4 4-4 4" }))), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", onClick: () => webviewRef.current?.reload(), title: "Refresh" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M2 8a6 6 0 0 1 10.47-4M14 8a6 6 0 0 1-10.47 4M9 1l3 3-3 3M7 15l-3-3 3-3" }))), /* @__PURE__ */ import_react3.default.createElement("div", { className: `browser__url-wrap${focused ? " browser__url-wrap--focused" : ""}` }, isLoading && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__spinner" }), /* @__PURE__ */ import_react3.default.createElement(
+      "svg",
+      {
+        className: "browser__lock",
+        ref: lockRef,
+        width: "14",
+        height: "14",
+        viewBox: "0 0 16 16",
+        fill: "currentColor",
+        onClick: handleLockClick,
+        style: { color: iconColor }
+      },
+      /* @__PURE__ */ import_react3.default.createElement("path", { d: iconPath })
+    ), /* @__PURE__ */ import_react3.default.createElement(
       "input",
       {
         className: "browser__url",
         value: inputValue,
         onChange: (e) => setInputValue(e.target.value),
         onKeyDown: handleKeyDown,
+        spellCheck: false,
+        onFocus: () => setFocused(true),
+        onBlur: () => {
+          setFocused(false);
+          setLockOpen(false);
+        }
+      }
+    )), /* @__PURE__ */ import_react3.default.createElement(
+      "button",
+      {
+        className: "browser__btn",
+        onClick: () => {
+          setExtOpen((o2) => !o2);
+          setLockOpen(false);
+        },
+        title: "Extensions",
+        style: { color: extensions.some((e) => e.enabled) ? "#4ec9b0" : "#999" }
+      },
+      /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: PUZZLE_ICON }))
+    ), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn", onClick: () => setBarHidden(true), title: "Hide toolbar" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M3 10l5-5 5 5" })))), barHidden && /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__show-btn", onClick: () => setBarHidden(false), title: "Show toolbar" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M3 6l5 5 5-5" }))), lockOpen && /* @__PURE__ */ import_react3.default.createElement(import_react3.default.Fragment, null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__lock-overlay", onClick: () => setLockOpen(false) }), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__lock-popup", style: popupStyle, onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__lock-popup-item" }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__lock-popup-label" }, "Connection"), /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__lock-popup-value", style: { color: iconColor } }, isLocal ? "Local" : isHttps ? "Secure" : "Not secure", " (", isLocal ? hostname : isHttps ? "HTTPS" : "HTTP", ")")), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__lock-popup-item" }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__lock-popup-label" }, "URL"), /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__lock-popup-value", style: { wordBreak: "break-all" } }, url)), hostname && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__lock-popup-item" }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__lock-popup-label" }, "Domain"), /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__lock-popup-value" }, hostname)))), extOpen && /* @__PURE__ */ import_react3.default.createElement(import_react3.default.Fragment, null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__lock-overlay", onClick: () => {
+      setExtOpen(false);
+      setExtAddOpen(false);
+    } }), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-popup" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-header" }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__ext-title" }, "Extensions"), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-add-btn", onClick: () => setExtAddOpen(true), title: "Add extension" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "12", height: "12", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm1 8H7v2h1V9h2V8H8V6H7v2H5v1h2v2h1V9z" })), "Add")), extAddOpen && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-add-form" }, /* @__PURE__ */ import_react3.default.createElement(
+      "input",
+      {
+        className: "browser__ext-input",
+        placeholder: "Extension name",
+        value: newExtName,
+        onChange: (e) => setNewExtName(e.target.value),
         spellCheck: false
       }
-    )), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__btn browser__btn--go", onClick: () => goToUrl(inputValue), title: "Go" }, "Go")), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__view-wrap" }, /* @__PURE__ */ import_react3.default.createElement("webview", { className: "browser__view", ref: webviewRef, src: url, allowpopups: true, allowfullscreen: true })));
+    ), /* @__PURE__ */ import_react3.default.createElement("select", { className: "browser__ext-select", value: newExtType, onChange: (e) => setNewExtType(e.target.value) }, /* @__PURE__ */ import_react3.default.createElement("option", { value: "css" }, "CSS"), /* @__PURE__ */ import_react3.default.createElement("option", { value: "js" }, "JavaScript")), /* @__PURE__ */ import_react3.default.createElement(
+      "textarea",
+      {
+        className: "browser__ext-textarea",
+        placeholder: newExtType === "css" ? "body { background: #000; }" : "console.log('hello');",
+        value: newExtCode,
+        onChange: (e) => setNewExtCode(e.target.value),
+        spellCheck: false,
+        rows: 3
+      }
+    ), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-add-actions" }, /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-btn browser__ext-btn--primary", onClick: handleExtAdd }, "Add"), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-btn", onClick: () => setExtAddOpen(false) }, "Cancel"))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-list" }, extensions.length === 0 && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-empty" }, "No extensions added yet"), extensions.map((ex) => /* @__PURE__ */ import_react3.default.createElement("div", { key: ex.id, className: "browser__ext-item" }, /* @__PURE__ */ import_react3.default.createElement("label", { className: "browser__ext-toggle" }, /* @__PURE__ */ import_react3.default.createElement("input", { type: "checkbox", checked: ex.enabled, onChange: () => handleExtToggle(ex.id) }), /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__ext-toggle-slider" })), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-info" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-name" }, ex.name), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-type" }, ex.type.toUpperCase())), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-del", onClick: () => handleExtDelete(ex.id), title: "Delete extension" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "10", height: "10", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M4 4L12 12M12 4L4 12" })))))))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__view-wrap" }, /* @__PURE__ */ import_react3.default.createElement("webview", { className: "browser__view", ref: webviewRefCb, src: url, allowpopups: true, allowfullscreen: true })));
   };
   var Panel3_default = Panel3;
 
@@ -28463,6 +28745,7 @@
     performUndo,
     performRedo,
     zoom,
+    onZoom,
     showHidden,
     onToggleHidden,
     showFolders,
@@ -28512,6 +28795,14 @@
     (0, import_react7.useEffect)(() => {
       performRedoRef.current = performRedo;
     }, [performRedo]);
+    const onZoomRef = (0, import_react7.useRef)(onZoom);
+    (0, import_react7.useEffect)(() => {
+      onZoomRef.current = onZoom;
+    }, [onZoom]);
+    const zoomRef = (0, import_react7.useRef)(zoom);
+    (0, import_react7.useEffect)(() => {
+      zoomRef.current = zoom;
+    }, [zoom]);
     const [settings] = useSettings_default();
     const settingsRef = (0, import_react7.useRef)(settings);
     (0, import_react7.useEffect)(() => {
@@ -28577,8 +28868,12 @@ ${msg}`);
           }
           return;
         }
-        case "openWith": {
+        case "openWithSystem": {
           for (const p of targetPaths) await window.electronAPI.openFile(p, "system");
+          return;
+        }
+        case "openInMediaViewer": {
+          for (const p of targetPaths) window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: p } }));
           return;
         }
         case "openInTerminal": {
@@ -28737,14 +29032,15 @@ ${msg}`);
           loadEntries();
           return;
         case "pinToSidebar": {
+          const rp = rootPathRef.current;
           for (const p of targetPaths) {
             const s15 = await window.electronAPI.stat(p);
             if (s15.isDir) {
-              const name = p.replace(/.*[\\/]/, "");
-              const existing = await window.electronAPI.readPinConfig(rootPathRef.current);
-              if (!existing.includes(name)) {
-                existing.push(name);
-                await window.electronAPI.writePinConfig(rootPathRef.current, existing);
+              const relPath = p.length > rp.length ? p.slice(rp.length + 1) : p.replace(/.*[\\/]/, "");
+              const existing = await window.electronAPI.readPinConfig(rp);
+              if (!existing.includes(relPath)) {
+                existing.push(relPath);
+                await window.electronAPI.writePinConfig(rp, existing);
               }
             }
           }
@@ -28858,6 +29154,19 @@ ${msg}`);
         }
       }
     }, [renamingPath, execAction, onSetSelectedItems, onToggleHidden]);
+    (0, import_react7.useEffect)(() => {
+      const el2 = contentRef.current;
+      if (!el2) return;
+      const handler = (e) => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        const step = e.deltaY > 0 ? -10 : 10;
+        const current = onZoomRef.current;
+        if (current) current(Math.max(30, Math.min(300, zoomRef.current + step)));
+      };
+      el2.addEventListener("wheel", handler, { passive: false });
+      return () => el2.removeEventListener("wheel", handler);
+    }, []);
     const handleItemClick = (0, import_react7.useCallback)((e, entry) => {
       e.stopPropagation();
       if (renamingPath === entry.path) return;
@@ -29804,8 +30113,11 @@ ${err.message}`);
         case "open":
           await window.electronAPI.openFile(filePath, "system");
           break;
-        case "openWith":
+        case "openWithSystem":
           await window.electronAPI.openFile(filePath, "system");
+          break;
+        case "openInMediaViewer":
+          window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: filePath } }));
           break;
         case "openInTerminal": {
           window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: parentDir } }));
@@ -29956,12 +30268,13 @@ ${failed.join(", ")}`);
       rootPath && /* @__PURE__ */ import_react8.default.createElement(import_react8.default.Fragment, null, pinned.length > 0 && /* @__PURE__ */ import_react8.default.createElement(import_react8.default.Fragment, null, /* @__PURE__ */ import_react8.default.createElement("div", { className: "pw-section" }, /* @__PURE__ */ import_react8.default.createElement("span", { className: "pw-section__label" }, "Pinned")), pinned.map((name) => {
         const sep = rootPath.includes("\\") ? "\\" : "/";
         const fullPath = rootPath + sep + name;
+        const folderName = name.split(/[\\/]/).pop();
         return /* @__PURE__ */ import_react8.default.createElement(
           TreeRow,
           {
             key: name,
-            label: name,
-            iconEl: /* @__PURE__ */ import_react8.default.createElement(VscodeIcon_default, { name, isDir: true, size: 16 }),
+            label: folderName,
+            iconEl: /* @__PURE__ */ import_react8.default.createElement(VscodeIcon_default, { name: folderName, isDir: true, size: 16 }),
             depth: 0,
             hasChildren: false,
             isOpen: false,
@@ -29982,6 +30295,10 @@ ${failed.join(", ")}`);
               e.stopPropagation();
               const result = await window.electronAPI.showContextMenu("pinned", [fullPath], clipboard?.paths ?? null);
               if (result?.action === "pinToSidebar") handlePinToggle(name);
+              else if (result?.action === "refresh") {
+                invalidateCache(fullPath);
+                setLocalRefresh((k) => k + 1);
+              }
             }
           }
         );
@@ -30114,6 +30431,32 @@ ${failed.join(", ")}`);
       window.electronAPI.readSettings().then((s15) => {
         window.electronAPI.writeSettings({ ...s15, zoom: val });
       });
+    }, []);
+    const navHistoryRef = (0, import_react10.useRef)({ stack: [], cursor: -1 });
+    const pushNavHistory = (0, import_react10.useCallback)((path) => {
+      const h2 = navHistoryRef.current;
+      if (h2.stack.length > 0 && h2.stack[h2.cursor] === path) return;
+      const trimmed = h2.stack.slice(0, h2.cursor + 1);
+      trimmed.push(path);
+      navHistoryRef.current = { stack: trimmed, cursor: trimmed.length - 1 };
+    }, []);
+    const handleBack = (0, import_react10.useCallback)(() => {
+      const h2 = navHistoryRef.current;
+      if (h2.cursor <= 0) return;
+      h2.cursor--;
+      const path = h2.stack[h2.cursor];
+      setSelectedPath(path);
+      setCurrentPath(path);
+      setSelectedItems(/* @__PURE__ */ new Set());
+    }, []);
+    const handleForward = (0, import_react10.useCallback)(() => {
+      const h2 = navHistoryRef.current;
+      if (h2.cursor >= h2.stack.length - 1) return;
+      h2.cursor++;
+      const path = h2.stack[h2.cursor];
+      setSelectedPath(path);
+      setCurrentPath(path);
+      setSelectedItems(/* @__PURE__ */ new Set());
     }, []);
     const undoStackRef = (0, import_react10.useRef)([]);
     const redoStackRef = (0, import_react10.useRef)([]);
@@ -30291,6 +30634,23 @@ ${err.message}`);
       }
     }, [refreshAll]);
     (0, import_react10.useEffect)(() => {
+      const handler = (e) => {
+        if (e.button === 3) {
+          e.preventDefault();
+          handleBack();
+        }
+        if (e.button === 4) {
+          e.preventDefault();
+          handleForward();
+        }
+      };
+      document.addEventListener("mouseup", handler);
+      document.addEventListener("mousedown", (e) => {
+        if (e.button === 3 || e.button === 4) e.preventDefault();
+      });
+      return () => document.removeEventListener("mouseup", handler);
+    }, [handleBack, handleForward]);
+    (0, import_react10.useEffect)(() => {
       if (!rootPath) return;
       window.electronAPI.watchDir(rootPath);
       const unsub = window.electronAPI.onFsChange((affectedDir) => {
@@ -30317,6 +30677,7 @@ ${err.message}`);
       setRefreshToken(0);
       undoStackRef.current = [];
       redoStackRef.current = [];
+      navHistoryRef.current = { stack: [folderPath], cursor: 0 };
     }, []);
     const closeProject = (0, import_react10.useCallback)(() => {
       setRootPath(null);
@@ -30329,6 +30690,7 @@ ${err.message}`);
       setClipboard(null);
       undoStackRef.current = [];
       redoStackRef.current = [];
+      navHistoryRef.current = { stack: [], cursor: -1 };
     }, []);
     (0, import_react10.useEffect)(() => {
       const u1 = window.electronAPI.onMenuEvent("menu:openProject", openProject);
@@ -30347,7 +30709,8 @@ ${err.message}`);
       setSelectedPath(folderPath);
       setCurrentPath(folderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
-    }, []);
+      pushNavHistory(folderPath);
+    }, [pushNavHistory]);
     const handleToggle = (0, import_react10.useCallback)((folderPath) => {
       setExpandedSet((prev) => {
         const n = new Set(prev);
@@ -30359,7 +30722,8 @@ ${err.message}`);
       setCurrentPath(folderPath);
       setSelectedPath(folderPath);
       setSelectedItems(/* @__PURE__ */ new Set());
-    }, []);
+      pushNavHistory(folderPath);
+    }, [pushNavHistory]);
     const handleSetSelectedItems = (0, import_react10.useCallback)((nextSet) => setSelectedItems(nextSet), []);
     const handleItemsLoaded = (0, import_react10.useCallback)((count) => setItemCount(count), []);
     const handleSidebarFileSelect = (0, import_react10.useCallback)((filePath) => {
@@ -30467,6 +30831,7 @@ ${failedDrop.join(", ")}`);
         performUndo,
         performRedo,
         zoom,
+        onZoom: handleZoom,
         showHidden,
         onToggleHidden: () => setShowHidden((v2) => !v2),
         showFolders,
@@ -39655,26 +40020,95 @@ ${h2.join(`
     "#e5c07b"
   ];
   var XTERM_CUSTOM_CSS = `
-.xterm { height: 100%; padding: 0 6px; background: #1e1e1e; }
+.xterm { height: 100%; padding: 0 6px; background: var(--bg-surface); }
 .xterm-viewport { scrollbar-width: thin; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
-.xterm-viewport::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
-.xterm-viewport::-webkit-scrollbar-thumb:hover { background: #555; }
+.xterm-viewport::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+.xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 .xterm-cursor { outline: none !important; }
-.xterm-cursor-block { background: #d4d4d4 !important; opacity: 0.9; }
+.xterm-cursor-block { background: var(--text-highlight) !important; opacity: 0.9; }
 .xterm-cursor-blink { animation: xterm-cursor-blink 1s step-end infinite; }
 @keyframes xterm-cursor-blink { 50% { opacity: 0; } }
-.xterm-selection div { background: #264f78 !important; opacity: 0.5; }
+.xterm-selection div { background: var(--selection) !important; opacity: 0.5; }
 .xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
+.term-xterm .xterm { pointer-events: auto; }
+.term-xterm .xterm-viewport { pointer-events: auto; }
 `;
-  var XtermStyle = () => /* @__PURE__ */ import_react12.default.createElement("style", null, XTERM_CUSTOM_CSS);
+  var TERMINAL_PANEL_CSS = `
+.term-panel { display:flex; flex-direction:row; height:100%; background:var(--bg-surface); }
+.term-content { flex:1; position:relative; overflow:hidden; z-index:1; }
+.term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; }
+.term-empty-center { flex-direction:column; gap:14px; }
+.term-empty-btn { background:var(--bg-active); color:var(--text-primary); border:1px solid #3c3c3c; border-radius:4px; padding:6px 20px; cursor:pointer; font-size:12px; }
+.term-empty-btn:hover { background:#383838; }
+.term-pane { position:absolute; inset:0; z-index:2; }
+.term-status { display:flex; align-items:center; gap:6px; padding:3px 10px; background:var(--bg-raised); border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); flex-shrink:0; }
+.term-status-icon { flex-shrink:0; }
+.term-status-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* \u2500\u2500 Side tab bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.term-tabs { width:120px; flex-shrink:0; z-index:3; background:var(--bg-raised); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+.term-tab { display:flex; align-items:center; gap:4px; padding:6px 6px 6px 8px; cursor:pointer; font-size:12px; user-select:none; transition:background 0.08s; }
+.term-tab:hover { background:var(--bg-hover); }
+.term-tab--active { background:var(--bg-surface); }
+.term-tab-icon { flex-shrink:0; }
+.term-tab-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.term-tab-input { flex:1; min-width:0; font-size:12px; background:var(--bg-header); border:1px solid var(--accent-light); border-radius:2px; color:var(--text-highlight); padding:1px 4px; outline:none; }
+.term-tab-close { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:3px; cursor:pointer; font-size:10px; line-height:16px; flex-shrink:0; color:var(--text-secondary); visibility:hidden; }
+.term-tab:hover .term-tab-close { visibility:visible; }
+.term-tab-close:hover { background:var(--scrollbar); color:var(--text-highlight); }
+.term-tab-add { display:flex; align-items:center; justify-content:center; padding:8px 0; cursor:pointer; color:var(--text-secondary); font-size:18px; line-height:1; transition:background 0.08s,color 0.08s; }
+.term-tab-add:hover { background:var(--bg-hover); color:var(--text-highlight); }
+`;
+  var TerminalStyle = () => /* @__PURE__ */ import_react12.default.createElement("style", null, XTERM_CUSTOM_CSS, TERMINAL_PANEL_CSS);
   var TabContent = ({ tabId, cwd, writersRef }) => {
     const elRef = (0, import_react12.useRef)(null);
     const termRef = (0, import_react12.useRef)(null);
     const [initError, setInitError] = (0, import_react12.useState)(null);
-    const [ctxMenu, setCtxMenu] = (0, import_react12.useState)(null);
     const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "";
+    const handleContextMenu = (0, import_react12.useCallback)(async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const term = termRef.current;
+      let selText = term?.getSelection() || "";
+      if (!selText) {
+        try {
+          const ds2 = document.getSelection()?.toString();
+          if (ds2) selText = ds2;
+        } catch {
+        }
+      }
+      const hasSelection = !!selText;
+      const result = await window.electronAPI.showTerminalContextMenu(hasSelection);
+      if (!result) return;
+      switch (result.action) {
+        case "copy": {
+          if (selText) {
+            try {
+              window.electronAPI.clipboardWrite(selText);
+            } catch {
+              try {
+                navigator.clipboard.writeText(selText);
+              } catch {
+              }
+            }
+          }
+          break;
+        }
+        case "paste": {
+          const text = window.electronAPI.clipboardRead();
+          if (text) window.electronAPI.writeToTerminal(tabId, text);
+          break;
+        }
+        case "kill":
+          window.electronAPI.closeTerminal(tabId);
+          break;
+        case "restart":
+          window.electronAPI.openTerminal(tabId, cwd);
+          break;
+      }
+    }, [tabId, cwd]);
     (0, import_react12.useEffect)(() => {
       let term;
       let fit;
@@ -39772,118 +40206,15 @@ ${h2.join(`
       "div",
       {
         ref: elRef,
+        className: "term-xterm",
         style: { flex: 1, minHeight: 0 },
-        onContextMenu: (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const term = termRef.current;
-          const hasSelection = term && term.getSelection().trim();
-          setCtxMenu({ x: e.clientX, y: e.clientY, hasSelection: !!hasSelection });
-        }
+        onContextMenu: handleContextMenu
       }
-    ), /* @__PURE__ */ import_react12.default.createElement("div", { style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      padding: "3px 10px",
-      background: "#252525",
-      borderTop: "1px solid #333",
-      fontSize: 11,
-      color: "#666",
-      flexShrink: 0
-    } }, /* @__PURE__ */ import_react12.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, dirName)), ctxMenu && /* @__PURE__ */ import_react12.default.createElement(
-      "div",
-      {
-        style: { position: "fixed", inset: 0, zIndex: 2147483647 },
-        onClick: () => setCtxMenu(null)
-      },
-      /* @__PURE__ */ import_react12.default.createElement(
-        "div",
-        {
-          style: {
-            position: "absolute",
-            left: ctxMenu.x,
-            top: ctxMenu.y,
-            background: "#2d2d2d",
-            border: "1px solid #444",
-            borderRadius: 6,
-            padding: "4px 0",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
-            minWidth: 140
-          },
-          onClick: (e) => e.stopPropagation()
-        },
-        ctxMenu.hasSelection && /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: async () => {
-              const sel = termRef.current?.getSelection();
-              if (sel) window.electronAPI.clipboardWrite(sel);
-              setCtxMenu(null);
-            },
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Copy"
-        ),
-        /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: async () => {
-              const text = window.electronAPI.clipboardRead();
-              if (text) window.electronAPI.writeToTerminal(tabId, text);
-              setCtxMenu(null);
-            },
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Paste"
-        ),
-        /* @__PURE__ */ import_react12.default.createElement("div", { style: MENU_SEP }),
-        /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: () => {
-              setCtxMenu(null);
-              window.electronAPI.closeTerminal(tabId);
-            },
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Kill Terminal"
-        ),
-        /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: () => {
-              setCtxMenu(null);
-              window.electronAPI.openTerminal(tabId, cwd);
-            },
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Restart"
-        )
-      )
-    ));
+    ), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-status" }, /* @__PURE__ */ import_react12.default.createElement("svg", { className: "term-status-icon", width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { className: "term-status-path" }, dirName)));
   };
-  var MENU_STYLE = {
-    padding: "5px 16px",
-    cursor: "pointer",
-    fontSize: 12,
-    color: "#c8c8c8",
-    whiteSpace: "nowrap",
-    transition: "background 0.08s"
-  };
-  var MENU_SEP = { height: 1, background: "#3c3c3c", margin: "4px 0" };
   var TerminalPanel = () => {
     const [tabs, setTabs] = (0, import_react12.useState)([]);
     const [activeTabId, setActiveTabId] = (0, import_react12.useState)(null);
-    const [contextMenu, setContextMenu] = (0, import_react12.useState)(null);
     const [projectOpen, setProjectOpen] = (0, import_react12.useState)(false);
     const [renamingTabId, setRenamingTabId] = (0, import_react12.useState)(null);
     const renameRef = (0, import_react12.useRef)(null);
@@ -39956,12 +40287,11 @@ ${h2.join(`
     const cancelRename = (0, import_react12.useCallback)(() => {
       setRenamingTabId(null);
     }, []);
-    const closeContextMenu = (0, import_react12.useCallback)(() => setContextMenu(null), []);
-    const execAction = (0, import_react12.useCallback)(async (action) => {
-      if (!contextMenu) return;
-      const { tabId } = contextMenu;
-      setContextMenu(null);
-      switch (action) {
+    const handleTabContextMenu = (0, import_react12.useCallback)(async (e, tabId) => {
+      e.preventDefault();
+      const result = await window.electronAPI.showTerminalTabContextMenu();
+      if (!result) return;
+      switch (result.action) {
         case "kill":
           try {
             await window.electronAPI.closeTerminal(tabId);
@@ -39981,7 +40311,7 @@ ${h2.join(`
         case "rename": {
           const tab = tabsRef.current.find((t) => t.id === tabId);
           startRename(tabId, tab?.name || "");
-          return;
+          break;
         }
         case "close":
           delete writersRef.current[tabId];
@@ -39992,7 +40322,7 @@ ${h2.join(`
           closeTab(tabId);
           break;
       }
-    }, [contextMenu, closeTab, startRename]);
+    }, [closeTab, startRename]);
     (0, import_react12.useEffect)(() => {
       const handler = (e) => {
         const dir = e.detail.dir;
@@ -40044,59 +40374,22 @@ ${h2.join(`
         u3();
       };
     }, [createTab]);
-    return /* @__PURE__ */ import_react12.default.createElement("div", { style: {
-      display: "flex",
-      flexDirection: "row",
-      height: "100%",
-      background: "#1e1e1e"
-    } }, /* @__PURE__ */ import_react12.default.createElement(XtermStyle, null), /* @__PURE__ */ import_react12.default.createElement("div", { style: { flex: 1, position: "relative", overflow: "hidden", zIndex: 1 } }, !projectOpen ? /* @__PURE__ */ import_react12.default.createElement("div", { style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100%",
-      color: "#666",
-      fontSize: 13,
-      fontStyle: "italic"
-    } }, "Open a project to use the terminal") : tabs.length === 0 ? /* @__PURE__ */ import_react12.default.createElement("div", { style: {
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100%",
-      gap: 14
-    } }, /* @__PURE__ */ import_react12.default.createElement("div", { style: { color: "#666", fontSize: 13 } }, "No open terminals"), /* @__PURE__ */ import_react12.default.createElement(
+    return /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-panel" }, /* @__PURE__ */ import_react12.default.createElement(TerminalStyle, null), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-content" }, !projectOpen ? /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-empty" }, "Open a project to use the terminal") : tabs.length === 0 ? /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-empty term-empty-center" }, /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-empty" }, "No open terminals"), /* @__PURE__ */ import_react12.default.createElement(
       "button",
       {
         onClick: () => createTab(),
-        style: {
-          background: "#2d2d2d",
-          color: "#c8c8c8",
-          border: "1px solid #3c3c3c",
-          borderRadius: 3,
-          padding: "6px 20px",
-          cursor: "pointer",
-          fontSize: 12,
-          transition: "background 0.1s"
-        },
-        onMouseEnter: (e) => e.currentTarget.style.background = "#383838",
-        onMouseLeave: (e) => e.currentTarget.style.background = "#2d2d2d"
+        className: "term-empty-btn"
       },
       "+ Create Terminal"
-    )) : tabs.map((tab) => /* @__PURE__ */ import_react12.default.createElement("div", { key: tab.id, style: {
-      position: "absolute",
-      inset: 0,
-      zIndex: 2,
-      display: tab.id === activeTabId ? "block" : "none"
-    } }, /* @__PURE__ */ import_react12.default.createElement(TabContent, { tabId: tab.id, cwd: tab.cwd, writersRef })))), projectOpen && /* @__PURE__ */ import_react12.default.createElement("div", { style: {
-      width: 110,
-      flexShrink: 0,
-      zIndex: 3,
-      background: "#252525",
-      borderLeft: "1px solid #333",
-      display: "flex",
-      flexDirection: "column",
-      overflowY: "auto"
-    } }, tabs.map((tab, i) => {
+    )) : tabs.map((tab) => /* @__PURE__ */ import_react12.default.createElement(
+      "div",
+      {
+        key: tab.id,
+        className: "term-pane",
+        style: { display: tab.id === activeTabId ? "block" : "none" }
+      },
+      /* @__PURE__ */ import_react12.default.createElement(TabContent, { tabId: tab.id, cwd: tab.cwd, writersRef })
+    ))), projectOpen && /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-tabs" }, tabs.map((tab, i) => {
       const active = tab.id === activeTabId;
       return /* @__PURE__ */ import_react12.default.createElement(
         "div",
@@ -40104,31 +40397,11 @@ ${h2.join(`
           key: tab.id,
           "data-term-tab": "",
           onClick: () => setActiveTabId(tab.id),
-          onContextMenu: (e) => {
-            e.preventDefault();
-            setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
-          },
-          style: {
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            padding: "7px 8px",
-            cursor: "pointer",
-            borderLeft: `3px solid ${active ? ACCENTS[i % ACCENTS.length] : "transparent"}`,
-            background: active ? "#1e1e1e" : "transparent",
-            color: active ? "#d4d4d4" : "#999",
-            fontSize: 12,
-            userSelect: "none",
-            transition: "background 0.08s"
-          },
-          onMouseEnter: (e) => {
-            if (!active) e.currentTarget.style.background = "#2a2a2a";
-          },
-          onMouseLeave: (e) => {
-            if (!active) e.currentTarget.style.background = "transparent";
-          }
+          onContextMenu: (e) => handleTabContextMenu(e, tab.id),
+          className: "term-tab" + (active ? " term-tab--active" : ""),
+          style: { borderLeft: `3px solid ${active ? ACCENTS[i % ACCENTS.length] : "transparent"}` }
         },
-        /* @__PURE__ */ import_react12.default.createElement("svg", { width: "11", height: "11", viewBox: "0 0 16 16", fill: "none", style: { flexShrink: 0 } }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })),
+        /* @__PURE__ */ import_react12.default.createElement("svg", { className: "term-tab-icon", width: "10", height: "10", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })),
         renamingTabId === tab.id ? /* @__PURE__ */ import_react12.default.createElement(
           "input",
           {
@@ -40141,17 +40414,7 @@ ${h2.join(`
             },
             onBlur: commitRename,
             onClick: (e) => e.stopPropagation(),
-            style: {
-              flex: 1,
-              minWidth: 0,
-              fontSize: 12,
-              background: "#1a1a1a",
-              border: "1px solid #5a9fd4",
-              borderRadius: 2,
-              color: "#d4d4d4",
-              padding: "1px 4px",
-              outline: "none"
-            }
+            className: "term-tab-input"
           }
         ) : /* @__PURE__ */ import_react12.default.createElement(
           "span",
@@ -40160,13 +40423,7 @@ ${h2.join(`
               e.stopPropagation();
               startRename(tab.id, tab.name);
             },
-            style: {
-              flex: 1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              cursor: "pointer"
-            }
+            className: "term-tab-name"
           },
           tab.name
         ),
@@ -40178,20 +40435,7 @@ ${h2.join(`
               window.electronAPI.closeTerminal(tab.id);
               closeTab(tab.id);
             },
-            className: "term-side-close",
-            style: {
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 16,
-              height: 16,
-              borderRadius: 3,
-              cursor: "pointer",
-              fontSize: 10,
-              lineHeight: "16px",
-              flexShrink: 0,
-              color: "#999"
-            }
+            className: "term-tab-close"
           },
           "\u2715"
         )
@@ -40201,98 +40445,21 @@ ${h2.join(`
       {
         onClick: () => createTab(),
         title: "New Terminal",
-        style: {
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "8px 0",
-          cursor: "pointer",
-          color: "#999",
-          fontSize: 18,
-          lineHeight: 1,
-          transition: "background 0.08s, color 0.08s"
-        },
-        onMouseEnter: (e) => {
-          e.currentTarget.style.background = "#2a2a2a";
-          e.currentTarget.style.color = "#d4d4d4";
-        },
-        onMouseLeave: (e) => {
-          e.currentTarget.style.background = "transparent";
-          e.currentTarget.style.color = "#999";
-        }
+        className: "term-tab-add"
       },
       "+"
-    )), contextMenu && /* @__PURE__ */ import_react12.default.createElement(
-      "div",
-      {
-        style: { position: "fixed", inset: 0, zIndex: 2147483647 },
-        onClick: closeContextMenu
-      },
-      /* @__PURE__ */ import_react12.default.createElement(
-        "div",
-        {
-          style: {
-            position: "absolute",
-            left: contextMenu.x,
-            top: contextMenu.y,
-            background: "#2d2d2d",
-            border: "1px solid #444",
-            borderRadius: 6,
-            padding: "4px 0",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
-            minWidth: 150
-          },
-          onClick: (e) => e.stopPropagation()
-        },
-        /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: () => execAction("kill"),
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Kill Terminal"
-        ),
-        /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: () => execAction("restart"),
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Restart"
-        ),
-        /* @__PURE__ */ import_react12.default.createElement("div", { style: MENU_SEP }),
-        /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: () => execAction("rename"),
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Rename Tab"
-        ),
-        /* @__PURE__ */ import_react12.default.createElement("div", { style: MENU_SEP }),
-        /* @__PURE__ */ import_react12.default.createElement(
-          "div",
-          {
-            style: MENU_STYLE,
-            onClick: () => execAction("close"),
-            onMouseEnter: (e) => e.currentTarget.style.background = "#3a3a3a",
-            onMouseLeave: (e) => e.currentTarget.style.background = "transparent"
-          },
-          "Close Tab"
-        )
-      )
-    ));
+    )));
   };
   var Terminal_default = TerminalPanel;
 
+  // electron/renderer/components/BlankPanel.jsx
+  var BlankPanel = () => {
+    return /* @__PURE__ */ React.createElement("div", { className: "panel", style: { display: "flex", alignItems: "center", justifyContent: "center", color: "#555", fontSize: 13 } }, "Empty Panel");
+  };
+  var BlankPanel_default = BlankPanel;
+
   // electron/renderer/index.jsx
-  var json = {
+  var DEFAULT_JSON = {
     global: {
       tabEnableClose: false,
       tabEnableRename: false,
@@ -40308,31 +40475,18 @@ ${h2.join(`
       type: "row",
       weight: 100,
       children: [
-        // ── Left + Center column (stacked: top panels + bottom tabs) ────────
         {
           type: "row",
           weight: 75,
           children: [
-            // Top section: Panel1 (left) + Panel3 (center)
             {
               type: "row",
               weight: 65,
               children: [
-                // Panel1 — left
-                {
-                  type: "tabset",
-                  weight: 30,
-                  children: [{ type: "tab", name: "panel1", component: "panel1" }]
-                },
-                // Panel3 — center main
-                {
-                  type: "tabset",
-                  weight: 70,
-                  children: [{ type: "tab", name: "panel3", component: "panel3" }]
-                }
+                { type: "tabset", weight: 30, children: [{ type: "tab", name: "Media Viewer", component: "mediaViewer" }] },
+                { type: "tabset", weight: 70, children: [{ type: "tab", name: "Browser", component: "panel3", config: { type: "browser", title: "Browser" } }] }
               ]
             },
-            // Bottom tabs: Project Panel & Terminal
             {
               type: "tabset",
               weight: 35,
@@ -40343,7 +40497,6 @@ ${h2.join(`
             }
           ]
         },
-        // ── Right column — Panel5 full height ────────────────────────────────
         {
           type: "tabset",
           weight: 25,
@@ -40352,30 +40505,139 @@ ${h2.join(`
       ]
     }
   };
-  var model = Model.fromJson(json);
   var factory = (node) => {
     switch (node.getComponent()) {
-      case "panel1":
+      case "mediaViewer":
         return /* @__PURE__ */ import_react13.default.createElement(Panel1_default, null);
       case "panel3":
-        return /* @__PURE__ */ import_react13.default.createElement(Panel3_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Panel3_default, { config: node.getConfig(), nodeId: node.getId() });
       case "projectPanel":
         return /* @__PURE__ */ import_react13.default.createElement(ProjectPanel_default, null);
       case "panel5":
         return /* @__PURE__ */ import_react13.default.createElement(Panel5_default, null);
       case "terminal":
         return /* @__PURE__ */ import_react13.default.createElement(Terminal_default, null);
+      case "blank":
+        return /* @__PURE__ */ import_react13.default.createElement(BlankPanel_default, null);
       default:
         return null;
     }
   };
   var App = () => {
-    import_react13.default.useEffect(() => {
-      const handler = () => model.doAction(Actions.selectTab("terminal-tab"));
+    const modelRef = (0, import_react13.useRef)(null);
+    const readyRef = (0, import_react13.useRef)(false);
+    const [, setTick] = (0, import_react13.useState)(0);
+    (0, import_react13.useEffect)(() => {
+      window.__flexModel = modelRef;
+      window.__getLayoutJSON = () => modelRef.current ? modelRef.current.toJson() : null;
+      return () => {
+        delete window.__flexModel;
+        delete window.__getLayoutJSON;
+      };
+    }, []);
+    (0, import_react13.useEffect)(() => {
+      window.electronAPI.loadSession().then((session) => {
+        const json = session && session.layout ? JSON.parse(JSON.stringify(session.layout)) : DEFAULT_JSON;
+        if (session && session.layout) {
+          (function migrate(node) {
+            if (node.type === "tab") {
+              if (node.component === "panel1") node.component = "mediaViewer";
+              if (node.name === "panel1") node.name = "Media Viewer";
+            }
+            if (node.children) node.children.forEach(migrate);
+          })(json);
+        }
+        modelRef.current = Model.fromJson(json);
+        readyRef.current = true;
+        setTick((t) => t + 1);
+      });
+    }, []);
+    (0, import_react13.useEffect)(() => {
+      const handler = () => {
+        if (modelRef.current) modelRef.current.doAction(Actions.selectTab("terminal-tab"));
+      };
       window.addEventListener("focus-terminal-tab", handler);
       return () => window.removeEventListener("focus-terminal-tab", handler);
     }, []);
-    return /* @__PURE__ */ import_react13.default.createElement(Layout, { model, factory });
+    (0, import_react13.useEffect)(() => {
+      const unsub = window.electronAPI.onMenuEvent("menu:resetLayout", () => {
+        modelRef.current = Model.fromJson(DEFAULT_JSON);
+        setTick((t) => t + 1);
+      });
+      return unsub;
+    }, []);
+    if (!readyRef.current) return null;
+    return /* @__PURE__ */ import_react13.default.createElement(
+      Layout,
+      {
+        model: modelRef.current,
+        factory,
+        onRenderTab: (node, renderValues) => {
+          const cfg = node.getConfig();
+          if (cfg?.type === "browser") {
+            const title = cfg.title || "Browser";
+            const favicon = cfg.favicon;
+            renderValues.content = /* @__PURE__ */ import_react13.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4, overflow: "hidden" } }, favicon ? /* @__PURE__ */ import_react13.default.createElement(
+              "img",
+              {
+                src: favicon,
+                width: 14,
+                height: 14,
+                style: { flexShrink: 0 },
+                onError: (e) => {
+                  e.target.style.display = "none";
+                }
+              }
+            ) : /* @__PURE__ */ import_react13.default.createElement("svg", { width: 14, height: 14, viewBox: "0 0 16 16", fill: "#888", style: { flexShrink: 0 } }, /* @__PURE__ */ import_react13.default.createElement("circle", { cx: "8", cy: "8", r: "7" })), /* @__PURE__ */ import_react13.default.createElement("span", { title, style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 } }, title.slice(0, 10)));
+          }
+        },
+        onRenderTabSet: (node, renderValues) => {
+          renderValues.buttons.push(
+            /* @__PURE__ */ import_react13.default.createElement(
+              "button",
+              {
+                key: "add",
+                className: "flexlayout__tab_toolbar_button",
+                onClick: async () => {
+                  const result = await window.electronAPI.showPanelAddMenu();
+                  if (!result) return;
+                  const m = modelRef.current;
+                  switch (result.action) {
+                    case "browser":
+                      m.doAction(Actions.addNode({
+                        type: "tab",
+                        component: "panel3",
+                        name: "Browser",
+                        enableClose: true,
+                        config: { type: "browser", title: "Browser" }
+                      }, node.getId(), DockLocation.CENTER));
+                      break;
+                    case "terminal":
+                      m.doAction(Actions.selectTab("terminal-tab"));
+                      window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
+                      break;
+                    default:
+                      if (result.action.startsWith("port:")) {
+                        const port = result.action.slice(5);
+                        m.doAction(Actions.addNode({
+                          type: "tab",
+                          component: "panel3",
+                          name: `localhost:${port}`,
+                          enableClose: true,
+                          config: { type: "browser", title: `localhost:${port}`, url: `http://localhost:${port}` }
+                        }, node.getId(), DockLocation.CENTER));
+                      }
+                      break;
+                  }
+                },
+                title: "Add Panel"
+              },
+              /* @__PURE__ */ import_react13.default.createElement("svg", { width: "12", height: "12", viewBox: "0 0 16 16", fill: "#fff" }, /* @__PURE__ */ import_react13.default.createElement("rect", { x: "7", y: "1", width: "2", height: "14", rx: "1" }), /* @__PURE__ */ import_react13.default.createElement("rect", { x: "1", y: "7", width: "14", height: "2", rx: "1" }))
+            )
+          );
+        }
+      }
+    );
   };
   import_client2.default.createRoot(document.getElementById("root")).render(/* @__PURE__ */ import_react13.default.createElement(App, null));
 })();

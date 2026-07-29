@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import useSettings from "../shared/useSettings.jsx";
 import EditorPage  from "./pages/EditorPage.jsx";
+import "../../variables.css";
 import "./settings.css";
 
 // ─── Navigation items ─────────────────────────────────────────────────────────

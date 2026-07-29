@@ -28121,7 +28121,7 @@
     }
   };
 
-  // electron/renderer/components/Panel1.jsx
+  // electron/renderer/components/MediaViewer.jsx
   var import_react2 = __toESM(require_react());
   var TEXT_EXTS = [".txt", ".md", ".json", ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".py", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".log", ".sh", ".bat", ".ps1", ".sql", ".rb", ".php", ".c", ".cpp", ".h", ".hpp", ".java", ".rs", ".go", ".toml"];
   var IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico"];
@@ -28140,7 +28140,7 @@
       return p;
     }
   };
-  var Panel1 = () => {
+  var MediaViewer = () => {
     const [filePath, setFilePath] = (0, import_react2.useState)(null);
     const [content, setContent] = (0, import_react2.useState)(null);
     const [type, setType] = (0, import_react2.useState)(null);
@@ -28233,9 +28233,9 @@
       /* @__PURE__ */ import_react2.default.createElement("div", { style: { flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: "#0d0d0d" } }, error && /* @__PURE__ */ import_react2.default.createElement("div", { style: { color: "#f44747", fontSize: 13 } }, error), type === "image" && content && /* @__PURE__ */ import_react2.default.createElement("img", { src: content, style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }, alt: "" }), type === "video" && content && /* @__PURE__ */ import_react2.default.createElement("video", { controls: true, style: { maxWidth: "100%", maxHeight: "100%" }, src: content }), type === "text" && content !== null && /* @__PURE__ */ import_react2.default.createElement("pre", { style: { margin: 0, padding: 12, color: "#c8c8c8", fontSize: 12, fontFamily: 'Consolas, "Courier New", monospace', whiteSpace: "pre-wrap", wordBreak: "break-word", width: "100%", height: "100%" } }, content))
     );
   };
-  var Panel1_default = Panel1;
+  var MediaViewer_default = MediaViewer;
 
-  // electron/renderer/components/Panel3.jsx
+  // electron/renderer/components/BrowserPanel.jsx
   var import_react3 = __toESM(require_react());
   var LOCK_ICON = "M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm-2 6V5a2 2 0 1 1 4 0v2H6z";
   var UNLOCK_ICON = "M8 1a4 4 0 0 1 4 4v1h-1V5a3 3 0 0 0-5.7-1.37l-.78-.62A4 4 0 0 1 8 1zm-5.65.09l12 14-.7.6L1.65 1.7zM6 7.49l-1.82.01a1 1 0 0 0-.18 0v3.85L2.35 9.7l-.7.6L4 13.2V14a1 1 0 0 0 1 1h6.15l-1-1H5v-4.5l1.85.01zm4.56-.57A1 1 0 0 1 12 7.5V8h1a1 1 0 0 1 1 1v3.15l-1-1V9h-1.44z";
@@ -28243,7 +28243,7 @@
   var PUZZLE_ICON = "M12.5 2A2.5 2.5 0 0 0 10 4.5c0 .28.05.55.14.8L8.8 6.65a2.77 2.77 0 0 0-.8-.15H6.5v1.5h1.5c.77 0 1.5.28 2.07.86l.79.79-.79.79a2.78 2.78 0 0 0-.85 2.01v1.5h1.5v-1.5c0-.28.05-.55.14-.8l1.35-1.35c.24.09.51.14.79.14a2.5 2.5 0 0 0 0-5zM3 5.5A1.5 1.5 0 0 1 4.5 4H6V2H4.5a3.5 3.5 0 0 0-3.5 3.5V7h2V5.5zM1 8v4.5A3.5 3.5 0 0 0 4.5 16H7v-2H4.5A1.5 1.5 0 0 1 3 12.5V8H1z";
   var extIdCounter = 1;
   var newExtId = () => "ext_" + Date.now() + "_" + extIdCounter++;
-  var Panel3 = (props) => {
+  var BrowserPanel = (props) => {
     const { nodeId, config } = props || {};
     const initialUrl = config?.url || "https://www.google.com";
     const [url, setUrl] = (0, import_react3.useState)(initialUrl);
@@ -28334,7 +28334,7 @@
           const tabNode = m.getNodeById(nodeId);
           if (tabNode) {
             const cfg = { ...tabNode.getConfig() || {}, title: e.title };
-            m.doAction(Actions.updateNodeAttributes(nodeId, { config: cfg }));
+            m.doAction(Actions.updateNodeAttributes(nodeId, { config: cfg, name: e.title }));
           }
         }
       };
@@ -28461,7 +28461,7 @@
       }
     ), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-add-actions" }, /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-btn browser__ext-btn--primary", onClick: handleExtAdd }, "Add"), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-btn", onClick: () => setExtAddOpen(false) }, "Cancel"))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-list" }, extensions.length === 0 && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-empty" }, "No extensions added yet"), extensions.map((ex) => /* @__PURE__ */ import_react3.default.createElement("div", { key: ex.id, className: "browser__ext-item" }, /* @__PURE__ */ import_react3.default.createElement("label", { className: "browser__ext-toggle" }, /* @__PURE__ */ import_react3.default.createElement("input", { type: "checkbox", checked: ex.enabled, onChange: () => handleExtToggle(ex.id) }), /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__ext-toggle-slider" })), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-info" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-name" }, ex.name), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-type" }, ex.type.toUpperCase())), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-del", onClick: () => handleExtDelete(ex.id), title: "Delete extension" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "10", height: "10", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M4 4L12 12M12 4L4 12" })))))))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__view-wrap" }, /* @__PURE__ */ import_react3.default.createElement("webview", { className: "browser__view", ref: webviewRefCb, src: url, allowpopups: true, allowfullscreen: true })));
   };
-  var Panel3_default = Panel3;
+  var BrowserPanel_default = BrowserPanel;
 
   // electron/renderer/components/ProjectPanel.jsx
   var import_react11 = __toESM(require_react());
@@ -40508,9 +40508,9 @@ ${h2.join(`
   var factory = (node) => {
     switch (node.getComponent()) {
       case "mediaViewer":
-        return /* @__PURE__ */ import_react13.default.createElement(Panel1_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(MediaViewer_default, null);
       case "panel3":
-        return /* @__PURE__ */ import_react13.default.createElement(Panel3_default, { config: node.getConfig(), nodeId: node.getId() });
+        return /* @__PURE__ */ import_react13.default.createElement(BrowserPanel_default, { config: node.getConfig(), nodeId: node.getId() });
       case "projectPanel":
         return /* @__PURE__ */ import_react13.default.createElement(ProjectPanel_default, null);
       case "panel5":
@@ -40574,9 +40574,10 @@ ${h2.join(`
         factory,
         onRenderTab: (node, renderValues) => {
           const cfg = node.getConfig();
-          if (cfg?.type === "browser") {
-            const title = cfg.title || "Browser";
-            const favicon = cfg.favicon;
+          const isBrowser = cfg?.type === "browser" || node.getComponent() === "panel3";
+          if (isBrowser) {
+            const title = cfg?.title || "Browser";
+            const favicon = cfg?.favicon;
             renderValues.content = /* @__PURE__ */ import_react13.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4, overflow: "hidden" } }, favicon ? /* @__PURE__ */ import_react13.default.createElement(
               "img",
               {

@@ -10,7 +10,7 @@ const PLUS_ICON = "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm1 8H7v2h1V9h2V8H8V6H7v2H5v
 let extIdCounter = 1;
 const newExtId = () => "ext_" + Date.now() + "_" + (extIdCounter++);
 
-const Panel3 = (props) => {
+const BrowserPanel = (props) => {
   const { nodeId, config } = props || {};
   const initialUrl = config?.url || "https://www.google.com";
   const [url, setUrl] = useState(initialUrl);
@@ -100,7 +100,7 @@ const Panel3 = (props) => {
         const tabNode = m.getNodeById(nodeId);
         if (tabNode) {
           const cfg = { ...(tabNode.getConfig() || {}), title: e.title };
-          m.doAction(Actions.updateNodeAttributes(nodeId, { config: cfg }));
+          m.doAction(Actions.updateNodeAttributes(nodeId, { config: cfg, name: e.title }));
         }
       }
     };
@@ -288,4 +288,4 @@ const Panel3 = (props) => {
   );
 };
 
-export default Panel3;
+export default BrowserPanel;

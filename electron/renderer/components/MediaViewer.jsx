@@ -7,7 +7,7 @@ const VIDEO_EXTS = [".mp4", ".webm", ".avi", ".mov", ".mkv", ".wmv", ".flv"];
 const ext = (p) => { try { return p.slice(p.lastIndexOf(".")).toLowerCase(); } catch { return ""; } };
 const fileName = (p) => { try { return p.split(/[\\/]/).pop(); } catch { return p; } };
 
-const Panel1 = () => {
+const MediaViewer = () => {
   const [filePath, setFilePath] = useState(null);
   const [content, setContent] = useState(null);
   const [type, setType] = useState(null);
@@ -106,4 +106,4 @@ const Panel1 = () => {
   );
 };
 
-export default Panel1;
+export default MediaViewer;

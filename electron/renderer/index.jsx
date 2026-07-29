@@ -5,8 +5,8 @@ import "./variables.css";
 import "flexlayout-react/style/dark.css";
 import "./layout.css";
 
-import Panel1 from "./components/Panel1.jsx";
-import Panel3 from "./components/Panel3.jsx";
+import MediaViewer from "./components/MediaViewer.jsx";
+import BrowserPanel from "./components/BrowserPanel.jsx";
 import ProjectPanel from "./components/ProjectPanel.jsx";
 import Panel5 from "./components/Panel5.jsx";
 import TerminalPanel from "./components/Terminal.jsx";
@@ -57,8 +57,8 @@ const DEFAULT_JSON = {
 
 const factory = (node) => {
   switch (node.getComponent()) {
-    case "mediaViewer":   return <Panel1 />;
-    case "panel3":        return <Panel3 config={node.getConfig()} nodeId={node.getId()} />;
+    case "mediaViewer":   return <MediaViewer />;
+    case "panel3":        return <BrowserPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "projectPanel":  return <ProjectPanel />;
     case "panel5":        return <Panel5 />;
     case "terminal":      return <TerminalPanel />;
@@ -72,7 +72,7 @@ const App = () => {
   const readyRef = useRef(false);
   const [, setTick] = useState(0);
 
-  // Expose layout JSON for main process to grab on close, and model for Panel3 to update tabs
+  // Expose layout JSON for main process to grab on close, and model for BrowserPanel to update tabs
   useEffect(() => {
     window.__flexModel = modelRef;
     window.__getLayoutJSON = () => modelRef.current ? modelRef.current.toJson() : null;
@@ -122,9 +122,10 @@ const App = () => {
       factory={factory}
       onRenderTab={(node, renderValues) => {
         const cfg = node.getConfig();
-        if (cfg?.type === "browser") {
-          const title = cfg.title || "Browser";
-          const favicon = cfg.favicon;
+        const isBrowser = cfg?.type === "browser" || node.getComponent() === "panel3";
+        if (isBrowser) {
+          const title = cfg?.title || "Browser";
+          const favicon = cfg?.favicon;
           renderValues.content = (
             <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
               {favicon ? (

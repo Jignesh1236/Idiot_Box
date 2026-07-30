@@ -243,6 +243,14 @@ const ContentArea = ({
         for (const p of targetPaths) window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: p } }));
         return;
       }
+      default: {
+        if (action.startsWith("openWithEditor:")) {
+          const editorId = action.slice("openWithEditor:".length);
+          for (const p of targetPaths) await window.electronAPI.openFile(p, editorId);
+          return;
+        }
+        break;
+      }
       case "openInTerminal": {
         for (const p of targetPaths) {
           const s = await window.electronAPI.stat(p);
@@ -398,7 +406,6 @@ const ContentArea = ({
         window.dispatchEvent(new CustomEvent("pin-changed"));
         return;
       }
-      default: return;
     }
   }, [onNavigate, onSetSelectedItems, onClipboardChange, invalidateCache, loadEntries]);
 
@@ -606,6 +613,12 @@ const ContentArea = ({
     const toDrag = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("application/ppoo-paths", JSON.stringify(toDrag));
+    // Store for internal drop fallback (native OS file drag strips custom MIME types)
+    window.__ppooDragPaths = toDrag;
+    // Native OS file drag (to desktop, file explorer, external apps)
+    window.electronAPI.startNativeDrag(toDrag);
+    // text/uri-list for basic external app compatibility
+    e.dataTransfer.setData("text/uri-list", toDrag.map(p => "file:///" + p.replace(/\\/g, "/")).join("\r\n"));
 
     if (toDrag.length > 1) {
       const el = document.createElement("div");
@@ -686,19 +699,30 @@ const ContentArea = ({
     e.stopPropagation();
     const cp = currentPathRef.current;
     if (!cp) return;
+    const rp = rootPathRef.current;
 
-    // Check for external files first
-    const externalPaths = getExternalPaths(e);
-    if (externalPaths) {
-      const copied = await copyExternalFiles(externalPaths, cp);
+    // Resolve paths: custom MIME → internal native drag → external files
+    let paths;
+    let isInternal = true;
+    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch {}
+    if (!paths?.length && window.__ppooDragPaths?.length) {
+      paths = window.__ppooDragPaths;
+      window.__ppooDragPaths = null;
+    }
+    if (!paths?.length) {
+      const externalPaths = getExternalPaths(e);
+      if (externalPaths) {
+        paths = externalPaths;
+        isInternal = false;
+      }
+    }
+    if (!paths?.length) return;
+
+    if (!isInternal) {
+      const copied = await copyExternalFiles(paths, cp);
       if (copied.length) { invalidateCache(cp); await loadEntries(); }
       return;
     }
-
-    // Internal drag
-    let paths;
-    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch { return; }
-    if (!paths?.length) return;
     const pairs = [];
     const sourceParents = new Set();
     for (const src of paths) {
@@ -727,7 +751,7 @@ const ContentArea = ({
       if (crumbsTimerRef.current) clearTimeout(crumbsTimerRef.current);
       crumbsTimerRef.current = setTimeout(() => {
         onNavigate(path);
-      }, 2000);
+      }, 800);
     }
   }, [onNavigate]);
 
@@ -744,18 +768,25 @@ const ContentArea = ({
     if (crumbsTimerRef.current) { clearTimeout(crumbsTimerRef.current); crumbsTimerRef.current = null; }
     crumbsHoverRef.current = null;
 
-    // External files
-    const externalPaths = getExternalPaths(e);
-    if (externalPaths) {
-      const copied = await copyExternalFiles(externalPaths, path);
+    // Resolve paths
+    let paths;
+    let isInternal = true;
+    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch {}
+    if (!paths?.length && window.__ppooDragPaths?.length) {
+      paths = window.__ppooDragPaths;
+      window.__ppooDragPaths = null;
+    }
+    if (!paths?.length) {
+      const externalPaths = getExternalPaths(e);
+      if (externalPaths) { paths = externalPaths; isInternal = false; }
+    }
+    if (!paths?.length) return;
+
+    if (!isInternal) {
+      const copied = await copyExternalFiles(paths, path);
       if (copied.length) { invalidateCache(path); onNavigate(path); }
       return;
     }
-
-    // Internal drag
-    let paths;
-    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch { return; }
-    if (!paths?.length) return;
     const pairs = [];
     const sourceParents = new Set();
     const failedCrumb = [];
@@ -793,7 +824,7 @@ const ContentArea = ({
       if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
       expandTimerRef.current = setTimeout(() => {
         onNavigate(entry.path);
-      }, 2000);
+      }, 800);
     }
   }, [onNavigate]);
 
@@ -810,18 +841,25 @@ const ContentArea = ({
     setDropTargetPath(null);
     if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
 
-    // External files
-    const externalPaths = getExternalPaths(e);
-    if (externalPaths) {
-      const copied = await copyExternalFiles(externalPaths, entry.path);
+    // Resolve paths
+    let paths;
+    let isInternal = true;
+    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch {}
+    if (!paths?.length && window.__ppooDragPaths?.length) {
+      paths = window.__ppooDragPaths;
+      window.__ppooDragPaths = null;
+    }
+    if (!paths?.length) {
+      const externalPaths = getExternalPaths(e);
+      if (externalPaths) { paths = externalPaths; isInternal = false; }
+    }
+    if (!paths?.length) return;
+
+    if (!isInternal) {
+      const copied = await copyExternalFiles(paths, entry.path);
       if (copied.length) { invalidateCache(entry.path); onNavigate(entry.path); }
       return;
     }
-
-    // Internal drag
-    let paths;
-    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch { return; }
-    if (!paths?.length) return;
     const pairs = [];
     const sourceParents = new Set();
     const failedDrop = [];

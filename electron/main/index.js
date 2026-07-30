@@ -54,8 +54,16 @@ const KNOWN_EDITORS = [
   { id: "nvim",     label: "Neovim",             commands: ["nvim"]               },
   { id: "system",   label: "System Default",     commands: []                     },
 ];
-const cmdExists = (cmd) => { try { require("child_process").execSync(process.platform === "win32" ? `where ${cmd}` : `which ${cmd}`, { stdio: "ignore" }); return true; } catch { return false; } };
-ipcMain.handle("editors:list", () => KNOWN_EDITORS.map((e) => ({ id: e.id, label: e.label, available: e.id === "system" || e.commands.some(cmdExists) })));
+let _availableEditors = null;
+const getAvailableEditors = () => {
+  if (_availableEditors) return _availableEditors;
+  const cmdExists = (cmd) => { try { require("child_process").execSync(process.platform === "win32" ? `where ${cmd}` : `which ${cmd}`, { stdio: "ignore" }); return true; } catch { return false; } };
+  _availableEditors = KNOWN_EDITORS
+    .filter((e) => e.id !== "system" && e.commands.some(cmdExists))
+    .map((e) => ({ id: e.id, label: e.label }));
+  return _availableEditors;
+};
+ipcMain.handle("editors:list", () => getAvailableEditors().map((e) => ({ id: e.id, label: e.label, available: true })));
 
 ipcMain.handle("fs:openFile", async (_e, { filePath, editorId }) => {
   const editor = KNOWN_EDITORS.find((e) => e.id === editorId);
@@ -423,6 +431,8 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
     const has = (n) => selectedPaths.length >= n;
     const sep = { type: "separator" };
 
+    const availableEditors = type === "file" ? getAvailableEditors() : [];
+
     let items = [];
 
     if (type === "breadcrumb") {
@@ -497,12 +507,23 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
         { label: "Refresh",                 accelerator: "F5",           click: () => act("refresh")  },
       ];
     } else {
+      const openWithSubmenu = [
+        { label: "System Default",        accelerator: "Ctrl+Enter",   click: () => act("openWithSystem") },
+      ];
+      if (availableEditors.length) {
+        openWithSubmenu.push({ type: "separator" });
+        for (const ed of availableEditors) {
+          openWithSubmenu.push({ label: ed.label, click: () => act(`openWithEditor:${ed.id}`) });
+        }
+      }
+      openWithSubmenu.push(
+        { type: "separator" },
+        { label: "Media Viewer",                                     click: () => act("openInMediaViewer") },
+      );
+
       items = [
         { label: "Open",                    accelerator: "Enter",        click: () => act("open")     },
-        { label: "Open with", submenu: [
-          { label: "System Default",        accelerator: "Ctrl+Enter",   click: () => act("openWithSystem") },
-          { label: "Media Viewer",                                     click: () => act("openInMediaViewer") },
-        ]},
+        { label: "Open with", submenu: openWithSubmenu },
         sep,
         { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
         { label: "Delete",                  accelerator: "Delete",       click: () => act("delete")    },
@@ -668,6 +689,15 @@ ipcMain.handle("panel:addMenu", async (event) => {
   });
 });
 
+// ─── Native file drag ──────────────────────────────────────────────────────────
+// renderer stores paths here via sync IPC; will-start-drag reads them
+let pendingNativeDragPaths = null;
+
+ipcMain.on("drag:startNative", (event, paths) => {
+  pendingNativeDragPaths = paths;
+  event.returnValue = true;
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const sendToRenderer = (channel, payload) => {
   const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
@@ -748,6 +778,16 @@ function createWindow() {
 
   if (wasMaximized) win.maximize();
   win.show();
+
+  // ── Native file drag: outgoing drag to OS/external apps ──────────────
+  win.webContents.on("will-start-drag", (event) => {
+    const paths = pendingNativeDragPaths;
+    if (paths && paths.length) {
+      event.preventDefault();
+      pendingNativeDragPaths = null;
+      win.webContents.startDrag({ files: paths });
+    }
+  });
 
   win.loadFile(path.join(__dirname, "../renderer/index.html"));
   win.webContents.openDevTools();

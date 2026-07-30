@@ -81,7 +81,7 @@ const FolderNode = ({
       if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
       expandTimerRef.current = setTimeout(() => {
         if (!isOpen) onToggle(entry.path);
-      }, 2000);
+      }, 800);
     }
   }, [entry.path, setDropTarget, isOpen, onToggle]);
   const handleDragLeave = useCallback((e) => {
@@ -93,6 +93,11 @@ const FolderNode = ({
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
     if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
     expandHoverRef.current = null;
+    // Internal native drag (from startDrag) fallback
+    if (window.__ppooDragPaths?.length) {
+      const paths = window.__ppooDragPaths; window.__ppooDragPaths = null;
+      onDrop(entry.path, paths); return;
+    }
     if (await onExternalDrop?.(e, entry.path)) return;
     try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(entry.path, paths); } catch {}
   }, [entry.path, onDrop, setDropTarget, onExternalDrop]);
@@ -174,7 +179,7 @@ const SidebarTree = ({
   onSelect, onToggle, loadChildren, onDrop,
   clipboard, invalidateCache,
   showHidden, showFolders, showFiles, showPreview,
-  onFileSelect,
+  onFileSelect, pushUndo,
 }) => {
   const [rootChildren, setRootChildren] = useState(null);
   const [dropTarget,   setDropTarget]   = useState(null);
@@ -207,6 +212,8 @@ const SidebarTree = ({
   const rootName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).pop() : "";
 
   const handleExternalDrop = useCallback(async (e, targetDir) => {
+    // Internal native drag (from our app) should use move, not copy
+    if (window.__ppooDragPaths?.length) return false;
     const dt = e.dataTransfer;
     if (!dt) return false;
     const hasFiles = dt.types?.includes("Files");
@@ -258,6 +265,11 @@ const SidebarTree = ({
   const handleRootDragLeave = ()  => setDropTarget((p) => p === rootPath ? null : p);
   const handleRootDrop      = async (e) => {
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
+    // Internal native drag (from startDrag) fallback
+    if (window.__ppooDragPaths?.length) {
+      const paths = window.__ppooDragPaths; window.__ppooDragPaths = null;
+      onDrop(rootPath, paths); return;
+    }
     // External files
     if (await handleExternalDrop(e, rootPath)) return;
     // Internal drag
@@ -342,7 +354,8 @@ const SidebarTree = ({
         const n = await ask("Rename to:", oldName);
         if (n && n !== oldName) {
           try {
-            await window.electronAPI.rename(folderPath, n);
+            const newPath = await window.electronAPI.rename(folderPath, n);
+            if (pushUndo) pushUndo({ type: "rename", oldPath: folderPath, oldName, newPath: newPath || parentDir + (parentDir.includes("\\") ? "\\" : "/") + n, newName: n, parentDir });
             invalidateCache(parentDir);
             setLocalRefresh((k) => k + 1);
           } catch (err) { await window.electronAPI.showAlert(`Cannot rename:\n${err.message}`); }
@@ -364,7 +377,8 @@ const SidebarTree = ({
           const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
           if (ok) {
             try {
-              await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
+              const result = await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
+              if (pushUndo && result?.trashId) pushUndo({ type: "delete", trashIds: [{ from: folderPath, trashId: result.trashId }], parentDir, rootPath: findTrashRoot(folderPath) });
               invalidateCache(parentDir);
               setLocalRefresh((k) => k + 1);
             } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
@@ -436,7 +450,8 @@ const SidebarTree = ({
         const n = await ask("Rename to:", oldName);
         if (n && n !== oldName) {
           try {
-            await window.electronAPI.rename(filePath, n);
+            const newPath = await window.electronAPI.rename(filePath, n);
+            if (pushUndo) pushUndo({ type: "rename", oldPath: filePath, oldName, newPath: newPath || parentDir + (parentDir.includes("\\") ? "\\" : "/") + n, newName: n, parentDir });
             invalidateCache(parentDir);
             setLocalRefresh((k) => k + 1);
           } catch (err) { await window.electronAPI.showAlert(`Cannot rename:\n${err.message}`); }
@@ -458,7 +473,8 @@ const SidebarTree = ({
           const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
           if (ok) {
             try {
-              await window.electronAPI.trashItem(filePath, findTrashRoot(filePath));
+              const result = await window.electronAPI.trashItem(filePath, findTrashRoot(filePath));
+              if (pushUndo && result?.trashId) pushUndo({ type: "delete", trashIds: [{ from: filePath, trashId: result.trashId }], parentDir, rootPath: findTrashRoot(filePath) });
               invalidateCache(parentDir);
               setLocalRefresh((k) => k + 1);
             } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
@@ -483,6 +499,13 @@ const SidebarTree = ({
       case "refresh": {
         invalidateCache(parentDir);
         setLocalRefresh((k) => k + 1);
+        break;
+      }
+      default: {
+        if (result.action.startsWith("openWithEditor:")) {
+          const editorId = result.action.slice("openWithEditor:".length);
+          await window.electronAPI.openFile(filePath, editorId);
+        }
         break;
       }
     }
@@ -578,9 +601,83 @@ const SidebarTree = ({
                     onContextMenu={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      if (fullPath !== selectedPath) onSelect(fullPath);
+                      const parentDir = fullPath.replace(/[\\/][^\\/]+$/, "") || fullPath;
                       const result = await window.electronAPI.showContextMenu("pinned", [fullPath], clipboard?.paths ?? null);
-                      if (result?.action === "pinToSidebar") handlePinToggle(name);
-                      else if (result?.action === "refresh") { invalidateCache(fullPath); setLocalRefresh((k) => k + 1); }
+                      if (!result) return;
+                      switch (result.action) {
+                        case "newFolder": {
+                          try {
+                            const created = await window.electronAPI.newFolder(fullPath, "New Folder");
+                            if (created) { invalidateCache(fullPath); setLocalRefresh((k) => k + 1); onSelect(fullPath); }
+                          } catch (err) { await window.electronAPI.showAlert(`Cannot create folder:\n${err.message}`); }
+                          break;
+                        }
+                        case "newFile": {
+                          try {
+                            const created = await window.electronAPI.newFile(fullPath, "New File.txt");
+                            if (created) { invalidateCache(fullPath); setLocalRefresh((k) => k + 1); onSelect(fullPath); }
+                          } catch (err) { await window.electronAPI.showAlert(`Cannot create file:\n${err.message}`); }
+                          break;
+                        }
+                        case "openInTerminal": {
+                          window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: fullPath } }));
+                          break;
+                        }
+                        case "pinToSidebar": handlePinToggle(name); break;
+                        case "rename": {
+                          const oldName = fullPath.replace(/.*[\\/]/, "");
+                          const n = await ask("Rename to:", oldName);
+                          if (n && n !== oldName) {
+                            try {
+                              await window.electronAPI.rename(fullPath, n);
+                              invalidateCache(parentDir);
+                              setLocalRefresh((k) => k + 1);
+                            } catch (err) { await window.electronAPI.showAlert(`Cannot rename:\n${err.message}`); }
+                          }
+                          break;
+                        }
+                        case "delete": {
+                          const dname = fullPath.replace(/.*[\\/]/, "");
+                          const ok = await window.electronAPI.confirmDialog(`Move "${dname}" to Trash?`);
+                          if (ok) {
+                            try {
+                              await window.electronAPI.trashItem(fullPath, rootPath);
+                              invalidateCache(parentDir);
+                              setLocalRefresh((k) => k + 1);
+                            } catch (err) { await window.electronAPI.showAlert(`Cannot delete:\n${err.message}`); }
+                          }
+                          break;
+                        }
+                        case "duplicate": {
+                          try {
+                            await window.electronAPI.duplicate(fullPath);
+                            invalidateCache(parentDir);
+                            setLocalRefresh((k) => k + 1);
+                          } catch (err) { await window.electronAPI.showAlert(`Cannot duplicate:\n${err.message}`); }
+                          break;
+                        }
+                        case "copy": break;
+                        case "cut": break;
+                        case "paste": {
+                          if (!clipboard?.paths?.length) break;
+                          for (const src of clipboard.paths) {
+                            if (clipboard.mode === "copy") await window.electronAPI.copyItem(src, fullPath);
+                            else await window.electronAPI.moveItem(src, fullPath);
+                          }
+                          invalidateCache(fullPath);
+                          setLocalRefresh((k) => k + 1);
+                          break;
+                        }
+                        case "reveal": window.electronAPI.revealInExplorer(fullPath); break;
+                        case "copyPath": navigator.clipboard.writeText(fullPath); break;
+                        case "refresh": {
+                          invalidateCache(fullPath);
+                          invalidateCache(parentDir);
+                          setLocalRefresh((k) => k + 1);
+                          break;
+                        }
+                      }
                     }}
                   />
                 );

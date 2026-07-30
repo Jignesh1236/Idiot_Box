@@ -7,6 +7,8 @@ import "@xterm/xterm/css/xterm.css";
 const ACCENTS = [
   "#569cd6", "#ce9178", "#6a9955", "#dcdcaa",
   "#c586c0", "#d16969", "#4ec9b0", "#e5c07b",
+  "#f44747", "#6796e6", "#89d185", "#cca700",
+  "#b392f0", "#79b8ff", "#f97583", "#56b4e9",
 ];
 
 // ─── Custom xterm CSS overrides (injected once) ────────────────────────────

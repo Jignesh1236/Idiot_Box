@@ -28876,6 +28876,14 @@ ${msg}`);
           for (const p of targetPaths) window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: p } }));
           return;
         }
+        default: {
+          if (action.startsWith("openWithEditor:")) {
+            const editorId = action.slice("openWithEditor:".length);
+            for (const p of targetPaths) await window.electronAPI.openFile(p, editorId);
+            return;
+          }
+          break;
+        }
         case "openInTerminal": {
           for (const p of targetPaths) {
             const s15 = await window.electronAPI.stat(p);
@@ -29047,8 +29055,6 @@ ${msg}`);
           window.dispatchEvent(new CustomEvent("pin-changed"));
           return;
         }
-        default:
-          return;
       }
     }, [onNavigate, onSetSelectedItems, onClipboardChange, invalidateCache, loadEntries]);
     const handleRenameCommit = (0, import_react7.useCallback)(async (oldPath, newName) => {
@@ -29256,6 +29262,9 @@ ${msg}`);
       const toDrag = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("application/ppoo-paths", JSON.stringify(toDrag));
+      window.__ppooDragPaths = toDrag;
+      window.electronAPI.startNativeDrag(toDrag);
+      e.dataTransfer.setData("text/uri-list", toDrag.map((p) => "file:///" + p.replace(/\\/g, "/")).join("\r\n"));
       if (toDrag.length > 1) {
         const el2 = document.createElement("div");
         el2.textContent = String(toDrag.length);
@@ -29331,22 +29340,33 @@ ${msg}`);
       e.stopPropagation();
       const cp = currentPathRef.current;
       if (!cp) return;
-      const externalPaths = getExternalPaths(e);
-      if (externalPaths) {
-        const copied = await copyExternalFiles(externalPaths, cp);
+      const rp = rootPathRef.current;
+      let paths;
+      let isInternal = true;
+      try {
+        paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+      } catch {
+      }
+      if (!paths?.length && window.__ppooDragPaths?.length) {
+        paths = window.__ppooDragPaths;
+        window.__ppooDragPaths = null;
+      }
+      if (!paths?.length) {
+        const externalPaths = getExternalPaths(e);
+        if (externalPaths) {
+          paths = externalPaths;
+          isInternal = false;
+        }
+      }
+      if (!paths?.length) return;
+      if (!isInternal) {
+        const copied = await copyExternalFiles(paths, cp);
         if (copied.length) {
           invalidateCache(cp);
           await loadEntries();
         }
         return;
       }
-      let paths;
-      try {
-        paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-      } catch {
-        return;
-      }
-      if (!paths?.length) return;
       const pairs = [];
       const sourceParents = /* @__PURE__ */ new Set();
       for (const src of paths) {
@@ -29373,7 +29393,7 @@ ${msg}`);
         if (crumbsTimerRef.current) clearTimeout(crumbsTimerRef.current);
         crumbsTimerRef.current = setTimeout(() => {
           onNavigate(path);
-        }, 2e3);
+        }, 800);
       }
     }, [onNavigate]);
     const handleCrumbsDragLeave = (0, import_react7.useCallback)((path) => {
@@ -29393,22 +29413,32 @@ ${msg}`);
         crumbsTimerRef.current = null;
       }
       crumbsHoverRef.current = null;
-      const externalPaths = getExternalPaths(e);
-      if (externalPaths) {
-        const copied = await copyExternalFiles(externalPaths, path);
+      let paths;
+      let isInternal = true;
+      try {
+        paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+      } catch {
+      }
+      if (!paths?.length && window.__ppooDragPaths?.length) {
+        paths = window.__ppooDragPaths;
+        window.__ppooDragPaths = null;
+      }
+      if (!paths?.length) {
+        const externalPaths = getExternalPaths(e);
+        if (externalPaths) {
+          paths = externalPaths;
+          isInternal = false;
+        }
+      }
+      if (!paths?.length) return;
+      if (!isInternal) {
+        const copied = await copyExternalFiles(paths, path);
         if (copied.length) {
           invalidateCache(path);
           onNavigate(path);
         }
         return;
       }
-      let paths;
-      try {
-        paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-      } catch {
-        return;
-      }
-      if (!paths?.length) return;
       const pairs = [];
       const sourceParents = /* @__PURE__ */ new Set();
       const failedCrumb = [];
@@ -29444,7 +29474,7 @@ ${msg}`);
         if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
         expandTimerRef.current = setTimeout(() => {
           onNavigate(entry.path);
-        }, 2e3);
+        }, 800);
       }
     }, [onNavigate]);
     const handleDragLeave = (0, import_react7.useCallback)((e, entry) => {
@@ -29464,22 +29494,32 @@ ${msg}`);
         clearTimeout(expandTimerRef.current);
         expandTimerRef.current = null;
       }
-      const externalPaths = getExternalPaths(e);
-      if (externalPaths) {
-        const copied = await copyExternalFiles(externalPaths, entry.path);
+      let paths;
+      let isInternal = true;
+      try {
+        paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+      } catch {
+      }
+      if (!paths?.length && window.__ppooDragPaths?.length) {
+        paths = window.__ppooDragPaths;
+        window.__ppooDragPaths = null;
+      }
+      if (!paths?.length) {
+        const externalPaths = getExternalPaths(e);
+        if (externalPaths) {
+          paths = externalPaths;
+          isInternal = false;
+        }
+      }
+      if (!paths?.length) return;
+      if (!isInternal) {
+        const copied = await copyExternalFiles(paths, entry.path);
         if (copied.length) {
           invalidateCache(entry.path);
           onNavigate(entry.path);
         }
         return;
       }
-      let paths;
-      try {
-        paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
-      } catch {
-        return;
-      }
-      if (!paths?.length) return;
       const pairs = [];
       const sourceParents = /* @__PURE__ */ new Set();
       const failedDrop = [];
@@ -29727,7 +29767,7 @@ ${msg}`);
         }
         expandTimerRef.current = setTimeout(() => {
           if (!isOpen) onToggle(entry.path);
-        }, 2e3);
+        }, 800);
       }
     }, [entry.path, setDropTarget, isOpen, onToggle]);
     const handleDragLeave = (0, import_react8.useCallback)((e) => {
@@ -29748,6 +29788,12 @@ ${msg}`);
         expandTimerRef.current = null;
       }
       expandHoverRef.current = null;
+      if (window.__ppooDragPaths?.length) {
+        const paths = window.__ppooDragPaths;
+        window.__ppooDragPaths = null;
+        onDrop(entry.path, paths);
+        return;
+      }
       if (await onExternalDrop?.(e, entry.path)) return;
       try {
         const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
@@ -29843,7 +29889,8 @@ ${msg}`);
     showFolders,
     showFiles,
     showPreview,
-    onFileSelect
+    onFileSelect,
+    pushUndo
   }) => {
     const [rootChildren, setRootChildren] = (0, import_react8.useState)(null);
     const [dropTarget, setDropTarget] = (0, import_react8.useState)(null);
@@ -29868,6 +29915,7 @@ ${msg}`);
     }, [rootPath, childCache]);
     const rootName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).pop() : "";
     const handleExternalDrop = (0, import_react8.useCallback)(async (e, targetDir) => {
+      if (window.__ppooDragPaths?.length) return false;
       const dt2 = e.dataTransfer;
       if (!dt2) return false;
       const hasFiles = dt2.types?.includes("Files");
@@ -29932,6 +29980,12 @@ ${failed.join(", ")}`);
       e.preventDefault();
       e.stopPropagation();
       setDropTarget(null);
+      if (window.__ppooDragPaths?.length) {
+        const paths = window.__ppooDragPaths;
+        window.__ppooDragPaths = null;
+        onDrop(rootPath, paths);
+        return;
+      }
       if (await handleExternalDrop(e, rootPath)) return;
       try {
         const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
@@ -30019,7 +30073,8 @@ ${err.message}`);
           const n = await ask("Rename to:", oldName);
           if (n && n !== oldName) {
             try {
-              await window.electronAPI.rename(folderPath, n);
+              const newPath = await window.electronAPI.rename(folderPath, n);
+              if (pushUndo) pushUndo({ type: "rename", oldPath: folderPath, oldName, newPath: newPath || parentDir + (parentDir.includes("\\") ? "\\" : "/") + n, newName: n, parentDir });
               invalidateCache(parentDir);
               setLocalRefresh((k) => k + 1);
             } catch (err) {
@@ -30047,7 +30102,8 @@ ${err.message}`);
             const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
             if (ok) {
               try {
-                await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
+                const result2 = await window.electronAPI.trashItem(folderPath, findTrashRoot(folderPath));
+                if (pushUndo && result2?.trashId) pushUndo({ type: "delete", trashIds: [{ from: folderPath, trashId: result2.trashId }], parentDir, rootPath: findTrashRoot(folderPath) });
                 invalidateCache(parentDir);
                 setLocalRefresh((k) => k + 1);
               } catch (err) {
@@ -30128,7 +30184,8 @@ ${err.message}`);
           const n = await ask("Rename to:", oldName);
           if (n && n !== oldName) {
             try {
-              await window.electronAPI.rename(filePath, n);
+              const newPath = await window.electronAPI.rename(filePath, n);
+              if (pushUndo) pushUndo({ type: "rename", oldPath: filePath, oldName, newPath: newPath || parentDir + (parentDir.includes("\\") ? "\\" : "/") + n, newName: n, parentDir });
               invalidateCache(parentDir);
               setLocalRefresh((k) => k + 1);
             } catch (err) {
@@ -30156,7 +30213,8 @@ ${err.message}`);
             const ok = await window.electronAPI.confirmDialog(`Move "${name}" to Trash?`);
             if (ok) {
               try {
-                await window.electronAPI.trashItem(filePath, findTrashRoot(filePath));
+                const result2 = await window.electronAPI.trashItem(filePath, findTrashRoot(filePath));
+                if (pushUndo && result2?.trashId) pushUndo({ type: "delete", trashIds: [{ from: filePath, trashId: result2.trashId }], parentDir, rootPath: findTrashRoot(filePath) });
                 invalidateCache(parentDir);
                 setLocalRefresh((k) => k + 1);
               } catch (err) {
@@ -30187,6 +30245,13 @@ ${err.message}`);
         case "refresh": {
           invalidateCache(parentDir);
           setLocalRefresh((k) => k + 1);
+          break;
+        }
+        default: {
+          if (result.action.startsWith("openWithEditor:")) {
+            const editorId = result.action.slice("openWithEditor:".length);
+            await window.electronAPI.openFile(filePath, editorId);
+          }
           break;
         }
       }
@@ -30293,11 +30358,113 @@ ${failed.join(", ")}`);
             onContextMenu: async (e) => {
               e.preventDefault();
               e.stopPropagation();
+              if (fullPath !== selectedPath) onSelect(fullPath);
+              const parentDir = fullPath.replace(/[\\/][^\\/]+$/, "") || fullPath;
               const result = await window.electronAPI.showContextMenu("pinned", [fullPath], clipboard?.paths ?? null);
-              if (result?.action === "pinToSidebar") handlePinToggle(name);
-              else if (result?.action === "refresh") {
-                invalidateCache(fullPath);
-                setLocalRefresh((k) => k + 1);
+              if (!result) return;
+              switch (result.action) {
+                case "newFolder": {
+                  try {
+                    const created = await window.electronAPI.newFolder(fullPath, "New Folder");
+                    if (created) {
+                      invalidateCache(fullPath);
+                      setLocalRefresh((k) => k + 1);
+                      onSelect(fullPath);
+                    }
+                  } catch (err) {
+                    await window.electronAPI.showAlert(`Cannot create folder:
+${err.message}`);
+                  }
+                  break;
+                }
+                case "newFile": {
+                  try {
+                    const created = await window.electronAPI.newFile(fullPath, "New File.txt");
+                    if (created) {
+                      invalidateCache(fullPath);
+                      setLocalRefresh((k) => k + 1);
+                      onSelect(fullPath);
+                    }
+                  } catch (err) {
+                    await window.electronAPI.showAlert(`Cannot create file:
+${err.message}`);
+                  }
+                  break;
+                }
+                case "openInTerminal": {
+                  window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: fullPath } }));
+                  break;
+                }
+                case "pinToSidebar":
+                  handlePinToggle(name);
+                  break;
+                case "rename": {
+                  const oldName = fullPath.replace(/.*[\\/]/, "");
+                  const n = await ask("Rename to:", oldName);
+                  if (n && n !== oldName) {
+                    try {
+                      await window.electronAPI.rename(fullPath, n);
+                      invalidateCache(parentDir);
+                      setLocalRefresh((k) => k + 1);
+                    } catch (err) {
+                      await window.electronAPI.showAlert(`Cannot rename:
+${err.message}`);
+                    }
+                  }
+                  break;
+                }
+                case "delete": {
+                  const dname = fullPath.replace(/.*[\\/]/, "");
+                  const ok = await window.electronAPI.confirmDialog(`Move "${dname}" to Trash?`);
+                  if (ok) {
+                    try {
+                      await window.electronAPI.trashItem(fullPath, rootPath);
+                      invalidateCache(parentDir);
+                      setLocalRefresh((k) => k + 1);
+                    } catch (err) {
+                      await window.electronAPI.showAlert(`Cannot delete:
+${err.message}`);
+                    }
+                  }
+                  break;
+                }
+                case "duplicate": {
+                  try {
+                    await window.electronAPI.duplicate(fullPath);
+                    invalidateCache(parentDir);
+                    setLocalRefresh((k) => k + 1);
+                  } catch (err) {
+                    await window.electronAPI.showAlert(`Cannot duplicate:
+${err.message}`);
+                  }
+                  break;
+                }
+                case "copy":
+                  break;
+                case "cut":
+                  break;
+                case "paste": {
+                  if (!clipboard?.paths?.length) break;
+                  for (const src of clipboard.paths) {
+                    if (clipboard.mode === "copy") await window.electronAPI.copyItem(src, fullPath);
+                    else await window.electronAPI.moveItem(src, fullPath);
+                  }
+                  invalidateCache(fullPath);
+                  setLocalRefresh((k) => k + 1);
+                  break;
+                }
+                case "reveal":
+                  window.electronAPI.revealInExplorer(fullPath);
+                  break;
+                case "copyPath":
+                  navigator.clipboard.writeText(fullPath);
+                  break;
+                case "refresh": {
+                  invalidateCache(fullPath);
+                  invalidateCache(parentDir);
+                  setLocalRefresh((k) => k + 1);
+                  break;
+                }
               }
             }
           }
@@ -30811,7 +30978,8 @@ ${failedDrop.join(", ")}`);
         showFolders,
         showFiles,
         showPreview,
-        onFileSelect: handleSidebarFileSelect
+        onFileSelect: handleSidebarFileSelect,
+        pushUndo
       }
     ), /* @__PURE__ */ import_react10.default.createElement("div", { className: "pw-sidebar__resize", onMouseDown: onResizeStart })), /* @__PURE__ */ import_react10.default.createElement(
       ContentArea_default,
@@ -40017,7 +40185,15 @@ ${h2.join(`
     "#c586c0",
     "#d16969",
     "#4ec9b0",
-    "#e5c07b"
+    "#e5c07b",
+    "#f44747",
+    "#6796e6",
+    "#89d185",
+    "#cca700",
+    "#b392f0",
+    "#79b8ff",
+    "#f97583",
+    "#56b4e9"
   ];
   var XTERM_CUSTOM_CSS = `
 .xterm { height: 100%; padding: 0 6px; background: var(--bg-surface); }

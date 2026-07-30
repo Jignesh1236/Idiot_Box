@@ -394,6 +394,7 @@ const ProjectWindow = () => {
             showFiles={showFiles}
             showPreview={showPreview}
             onFileSelect={handleSidebarFileSelect}
+            pushUndo={pushUndo}
           />
           <div className="pw-sidebar__resize" onMouseDown={onResizeStart} />
         </div>

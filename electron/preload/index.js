@@ -2,6 +2,9 @@
 const { contextBridge, ipcRenderer, webUtils, clipboard } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  // ── Native file drag (outgoing to OS/external apps) ────────────────────
+  startNativeDrag: (paths) => ipcRenderer.sendSync("drag:startNative", paths),
+
   // ── Clipboard ─────────────────────────────────────────────────────────────
   clipboardRead:  ()  => clipboard.readText(),
   clipboardWrite: (t) => clipboard.writeText(t),

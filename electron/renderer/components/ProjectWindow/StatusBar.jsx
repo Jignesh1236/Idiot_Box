@@ -1,7 +1,5 @@
 import React from "react";
 
-const ZOOM_STEPS = [50, 75, 100, 125, 150, 200];
-
 const StatusBar = ({ selectedPath, itemCount, selectedCount, zoom, onZoom }) => {
   const pct = Math.round(zoom);
   return (

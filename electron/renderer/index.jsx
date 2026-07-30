@@ -10,7 +10,6 @@ import BrowserPanel from "./components/BrowserPanel.jsx";
 import ProjectPanel from "./components/ProjectPanel.jsx";
 import Panel5 from "./components/Panel5.jsx";
 import TerminalPanel from "./components/Terminal.jsx";
-import FileManagerPanel from "./components/FileManagerPanel.jsx";
 import BlankPanel from "./components/BlankPanel.jsx";
 
 const DEFAULT_JSON = {
@@ -43,8 +42,7 @@ const DEFAULT_JSON = {
             type: "tabset", weight: 35,
             children: [
               { type: "tab", name: "Project", component: "projectPanel" },
-                { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
-                { type: "tab", name: "File Manager", component: "fileManager", id: "filemanager-tab" },
+              { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
             ],
           },
         ],
@@ -64,7 +62,6 @@ const factory = (node) => {
     case "projectPanel":  return <ProjectPanel />;
     case "panel5":        return <Panel5 />;
     case "terminal":      return <TerminalPanel />;
-    case "fileManager":   return <FileManagerPanel />;
     case "blank":         return <BlankPanel />;
     default:              return null;
   }
@@ -106,6 +103,32 @@ const App = () => {
     const handler = () => { if (modelRef.current) modelRef.current.doAction(Actions.selectTab("terminal-tab")); };
     window.addEventListener("focus-terminal-tab", handler);
     return () => window.removeEventListener("focus-terminal-tab", handler);
+  }, []);
+
+  // Add a new terminal panel to the layout
+  useEffect(() => {
+    const handler = () => {
+      const m = modelRef.current;
+      if (!m) return;
+      // Find the terminal tab's parent tab set and add there
+      const terminalNode = m.getNodeById("terminal-tab");
+      const parentId = terminalNode ? terminalNode.getParent()?.getId() : null;
+      if (parentId) {
+        m.doAction(Actions.addNode({
+          type: "tab", component: "terminal", name: "Terminal", enableClose: true,
+        }, parentId, DockLocation.CENTER));
+      } else {
+        // Fallback: add at root
+        const root = m.getRoot();
+        if (root?.getId()) {
+          m.doAction(Actions.addNode({
+            type: "tab", component: "terminal", name: "Terminal", enableClose: true,
+          }, root.getId(), DockLocation.BOTTOM));
+        }
+      }
+    };
+    window.addEventListener("add-terminal-panel", handler);
+    return () => window.removeEventListener("add-terminal-panel", handler);
   }, []);
 
   // Reset panels to default layout
@@ -159,13 +182,10 @@ const App = () => {
                   }, node.getId(), DockLocation.CENTER));
                   break;
                 case "terminal":
-                  m.doAction(Actions.selectTab("terminal-tab"));
-                  window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
-                  break;
-                case "fileManager":
                   m.doAction(Actions.addNode({
-                    type: "tab", component: "fileManager", name: "File Manager", enableClose: true,
+                    type: "tab", component: "terminal", name: "Terminal", enableClose: true,
                   }, node.getId(), DockLocation.CENTER));
+                  window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
                   break;
                 default:
                   if (result.action.startsWith("port:")) {

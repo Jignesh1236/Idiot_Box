@@ -384,7 +384,6 @@ const ProjectWindow = () => {
           <SidebarTree
             rootPath={rootPath}
             selectedPath={selectedPath}
-            selectedItems={selectedItems}
             expandedSet={expandedSet}
             childCache={childCache}
             clipboard={clipboard}

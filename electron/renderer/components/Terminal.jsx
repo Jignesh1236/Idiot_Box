@@ -1,4 +1,4 @@
-// Terminal Panel — multi-tab terminal with right-side tab rail
+// Terminal Panel — custom multi-tab terminal with side tab bar
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -11,210 +11,72 @@ const ACCENTS = [
   "#b392f0", "#79b8ff", "#f97583", "#56b4e9",
 ];
 
-// ─── Injected CSS ─────────────────────────────────────────────────────────────
+// ─── Custom xterm CSS overrides (injected once) ────────────────────────────
 const XTERM_CUSTOM_CSS = `
-.xterm { height: 100%; padding: 0; background: transparent; }
-.xterm-screen,
-.xterm-viewport,
-.xterm-scroll-area,
-.xterm-helper-textarea { background: transparent !important; }
+.xterm { height: 100%; padding: 0 6px; background: var(--bg-surface); }
 .xterm-viewport { scrollbar-width: thin; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
 .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
-.xterm-cursor-block { opacity: 0.9; }
+.xterm-cursor { outline: none !important; }
+.xterm-cursor-block { background: var(--text-highlight) !important; opacity: 0.9; }
+.xterm-cursor-blink { animation: xterm-cursor-blink 1s step-end infinite; }
+@keyframes xterm-cursor-blink { 50% { opacity: 0; } }
 .xterm-selection div { background: var(--selection) !important; opacity: 0.5; }
 .xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
+.term-xterm .xterm { pointer-events: auto; }
+.term-xterm .xterm-viewport { pointer-events: auto; }
 `;
 
+// ─── Terminal panel CSS ═══════════════════════════════════════════════════
 const TERMINAL_PANEL_CSS = `
-/* ── Panel shell ───────────────────────────────────────────────────── */
-.term-panel {
-  display: flex;
-  flex-direction: row;
-  height: 100%;
-  background: var(--bg-surface);
-  overflow: hidden;
-}
+.term-panel { display:flex; flex-direction:row; height:100%; background:var(--bg-surface); }
+.term-content { flex:1; position:relative; overflow:hidden; z-index:1; }
+.term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; }
+.term-empty-center { flex-direction:column; gap:14px; }
+.term-empty-btn { background:var(--bg-active); color:var(--text-primary); border:1px solid #3c3c3c; border-radius:4px; padding:6px 20px; cursor:pointer; font-size:12px; }
+.term-empty-btn:hover { background:#383838; }
+.term-pane { position:absolute; inset:0; z-index:2; }
+.term-status { display:flex; align-items:center; gap:6px; padding:3px 10px; background:var(--bg-raised); border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); flex-shrink:0; }
+.term-status-icon { flex-shrink:0; }
+.term-status-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-/* ── Vertical right tab rail ───────────────────────────────────────── */
-.term-tabs {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  flex-shrink: 0;
-  background: var(--bg-raised);
-  border-left: 1px solid var(--border);
-  overflow-y: auto;
-  overflow-x: hidden;
-  width: 46px;
-  min-width: 46px;
-  scrollbar-width: none;
-}
-.term-tabs::-webkit-scrollbar { display: none; }
-
-/* ── Individual tab ─────────────────────────────────────────────────── */
-.term-tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 4px;
-  min-height: 92px;
-  cursor: pointer;
-  font-size: 11.5px;
-  user-select: none;
-  border-bottom: 1px solid var(--border);
-  border-left: 2px solid transparent;
-  flex-shrink: 0;
-  transition: background 0.08s;
-  color: var(--text-secondary);
-  box-sizing: border-box;
-}
-.term-tab:hover { background: var(--bg-hover); }
-.term-tab--active {
-  background: var(--bg-surface);
-  color: var(--text-primary);
-}
-
-.term-tab-icon { flex-shrink: 0; opacity: 0.55; }
-.term-tab--active .term-tab-icon { opacity: 1; }
-
-.term-tab-name {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  max-height: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-}
-.term-tab-input {
-  width: 24px;
-  min-width: 24px;
-  min-height: 72px;
-  font-size: 11.5px;
-  background: var(--bg-header);
-  border: 1px solid var(--accent-light);
-  border-radius: 2px;
-  color: var(--text-highlight);
-  padding: 6px 2px;
-  outline: none;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  text-align: center;
-}
-
-.term-tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-  flex-shrink: 0;
-  color: var(--text-secondary);
-  visibility: hidden;
-  flex-shrink: 0;
-}
-.term-tab:hover .term-tab-close,
-.term-tab--active .term-tab-close { visibility: visible; }
-.term-tab-close:hover { background: #505050; color: #e0e0e0; }
-
-/* ── Add-new-tab button at the end of tab bar ───────────────────────── */
-.term-tab-add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 40px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1;
-  flex-shrink: 0;
-  margin-top: auto;
-  transition: background 0.08s, color 0.08s;
-  border-top: 1px solid var(--border);
-}
-.term-tab-add:hover { background: var(--bg-hover); color: var(--text-highlight); }
-
-/* ── Terminal content area ──────────────────────────────────────────── */
-.term-content {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  min-height: 0;
-  min-width: 0;
-  background: var(--bg-surface);
-}
-.term-pane {
-  position: absolute;
-  inset: 0;
-}
-.term-pane-inner {
-  position: absolute;
-  inset: 0;
-  padding: 8px 10px 8px 8px;
-  background: var(--bg-surface);
-}
-.term-xterm-host {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg-surface);
-  border-radius: 6px;
-}
-
-/* ── Empty / no-project states ─────────────────────────────────────── */
-.term-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-muted);
-  font-size: 13px;
-  flex-direction: column;
-  gap: 14px;
-  text-align: center;
-  padding: 0 20px;
-}
-.term-new-btn {
-  background: var(--bg-active);
-  color: var(--text-primary);
-  border: 1px solid #3c3c3c;
-  border-radius: 4px;
-  padding: 6px 20px;
-  cursor: pointer;
-  font-size: 12px;
-  margin-top: 4px;
-}
-.term-new-btn:hover { background: #383838; }
+/* ── Side tab bar ─────────────────────────────────────── */
+.term-tabs { width:120px; flex-shrink:0; z-index:3; background:var(--bg-raised); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+.term-tab { display:flex; align-items:center; gap:4px; padding:6px 6px 6px 8px; cursor:pointer; font-size:12px; user-select:none; transition:background 0.08s; }
+.term-tab:hover { background:var(--bg-hover); }
+.term-tab--active { background:var(--bg-surface); }
+.term-tab-icon { flex-shrink:0; }
+.term-tab-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.term-tab-input { flex:1; min-width:0; font-size:12px; background:var(--bg-header); border:1px solid var(--accent-light); border-radius:2px; color:var(--text-highlight); padding:1px 4px; outline:none; }
+.term-tab-close { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:3px; cursor:pointer; font-size:10px; line-height:16px; flex-shrink:0; color:var(--text-secondary); visibility:hidden; }
+.term-tab:hover .term-tab-close { visibility:visible; }
+.term-tab-close:hover { background:var(--scrollbar); color:var(--text-highlight); }
+.term-tab-add { display:flex; align-items:center; justify-content:center; padding:8px 0; cursor:pointer; color:var(--text-secondary); font-size:18px; line-height:1; transition:background 0.08s,color 0.08s; }
+.term-tab-add:hover { background:var(--bg-hover); color:var(--text-highlight); }
 `;
 
-const TerminalStyle = () => (
-  <style>{XTERM_CUSTOM_CSS}{TERMINAL_PANEL_CSS}</style>
-);
+const TerminalStyle = () => <style>{XTERM_CUSTOM_CSS}{TERMINAL_PANEL_CSS}</style>;
 
-// ─── TabContent — owns one xterm.js instance + pty shell ─────────────────────
-// FIX: receives `isActive` so it can call fit() when tab becomes visible
+// ─── TabContent — owns one xterm.js instance + shell ────────────────────────
+// FIX: receives `isActive` prop so it can call fit() when becoming visible
 const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
-  const elRef    = useRef(null);
-  const termRef  = useRef(null);
-  const fitRef   = useRef(null);
+  const elRef = useRef(null);
+  const termRef = useRef(null);
+  const fitRef = useRef(null);
   const [initError, setInitError] = useState(null);
+  const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "";
 
   const handleContextMenu = useCallback(async (e) => {
     e.preventDefault();
     e.stopPropagation();
     const term = termRef.current;
     let selText = term?.getSelection() || "";
-    if (!selText) { try { selText = document.getSelection()?.toString() || ""; } catch {} }
-    const result = await window.electronAPI.showTerminalContextMenu(!!selText);
+    // fallback: try DOM selection in case xterm's API returns empty
+    if (!selText) { try { const ds = document.getSelection()?.toString(); if (ds) selText = ds; } catch {} }
+    const hasSelection = !!selText;
+    const result = await window.electronAPI.showTerminalContextMenu(hasSelection);
     if (!result) return;
     switch (result.action) {
       case "copy": {
@@ -229,39 +91,40 @@ const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
         if (text) window.electronAPI.writeToTerminal(tabId, text);
         break;
       }
-      case "kill":    window.electronAPI.closeTerminal(tabId);       break;
-      case "restart": window.electronAPI.openTerminal(tabId, cwd);  break;
+      case "kill": window.electronAPI.closeTerminal(tabId); break;
+      case "restart": window.electronAPI.openTerminal(tabId, cwd); break;
     }
   }, [tabId, cwd]);
 
-  // ── Initialize xterm + pty ────────────────────────────────────────────────
+  // ── Initialize xterm + pty shell ──────────────────────────────────────────
   useEffect(() => {
-    let term, fit, ro, el, rafId;
+    let term;
+    let fit;
+    let ro;
+    let el;
+    let rafId;
     let disposed = false;
 
     (async () => {
       try {
         term = new Terminal({
-          cursorBlink:       true,
-          cursorStyle:       "block",
-          fontSize:          13,
-          fontFamily:        'Consolas, "Courier New", monospace',
+          cursorBlink: true,
+          cursorStyle: "block",
+          fontSize:   13,
+          fontFamily: 'Consolas, "Courier New", monospace',
           allowTransparency: true,
           theme: {
-            background:                 "#1e1e1e",
-            foreground:                 "#c8c8c8",
-            cursor:                     "#c8c8c8",
-            cursorAccent:               "#1e1e1e",
-            selectionBackground:        "#2c4f6e",
-            selectionInactiveBackground:"#264f78",
-            black:          "#000000", red:     "#f44747",
-            green:          "#4ec9b0", yellow:  "#dcdcaa",
-            blue:           "#569cd6", magenta: "#c586c0",
-            cyan:           "#9cdcfe", white:   "#d4d4d4",
-            brightBlack:    "#444",    brightRed:     "#f44747",
-            brightGreen:    "#4ec9b0", brightYellow:  "#dcdcaa",
-            brightBlue:     "#569cd6", brightMagenta: "#c586c0",
-            brightCyan:     "#9cdcfe", brightWhite:   "#e0e0e0",
+            background: "#1e1e1e",
+            foreground: "#c8c8c8",
+            cursor:     "#c8c8c8",
+            cursorAccent: "#1e1e1e",
+            selectionBackground: "#2c4f6e",
+            selectionInactiveBackground: "#264f78",
+            black: "#000000", red: "#f44747", green: "#4ec9b0", yellow: "#dcdcaa",
+            blue:  "#569cd6", magenta: "#c586c0", cyan: "#9cdcfe", white: "#d4d4d4",
+            brightBlack: "#444", brightRed: "#f44747", brightGreen: "#4ec9b0",
+            brightYellow: "#dcdcaa", brightBlue: "#569cd6", brightMagenta: "#c586c0",
+            brightCyan: "#9cdcfe", brightWhite: "#e0e0e0",
           },
         });
 
@@ -269,20 +132,27 @@ const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
         term.loadAddon(fit);
 
         el = elRef.current;
-        if (el) { el.innerHTML = ""; term.open(el); }
+        if (el) {
+          el.innerHTML = "";
+          term.open(el);
+        }
 
-        term.onData((data) => window.electronAPI.writeToTerminal(tabId, data));
+        term.onData((data) => {
+          window.electronAPI.writeToTerminal(tabId, data);
+        });
 
         termRef.current = term;
         fitRef.current  = fit;
+
         writersRef.current[tabId] = (data) => term.write(data);
 
         ro = new ResizeObserver(() => {
           if (fit && term) {
             try {
               fit.fit();
-              if (term.cols > 0 && term.rows > 0)
+              if (term.cols > 0 && term.rows > 0) {
                 window.electronAPI.resizeTerminal(tabId, term.cols, term.rows);
+              }
             } catch {}
           }
         });
@@ -292,8 +162,9 @@ const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
           if (!disposed && fit && term) {
             try {
               fit.fit();
-              if (term.cols > 0 && term.rows > 0)
+              if (term.cols > 0 && term.rows > 0) {
                 window.electronAPI.resizeTerminal(tabId, term.cols, term.rows);
+              }
             } catch {}
           }
         });
@@ -307,7 +178,7 @@ const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
     return () => {
       disposed = true;
       if (rafId !== undefined) cancelAnimationFrame(rafId);
-      // FIX: remove writer before dispose so no stale writes
+      // FIX: explicitly remove writer before dispose so no stale writes occur
       delete writersRef.current[tabId];
       window.electronAPI.closeTerminal(tabId);
       if (term) { try { term.dispose(); } catch {} }
@@ -315,19 +186,22 @@ const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
       fitRef.current  = null;
       if (ro && el) ro.disconnect();
     };
-  }, [tabId, cwd]); // eslint-disable-line
+  }, [tabId, cwd]);
 
-  // FIX: when tab becomes visible, re-fit (was hidden with display:none)
+  // FIX: when this tab becomes active (visible), re-fit the terminal
+  // The tab was hidden with display:none, so ResizeObserver didn't fire.
   useEffect(() => {
     if (!isActive) return;
+    // Use a small RAF so the DOM has time to become visible first
     const id = requestAnimationFrame(() => {
       const fit  = fitRef.current;
       const term = termRef.current;
       if (fit && term) {
         try {
           fit.fit();
-          if (term.cols > 0 && term.rows > 0)
+          if (term.cols > 0 && term.rows > 0) {
             window.electronAPI.resizeTerminal(tabId, term.cols, term.rows);
+          }
         } catch {}
       }
     });
@@ -336,42 +210,46 @@ const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
 
   if (initError) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" }}>
         Terminal init error: {initError}
       </div>
     );
   }
 
   return (
-    <div
-      className="term-pane-inner"
-      onContextMenu={handleContextMenu}
-    >
-      <div
-        ref={elRef}
-        className="term-xterm-host"
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div ref={elRef} className="term-xterm"
+        style={{ flex: 1, minHeight: 0 }}
+        onContextMenu={handleContextMenu}
       />
+      <div className="term-status">
+        <svg className="term-status-icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="3" width="12" height="10" rx="1" stroke="#777" strokeWidth="1.2" fill="none" />
+          <path d="M5 7L7 9L5 11" stroke="#777" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9 7L11 9L9 11" stroke="#777" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="term-status-path">{dirName}</span>
+      </div>
     </div>
   );
 };
 
-// ─── Main TerminalPanel ───────────────────────────────────────────────────────
+// ─── Main TerminalPanel ─────────────────────────────────────────────────────
 const TerminalPanel = () => {
-  const [tabs,         setTabs]         = useState([]);
-  const [activeTabId,  setActiveTabId]  = useState(null);
-  const [projectOpen,  setProjectOpen]  = useState(false);
+  const [tabs, setTabs] = useState([]);
+  const [activeTabId, setActiveTabId] = useState(null);
+  const [projectOpen, setProjectOpen] = useState(false);
   const [renamingTabId, setRenamingTabId] = useState(null);
-  const renameRef  = useRef(null);
-  const nextId     = useRef(1);
-  const projPath   = useRef(null);
+  const renameRef = useRef(null);
+  const nextId    = useRef(1);
+  const projPath  = useRef(null);
   const writersRef = useRef({});
-  const tabsRef    = useRef(tabs);
-  tabsRef.current  = tabs;
-  const activeRef  = useRef(activeTabId);
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const activeRef = useRef(activeTabId);
   activeRef.current = activeTabId;
 
-  // ── Dispatch shell output to xterm instances ──────────────────────────
+  // ── Central dispatcher: shell output → xterm ──────────────────────────
   useEffect(() => {
     const unsub = window.electronAPI.onTerminalData(({ tabId, data }) => {
       const w = writersRef.current[tabId];
@@ -380,10 +258,13 @@ const TerminalPanel = () => {
     return unsub;
   }, []);
 
+  // ── Central dispatcher: shell exit → xterm message ────────────────────
   useEffect(() => {
     const unsub = window.electronAPI.onTerminalExit(({ tabId, code }) => {
       const w = writersRef.current[tabId];
-      if (w) try { w(`\x1b[33m\r\n[Process exited with code ${code}]\x1b[0m\r\n`); } catch {}
+      if (w) {
+        try { w(`\x1b[33m\r\n[Process exited with code ${code}]\x1b[0m\r\n`); } catch {}
+      }
     });
     return unsub;
   }, []);
@@ -392,32 +273,37 @@ const TerminalPanel = () => {
   const createTab = useCallback((cwd) => {
     const dir = cwd || projPath.current;
     if (!dir) return;
-    const num  = nextId.current++;
+    const num = nextId.current++;
     const id   = `term_${num}`;
-    const name = cwd
+    const explicitCwd = cwd !== undefined;
+    const name = explicitCwd
       ? dir.replace(/[\\/]$/, "").split(/[\\/]/).pop() || `Terminal ${num}`
       : `Terminal ${num}`;
     setTabs((prev) => [...prev, { id, name, cwd: dir }]);
     setActiveTabId(id);
   }, []);
 
-  // FIX: also clean up writersRef when closing
+  // FIX: clean up writersRef when closing a tab so no stale writes
   const closeTab = useCallback((tabId) => {
     delete writersRef.current[tabId];
     setTabs((prev) => {
-      const idx  = prev.findIndex((t) => t.id === tabId);
+      const idx = prev.findIndex((t) => t.id === tabId);
       const next = prev.filter((t) => t.id !== tabId);
-      if (activeRef.current === tabId)
+      if (activeRef.current === tabId) {
         setActiveTabId(next[Math.min(idx, next.length - 1)]?.id || null);
+      }
       return next;
     });
   }, []);
 
-  // ── Inline rename ─────────────────────────────────────────────────────
+  // ── Inline rename ────────────────────────────────────────────────────
   const startRename = useCallback((tabId, currentName) => {
     setRenamingTabId(tabId);
     requestAnimationFrame(() => {
-      if (renameRef.current) { renameRef.current.value = currentName; renameRef.current.select(); }
+      if (renameRef.current) {
+        renameRef.current.value = currentName;
+        renameRef.current.select();
+      }
     });
   }, []);
 
@@ -428,9 +314,11 @@ const TerminalPanel = () => {
     setRenamingTabId(null);
   }, [renamingTabId]);
 
-  const cancelRename = useCallback(() => setRenamingTabId(null), []);
+  const cancelRename = useCallback(() => {
+    setRenamingTabId(null);
+  }, []);
 
-  // ── Tab context menu ──────────────────────────────────────────────────
+  // ── Context menu ──────────────────────────────────────────────────────
   const handleTabContextMenu = useCallback(async (e, tabId) => {
     e.preventDefault();
     const result = await window.electronAPI.showTerminalTabContextMenu();
@@ -456,7 +344,7 @@ const TerminalPanel = () => {
     }
   }, [closeTab, startRename]);
 
-  // ── "Open in Terminal" from file explorer ─────────────────────────────
+  // ── Listen for "Open in Terminal" from file explorer ──────────────────
   useEffect(() => {
     const handler = (e) => {
       const dir = e.detail.dir;
@@ -486,7 +374,7 @@ const TerminalPanel = () => {
     const u3 = window.electronAPI.onMenuEvent("menu:closeProject", () => {
       projPath.current = null;
       setProjectOpen(false);
-      // FIX: close all ptys before clearing tabs
+      // FIX: close all pty processes before clearing tabs
       for (const id of Object.keys(writersRef.current)) {
         try { window.electronAPI.closeTerminal(id); } catch {}
       }
@@ -503,37 +391,28 @@ const TerminalPanel = () => {
     <div className="term-panel">
       <TerminalStyle />
 
-      {/* ── Terminal content area ────────────────────────────────────── */}
+      {/* ── Terminal content area ─────────────────────────────────── */}
       <div className="term-content">
         {!projectOpen ? (
           <div className="term-empty">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="3" width="20" height="16" rx="2" stroke="#444" strokeWidth="1.2"/>
-              <path d="M7 9l3 3-3 3" stroke="#444" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M13 15h4" stroke="#444" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-            <span>Open a project to use the terminal</span>
+            Open a project to use the terminal
           </div>
         ) : tabs.length === 0 ? (
-          <div className="term-empty">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="3" width="20" height="16" rx="2" stroke="#444" strokeWidth="1.2"/>
-              <path d="M7 9l3 3-3 3" stroke="#444" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M13 15h4" stroke="#444" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-            <span>No open terminals</span>
-            <button className="term-new-btn" onClick={() => createTab()}>
-              + New Terminal
+          <div className="term-empty term-empty-center">
+            <div className="term-empty">No open terminals</div>
+            <button
+              onClick={() => createTab()}
+              className="term-empty-btn"
+            >
+              + Create Terminal
             </button>
           </div>
         ) : (
           tabs.map((tab) => (
-            <div
-              key={tab.id}
-              className="term-pane"
+            <div key={tab.id} className="term-pane"
               style={{ display: tab.id === activeTabId ? "block" : "none" }}
             >
-              {/* FIX: isActive triggers fit() when tab becomes visible */}
+              {/* FIX: pass isActive so TabContent can fit() when becoming visible */}
               <TabContent
                 tabId={tab.id}
                 cwd={tab.cwd}
@@ -545,32 +424,31 @@ const TerminalPanel = () => {
         )}
       </div>
 
-      {/* ── Right tab rail ───────────────────────────────────────────── */}
-      {projectOpen && tabs.length > 0 && (
+      {/* ── Side tab bar (right side, like VS Code) ───────────────── */}
+      {projectOpen && (
         <div className="term-tabs">
           {tabs.map((tab, i) => {
             const active = tab.id === activeTabId;
-            const accent = ACCENTS[i % ACCENTS.length];
             return (
               <div
                 key={tab.id}
+                data-term-tab=""
                 onClick={() => setActiveTabId(tab.id)}
                 onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
                 className={"term-tab" + (active ? " term-tab--active" : "")}
-                style={{ borderLeftColor: active ? accent : "transparent" }}
+                style={{ borderLeft: `3px solid ${active ? ACCENTS[i % ACCENTS.length] : "transparent"}` }}
               >
-                <svg className="term-tab-icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <rect x="2" y="2.5" width="12" height="11" rx="1" stroke={active ? accent : "#666"} strokeWidth="1.2" fill="none"/>
-                  <path d="M5 7L7 9L5 11" stroke={active ? accent : "#666"} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M9 11h3" stroke={active ? accent : "#666"} strokeWidth="1.2" strokeLinecap="round"/>
+                <svg className="term-tab-icon" width="10" height="10" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="3" width="12" height="10" rx="1" stroke={active ? "#aaa" : "#666"} strokeWidth="1.2" fill="none" />
+                  <path d="M5 7L7 9L5 11" stroke={active ? "#aaa" : "#666"} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M9 7L11 9L9 11" stroke={active ? "#aaa" : "#666"} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-
                 {renamingTabId === tab.id ? (
                   <input
                     ref={renameRef}
                     defaultValue={tab.name}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter")  commitRename();
+                      if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") cancelRename();
                       e.stopPropagation();
                     }}
@@ -580,21 +458,23 @@ const TerminalPanel = () => {
                   />
                 ) : (
                   <span
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      startRename(tab.id, tab.name);
+                    }}
                     className="term-tab-name"
-                    onDoubleClick={(e) => { e.stopPropagation(); startRename(tab.id, tab.name); }}
                   >
                     {tab.name}
                   </span>
                 )}
-
                 <span
-                  className="term-tab-close"
                   onClick={(e) => {
                     e.stopPropagation();
+                    // FIX: tell pty to close, then clean up tab + writers
                     try { window.electronAPI.closeTerminal(tab.id); } catch {}
                     closeTab(tab.id);
                   }}
-                  title="Close terminal"
+                  className="term-tab-close"
                 >
                   ✕
                 </span>
@@ -603,14 +483,15 @@ const TerminalPanel = () => {
           })}
 
           <div
+            onClick={() => window.dispatchEvent(new CustomEvent("add-terminal-panel"))}
+            title="New Terminal Panel"
             className="term-tab-add"
-            onClick={() => createTab()}
-            title="New Terminal (Ctrl+`)"
           >
             +
           </div>
         </div>
       )}
+
     </div>
   );
 };

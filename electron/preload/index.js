@@ -3,9 +3,7 @@ const { contextBridge, ipcRenderer, webUtils, clipboard } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   // ── Native file drag (outgoing to OS/external apps) ────────────────────
-  // Use the synchronous queueing signal so the main process can pick up
-  // the paths when the HTML5 drag operation begins (will-start-drag).
-  startNativeDrag: (paths) => ipcRenderer.sendSync("drag:startNative", paths),
+  startNativeDrag: (paths) => ipcRenderer.send("drag:startNative", paths),
 
   // ── Clipboard ─────────────────────────────────────────────────────────────
   clipboardRead:  ()  => clipboard.readText(),

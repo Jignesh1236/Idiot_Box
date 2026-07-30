@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import VscodeIcon from "../shared/VscodeIcon.jsx";
-import { useInputDialog } from "../shared/InputDialog.jsx";
+import VscodeIcon from "../../shared/VscodeIcon.jsx";
+import { useInputDialog } from "../../shared/InputDialog.jsx";
 import { PreviewIcon } from "./ContentArea.jsx";
 
 const ArrowSvg = () => (

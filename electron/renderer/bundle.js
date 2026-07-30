@@ -28121,7 +28121,7 @@
     }
   };
 
-  // electron/renderer/components/MediaViewer.jsx
+  // electron/renderer/components/MediaViewer/index.jsx
   var import_react2 = __toESM(require_react());
   var TEXT_EXTS = [".txt", ".md", ".json", ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".py", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".log", ".sh", ".bat", ".ps1", ".sql", ".rb", ".php", ".c", ".cpp", ".h", ".hpp", ".java", ".rs", ".go", ".toml"];
   var IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico"];
@@ -28275,7 +28275,7 @@
   };
   var MediaViewer_default = MediaViewer;
 
-  // electron/renderer/components/BrowserPanel.jsx
+  // electron/renderer/components/Browser/index.jsx
   var import_react3 = __toESM(require_react());
   var LOCK_ICON = "M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm-2 6V5a2 2 0 1 1 4 0v2H6z";
   var UNLOCK_ICON = "M8 1a4 4 0 0 1 4 4v1h-1V5a3 3 0 0 0-5.7-1.37l-.78-.62A4 4 0 0 1 8 1zm-5.65.09l12 14-.7.6L1.65 1.7zM6 7.49l-1.82.01a1 1 0 0 0-.18 0v3.85L2.35 9.7l-.7.6L4 13.2V14a1 1 0 0 0 1 1h6.15l-1-1H5v-4.5l1.85.01zm4.56-.57A1 1 0 0 1 12 7.5V8h1a1 1 0 0 1 1 1v3.15l-1-1V9h-1.44z";
@@ -28509,15 +28509,15 @@
       }
     ), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-add-actions" }, /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-btn browser__ext-btn--primary", onClick: handleExtAdd }, "Add"), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-btn", onClick: () => setExtAddOpen(false) }, "Cancel"))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-list" }, extensions.length === 0 && /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-empty" }, "No extensions added yet"), extensions.map((ex) => /* @__PURE__ */ import_react3.default.createElement("div", { key: ex.id, className: "browser__ext-item" }, /* @__PURE__ */ import_react3.default.createElement("label", { className: "browser__ext-toggle" }, /* @__PURE__ */ import_react3.default.createElement("input", { type: "checkbox", checked: ex.enabled, onChange: () => handleExtToggle(ex.id) }), /* @__PURE__ */ import_react3.default.createElement("span", { className: "browser__ext-toggle-slider" })), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-info" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-name" }, ex.name), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__ext-type" }, ex.type.toUpperCase())), /* @__PURE__ */ import_react3.default.createElement("button", { className: "browser__ext-del", onClick: () => handleExtDelete(ex.id), title: "Delete extension" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "10", height: "10", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M4 4L12 12M12 4L4 12" })))))))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "browser__view-wrap" }, /* @__PURE__ */ import_react3.default.createElement("webview", { className: "browser__view", ref: webviewRefCb, src: navUrl, allowpopups: true, allowfullscreen: true })));
   };
-  var BrowserPanel_default = BrowserPanel;
+  var Browser_default = BrowserPanel;
 
-  // electron/renderer/components/ProjectPanel.jsx
+  // electron/renderer/components/Project/index.jsx
   var import_react11 = __toESM(require_react());
 
-  // electron/renderer/components/ProjectWindow/index.jsx
+  // electron/renderer/components/Project/window/index.jsx
   var import_react10 = __toESM(require_react());
 
-  // electron/renderer/components/ProjectWindow/SidebarTree.jsx
+  // electron/renderer/components/Project/window/SidebarTree.jsx
   var import_react8 = __toESM(require_react());
 
   // electron/renderer/components/shared/VscodeIcon.jsx
@@ -28612,7 +28612,7 @@
     return { dialog, ask };
   };
 
-  // electron/renderer/components/ProjectWindow/ContentArea.jsx
+  // electron/renderer/components/Project/window/ContentArea.jsx
   var import_react7 = __toESM(require_react());
 
   // electron/renderer/components/shared/useSettings.jsx
@@ -28636,7 +28636,7 @@
   };
   var useSettings_default = useSettings;
 
-  // electron/renderer/components/ProjectWindow/ContentArea.jsx
+  // electron/renderer/components/Project/window/ContentArea.jsx
   var IcoFolder = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z" }));
   var IcoFile = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4Zm5.5 1.5v3A1.5 1.5 0 0 0 11 6h3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5Z" }));
   var IcoEye = () => /* @__PURE__ */ import_react7.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z" }), /* @__PURE__ */ import_react7.default.createElement("path", { d: "M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" }));
@@ -29698,7 +29698,7 @@ ${msg}`);
   };
   var ContentArea_default = ContentArea;
 
-  // electron/renderer/components/ProjectWindow/SidebarTree.jsx
+  // electron/renderer/components/Project/window/SidebarTree.jsx
   var ArrowSvg = () => /* @__PURE__ */ import_react8.default.createElement("svg", { width: "8", height: "8", viewBox: "0 0 8 8", fill: "currentColor" }, /* @__PURE__ */ import_react8.default.createElement("path", { d: "M2 1l4 3-4 3V1z" }));
   var TreeRow = ({
     label,
@@ -30590,7 +30590,7 @@ ${err.message}`);
   };
   var SidebarTree_default = SidebarTree;
 
-  // electron/renderer/components/ProjectWindow/StatusBar.jsx
+  // electron/renderer/components/Project/window/StatusBar.jsx
   var import_react9 = __toESM(require_react());
   var StatusBar = ({ selectedPath, itemCount, selectedCount, zoom, onZoom }) => {
     const pct = Math.round(zoom);
@@ -30610,7 +30610,7 @@ ${err.message}`);
   };
   var StatusBar_default = StatusBar;
 
-  // electron/renderer/components/ProjectWindow/index.jsx
+  // electron/renderer/components/Project/window/index.jsx
   var SIDEBAR_MIN = 120;
   var SIDEBAR_MAX = 400;
   var SIDEBAR_DEFAULT = 180;
@@ -31067,21 +31067,21 @@ ${failedDrop.join(", ")}`);
       }
     ));
   };
-  var ProjectWindow_default = ProjectWindow;
+  var window_default = ProjectWindow;
 
-  // electron/renderer/components/ProjectPanel.jsx
+  // electron/renderer/components/Project/index.jsx
   var ProjectPanel = () => {
-    return /* @__PURE__ */ import_react11.default.createElement(ProjectWindow_default, null);
+    return /* @__PURE__ */ import_react11.default.createElement(window_default, null);
   };
-  var ProjectPanel_default = ProjectPanel;
+  var Project_default = ProjectPanel;
 
-  // electron/renderer/components/Panel5.jsx
+  // electron/renderer/components/Panel5/index.jsx
   var Panel5 = () => {
     return /* @__PURE__ */ React.createElement("div", { className: "panel" });
   };
   var Panel5_default = Panel5;
 
-  // electron/renderer/components/Terminal.jsx
+  // electron/renderer/components/Terminal/index.jsx
   var import_react12 = __toESM(require_react());
 
   // node_modules/@xterm/xterm/lib/xterm.mjs
@@ -40223,7 +40223,7 @@ ${h2.join(`
     }
   };
 
-  // electron/renderer/components/Terminal.jsx
+  // electron/renderer/components/Terminal/index.jsx
   var ACCENTS = [
     "#569cd6",
     "#ce9178",
@@ -40714,11 +40714,11 @@ ${h2.join(`
   };
   var Terminal_default = TerminalPanel;
 
-  // electron/renderer/components/BlankPanel.jsx
+  // electron/renderer/components/Blank/index.jsx
   var BlankPanel = () => {
     return /* @__PURE__ */ React.createElement("div", { className: "panel", style: { display: "flex", alignItems: "center", justifyContent: "center", color: "#555", fontSize: 13 } }, "Empty Panel");
   };
-  var BlankPanel_default = BlankPanel;
+  var Blank_default = BlankPanel;
 
   // electron/renderer/index.jsx
   var DEFAULT_JSON = {
@@ -40772,15 +40772,15 @@ ${h2.join(`
       case "mediaViewer":
         return /* @__PURE__ */ import_react13.default.createElement(MediaViewer_default, null);
       case "panel3":
-        return /* @__PURE__ */ import_react13.default.createElement(BrowserPanel_default, { config: node.getConfig(), nodeId: node.getId() });
+        return /* @__PURE__ */ import_react13.default.createElement(Browser_default, { config: node.getConfig(), nodeId: node.getId() });
       case "projectPanel":
-        return /* @__PURE__ */ import_react13.default.createElement(ProjectPanel_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Project_default, null);
       case "panel5":
         return /* @__PURE__ */ import_react13.default.createElement(Panel5_default, null);
       case "terminal":
         return /* @__PURE__ */ import_react13.default.createElement(Terminal_default, null);
       case "blank":
-        return /* @__PURE__ */ import_react13.default.createElement(BlankPanel_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Blank_default, null);
       default:
         return null;
     }

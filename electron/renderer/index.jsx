@@ -5,12 +5,12 @@ import "./variables.css";
 import "flexlayout-react/style/dark.css";
 import "./layout.css";
 
-import MediaViewer from "./components/MediaViewer.jsx";
-import BrowserPanel from "./components/BrowserPanel.jsx";
-import ProjectPanel from "./components/ProjectPanel.jsx";
-import Panel5 from "./components/Panel5.jsx";
-import TerminalPanel from "./components/Terminal.jsx";
-import BlankPanel from "./components/BlankPanel.jsx";
+import MediaViewer from "./components/MediaViewer/index.jsx";
+import BrowserPanel from "./components/Browser/index.jsx";
+import ProjectPanel from "./components/Project/index.jsx";
+import Panel5 from "./components/Panel5/index.jsx";
+import TerminalPanel from "./components/Terminal/index.jsx";
+import BlankPanel from "./components/Blank/index.jsx";
 
 const DEFAULT_JSON = {
   global: {

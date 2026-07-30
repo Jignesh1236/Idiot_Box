@@ -1161,7 +1161,7 @@ body,
   background: var(--text-inverse);
 }
 
-/* electron/renderer/components/ProjectWindow/project-window.css */
+/* electron/renderer/components/Project/window/project-window.css */
 .pw-root {
   display: flex;
   flex-direction: column;

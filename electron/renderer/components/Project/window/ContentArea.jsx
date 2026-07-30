@@ -1,8 +1,8 @@
 import React, {
   useState, useEffect, useCallback, useMemo, useRef,
 } from "react";
-import VscodeIcon  from "../shared/VscodeIcon.jsx";
-import useSettings from "../shared/useSettings.jsx";
+import VscodeIcon  from "../../shared/VscodeIcon.jsx";
+import useSettings from "../../shared/useSettings.jsx";
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
 const IcoFolder  = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.56 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z"/></svg>);

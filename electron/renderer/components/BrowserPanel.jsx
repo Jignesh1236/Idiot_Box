@@ -5,7 +5,6 @@ const LOCK_ICON = "M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0
 const UNLOCK_ICON = "M8 1a4 4 0 0 1 4 4v1h-1V5a3 3 0 0 0-5.7-1.37l-.78-.62A4 4 0 0 1 8 1zm-5.65.09l12 14-.7.6L1.65 1.7zM6 7.49l-1.82.01a1 1 0 0 0-.18 0v3.85L2.35 9.7l-.7.6L4 13.2V14a1 1 0 0 0 1 1h6.15l-1-1H5v-4.5l1.85.01zm4.56-.57A1 1 0 0 1 12 7.5V8h1a1 1 0 0 1 1 1v3.15l-1-1V9h-1.44z";
 const LOCAL_ICON = "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm-1 12.93A6 6 0 0 1 2 8c0-.33.03-.66.07-1H4v1h2v1H5v1h1v2l1 1zm5.1-3.83A4.9 4.9 0 0 0 13 8c0-2.5-1.83-4.55-4.2-4.96L9 4v1H7V4h-.44l3.55 5.1zm-9.4.14A5 5 0 0 1 2 8c0 1.72.87 3.23 2.2 4.14l.83-1.04z";
 const PUZZLE_ICON = "M12.5 2A2.5 2.5 0 0 0 10 4.5c0 .28.05.55.14.8L8.8 6.65a2.77 2.77 0 0 0-.8-.15H6.5v1.5h1.5c.77 0 1.5.28 2.07.86l.79.79-.79.79a2.78 2.78 0 0 0-.85 2.01v1.5h1.5v-1.5c0-.28.05-.55.14-.8l1.35-1.35c.24.09.51.14.79.14a2.5 2.5 0 0 0 0-5zM3 5.5A1.5 1.5 0 0 1 4.5 4H6V2H4.5a3.5 3.5 0 0 0-3.5 3.5V7h2V5.5zM1 8v4.5A3.5 3.5 0 0 0 4.5 16H7v-2H4.5A1.5 1.5 0 0 1 3 12.5V8H1z";
-const PLUS_ICON = "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm1 8H7v2h1V9h2V8H8V6H7v2H5v1h2v2h1V9z";
 
 let extIdCounter = 1;
 const newExtId = () => "ext_" + Date.now() + "_" + (extIdCounter++);
@@ -13,25 +12,36 @@ const newExtId = () => "ext_" + Date.now() + "_" + (extIdCounter++);
 const BrowserPanel = (props) => {
   const { nodeId, config } = props || {};
   const initialUrl = config?.url || "https://www.google.com";
-  const [url, setUrl] = useState(initialUrl);
-  const [inputValue, setInputValue] = useState(initialUrl);
-  const [canGoBack, setCanGoBack] = useState(false);
-  const [canGoForward, setCanGoForward] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const [lockOpen, setLockOpen] = useState(false);
-  const [barHidden, setBarHidden] = useState(false);
-  const [popupStyle, setPopupStyle] = useState({});
-  const [extOpen, setExtOpen] = useState(false);
-  const [extAddOpen, setExtAddOpen] = useState(false);
-  const [extensions, setExtensions] = useState([]);
-  const [newExtName, setNewExtName] = useState("");
-  const [newExtType, setNewExtType] = useState("css");
-  const [newExtCode, setNewExtCode] = useState("");
-  const webviewRef = useRef(null);
-  const attachedRef = useRef(false);
-  const lockRef = useRef(null);
-  const extLoadedRef = useRef(false);
+
+  // FIX: `navUrl` is the URL the webview should load (user-initiated navigation only).
+  // `inputValue` tracks the address bar and is updated on every page navigation event.
+  // We deliberately do NOT update `navUrl` when the webview navigates on its own
+  // (clicks, redirects) — that would change the `src` attribute, causing a reload loop.
+  const [navUrl,      setNavUrl]      = useState(initialUrl);
+  const [inputValue,  setInputValue]  = useState(initialUrl);
+  const [displayUrl,  setDisplayUrl]  = useState(initialUrl); // actual current page URL
+  const [canGoBack,   setCanGoBack]   = useState(false);
+  const [canGoForward,setCanGoForward]= useState(false);
+  const [isLoading,   setIsLoading]   = useState(false);
+  const [focused,     setFocused]     = useState(false);
+  const [lockOpen,    setLockOpen]    = useState(false);
+  const [barHidden,   setBarHidden]   = useState(false);
+  const [popupStyle,  setPopupStyle]  = useState({});
+  const [extOpen,     setExtOpen]     = useState(false);
+  const [extAddOpen,  setExtAddOpen]  = useState(false);
+  const [extensions,  setExtensions]  = useState([]);
+  const [newExtName,  setNewExtName]  = useState("");
+  const [newExtType,  setNewExtType]  = useState("css");
+  const [newExtCode,  setNewExtCode]  = useState("");
+  const webviewRef    = useRef(null);
+  const attachedRef   = useRef(false);
+  const lockRef       = useRef(null);
+
+  // FIX: keep a ref to the latest `extensions` array so the did-finish-load
+  // listener always injects the current set, even if extensions changed after
+  // the listener was first attached. This prevents stale-closure bugs.
+  const extensionsRef = useRef(extensions);
+  useEffect(() => { extensionsRef.current = extensions; }, [extensions]);
 
   // Load extensions on mount
   useEffect(() => {
@@ -44,9 +54,10 @@ const BrowserPanel = (props) => {
     window.electronAPI.writeExtensions(ex);
   }, []);
 
+  // Derive display properties from the current page URL (displayUrl), not navUrl
   let hostname = "";
   let protocol = "";
-  try { const u = new URL(url); hostname = u.hostname; protocol = u.protocol; } catch {}
+  try { const u = new URL(displayUrl); hostname = u.hostname; protocol = u.protocol; } catch {}
 
   const isLocal = !hostname || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname.startsWith("192.168.") || hostname.startsWith("10.");
   const isHttps = protocol === "https:";
@@ -58,13 +69,16 @@ const BrowserPanel = (props) => {
     let fixed = u.trim();
     if (!fixed) return;
     if (/^https?:\/\//i.test(fixed)) {
+      // already has scheme
     } else if (/^[^\s]+\.[^\s]+/.test(fixed) || fixed.startsWith("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(fixed)) {
       fixed = "https://" + fixed;
     } else {
       fixed = "https://www.google.com/search?q=" + encodeURIComponent(fixed);
     }
-    setUrl(fixed);
+    // FIX: update navUrl to change the webview src (user-initiated navigation)
+    setNavUrl(fixed);
     setInputValue(fixed);
+    setDisplayUrl(fixed);
     setLockOpen(false);
   }, []);
 
@@ -72,28 +86,38 @@ const BrowserPanel = (props) => {
     if (e.key === "Enter") goToUrl(inputValue);
   }, [inputValue, goToUrl]);
 
-  // Inject enabled extensions into webview
+  // FIX: inject extensions using the ref so we always use the latest list
   const injectExtensions = useCallback((wv) => {
-    const currentUrl = wv.getURL();
-    const enabled = extensions.filter((ex) => ex.enabled && ex.code.trim());
+    const enabled = extensionsRef.current.filter((ex) => ex.enabled && ex.code.trim());
     for (const ex of enabled) {
       try {
         if (ex.type === "css") wv.insertCSS(ex.code);
         else wv.executeJavaScript(ex.code);
       } catch {}
     }
-  }, [extensions]);
+  }, []); // no deps needed — reads from ref
 
+  // FIX: attach listeners only once per webview element.
+  // Use `injectExtensions` via stable callback (reads extensionsRef internally).
   const attachListeners = useCallback((wv) => {
     if (attachedRef.current) return;
     attachedRef.current = true;
-    const onStart = () => setIsLoading(true);
-    const onStop = () => setIsLoading(false);
+
+    const onStart    = () => setIsLoading(true);
+    const onStop     = () => setIsLoading(false);
+
+    // FIX: onNavigate updates the address bar and navigation buttons, but does
+    // NOT update navUrl/setNavUrl. Updating navUrl would change the webview's
+    // `src` attribute, causing the webview to reload — a navigation loop.
     const onNavigate = () => {
-      setInputValue(wv.getURL()); setUrl(wv.getURL());
+      const current = wv.getURL();
+      setInputValue(current);
+      setDisplayUrl(current);
       try { setCanGoBack(wv.canGoBack()); setCanGoForward(wv.canGoForward()); } catch {}
     };
+
     const onLoaded = () => injectExtensions(wv);
+
     const onTitle = (e) => {
       const m = window.__flexModel?.current;
       if (m) {
@@ -104,6 +128,7 @@ const BrowserPanel = (props) => {
         }
       }
     };
+
     const onFavicon = (e) => {
       const favicons = e.favicons;
       if (favicons && favicons.length > 0) {
@@ -117,18 +142,27 @@ const BrowserPanel = (props) => {
         }
       }
     };
-    wv.addEventListener("did-start-loading", onStart);
-    wv.addEventListener("did-stop-loading", onStop);
-    wv.addEventListener("did-navigate", onNavigate);
+
+    wv.addEventListener("did-start-loading",    onStart);
+    wv.addEventListener("did-stop-loading",     onStop);
+    wv.addEventListener("did-navigate",         onNavigate);
     wv.addEventListener("did-navigate-in-page", onNavigate);
-    wv.addEventListener("did-finish-load", onLoaded);
-    wv.addEventListener("page-title-updated", onTitle);
+    wv.addEventListener("did-finish-load",      onLoaded);
+    wv.addEventListener("page-title-updated",   onTitle);
     wv.addEventListener("page-favicon-updated", onFavicon);
     setIsLoading(false);
   }, [injectExtensions, nodeId]);
 
+  // FIX: reset attachedRef when webview unmounts so listeners re-attach on remount
   const webviewRefCb = useCallback((el) => {
-    if (el) { webviewRef.current = el; attachListeners(el); }
+    if (el) {
+      webviewRef.current = el;
+      attachListeners(el);
+    } else {
+      // webview unmounted — reset so we re-attach on next mount
+      attachedRef.current = false;
+      webviewRef.current  = null;
+    }
   }, [attachListeners]);
 
   const handleLockClick = useCallback((e) => {
@@ -211,12 +245,12 @@ const BrowserPanel = (props) => {
             <div className="browser__lock-popup-item">
               <span className="browser__lock-popup-label">Connection</span>
               <span className="browser__lock-popup-value" style={{ color: iconColor }}>
-                {isLocal ? "Local" : (isHttps ? "Secure" : "Not secure")} ({isLocal ? hostname : (isHttps ? "HTTPS" : "HTTP")})
+                {isLocal ? "Local" : (isHttps ? "Secure" : "Not secure")} ({isLocal ? (hostname || "local") : (isHttps ? "HTTPS" : "HTTP")})
               </span>
             </div>
             <div className="browser__lock-popup-item">
               <span className="browser__lock-popup-label">URL</span>
-              <span className="browser__lock-popup-value" style={{ wordBreak: "break-all" }}>{url}</span>
+              <span className="browser__lock-popup-value" style={{ wordBreak: "break-all" }}>{displayUrl}</span>
             </div>
             {hostname && (
               <div className="browser__lock-popup-item">
@@ -282,7 +316,8 @@ const BrowserPanel = (props) => {
       )}
 
       <div className="browser__view-wrap">
-        <webview className="browser__view" ref={webviewRefCb} src={url} allowpopups allowfullscreen />
+        {/* FIX: src={navUrl} — only changes on user-initiated navigation, never on did-navigate */}
+        <webview className="browser__view" ref={webviewRefCb} src={navUrl} allowpopups allowfullscreen />
       </div>
     </div>
   );

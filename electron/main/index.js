@@ -1,11 +1,85 @@
 // Main process entry point
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage } = require("electron");
 const path    = require("path");
 const fs      = require("fs");
 const net     = require("net");
+const zlib    = require("zlib");
 const { spawn } = require("child_process");
 const chokidar = require("chokidar");
 const pty     = require("node-pty");
+
+// ─── Native drag icon ─────────────────────────────────────────────────────────
+// Build a minimal 16×16 RGBA PNG at startup to use as the cursor image for
+// outgoing native file-drag operations.  startDrag({ files, icon }) requires
+// a NativeImage on every platform; omitting it silently breaks the drag.
+function buildDragIcon() {
+  const W = 16, H = 16;
+  // CRC-32 helper (needed for valid PNG chunks)
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c;
+    }
+    return t;
+  })();
+  const crc32 = (buf) => {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const t = Buffer.from(type, "ascii");
+    const len = Buffer.allocUnsafe(4); len.writeUInt32BE(data.length, 0);
+    const crcVal = Buffer.allocUnsafe(4); crcVal.writeUInt32BE(crc32(Buffer.concat([t, data])), 0);
+    return Buffer.concat([len, t, data, crcVal]);
+  };
+
+  // Build raw scanlines (filter-byte 0 = None, then RGBA per pixel)
+  const scanlines = [];
+  for (let y = 0; y < H; y++) {
+    const row = Buffer.alloc(1 + W * 4, 0); // all transparent
+    row[0] = 0; // filter type
+    for (let x = 0; x < W; x++) {
+      // Simple document-page shape
+      const inBody = x >= 2 && x <= 12 && y >= 1 && y <= 14;
+      const inFold = x >= 9 && y <= 4 && (x + y) >= 13;
+      if (inBody && !inFold) {
+        const i = 1 + x * 4;
+        row[i] = 180; row[i+1] = 180; row[i+2] = 195; row[i+3] = 210;
+      } else if (inFold) {
+        const i = 1 + x * 4;
+        row[i] = 130; row[i+1] = 130; row[i+2] = 150; row[i+3] = 180;
+      }
+    }
+    scanlines.push(row);
+  }
+  const rawData    = Buffer.concat(scanlines);
+  const compressed = zlib.deflateSync(rawData);
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4);
+  ihdr[8] = 8; ihdr[9] = 6; // bit depth 8, RGBA
+
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), // PNG sig
+    chunk("IHDR", ihdr),
+    chunk("IDAT", compressed),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+
+  try {
+    return nativeImage.createFromBuffer(png);
+  } catch {
+    // Last-resort fallback: 1×1 transparent PNG (universally valid)
+    return nativeImage.createFromDataURL(
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    );
+  }
+}
+
+const FILE_DRAG_ICON = buildDragIcon();
 
 // ─── Long path helper (Windows) ──────────────────────────────────────────────
 const toLongPath = (p) => {
@@ -297,9 +371,36 @@ ipcMain.handle("fs:moveItem", async (_e, { srcPath, destDir }) => {
   const lpSrc = toLongPath(srcPath);
   const lpDst = toLongPath(destDir);
   try {
+    const resolvedSrc = path.resolve(srcPath);
+    const resolvedDstDir = path.resolve(destDir);
+    const srcName = path.basename(srcPath);
+    const srcParent = path.dirname(resolvedSrc);
+
+    if (!fs.existsSync(lpSrc)) {
+      throw new Error(`source does not exist`);
+    }
+    if (!fs.existsSync(lpDst)) {
+      throw new Error(`destination folder does not exist`);
+    }
+    if (srcParent === resolvedDstDir) {
+      throw new Error(`item is already in this folder`);
+    }
+
+    const srcStat = fs.statSync(lpSrc);
+    if (srcStat.isDirectory()) {
+      const normalizedSrc = resolvedSrc.endsWith(path.sep) ? resolvedSrc : `${resolvedSrc}${path.sep}`;
+      const normalizedDst = resolvedDstDir.endsWith(path.sep) ? resolvedDstDir : `${resolvedDstDir}${path.sep}`;
+      if (resolvedDstDir === resolvedSrc || normalizedDst.startsWith(normalizedSrc)) {
+        throw new Error(`cannot move a folder into itself`);
+      }
+    }
+
     const dest = path.join(lpDst, path.basename(lpSrc));
+    if (fs.existsSync(dest)) {
+      throw new Error(`"${srcName}" already exists in the destination folder`);
+    }
     fs.renameSync(lpSrc, dest);
-    return path.join(destDir, path.basename(srcPath));
+    return path.join(destDir, srcName);
   } catch (err) {
     throw new Error(`Cannot move "${path.basename(srcPath)}": ${err.code === "EBUSY" ? "item is in use by another process" : err.message}`);
   }
@@ -675,6 +776,7 @@ ipcMain.handle("panel:addMenu", async (event) => {
     const items = [
       { label: "Browser", click: () => act("browser") },
       { label: "Terminal", click: () => act("terminal") },
+      { label: "File Manager", click: () => act("fileManager") },
     ];
     if (ports.length) {
       items.push({ type: "separator" });
@@ -690,12 +792,64 @@ ipcMain.handle("panel:addMenu", async (event) => {
 });
 
 // ─── Native file drag ──────────────────────────────────────────────────────────
-// renderer stores paths here via sync IPC; will-start-drag reads them
+// Keep the requested native export payload pending and let Electron's
+// will-start-drag lifecycle trigger the real OS drag. This preserves the
+// renderer's internal drag/drop flow while still enabling external export.
 let pendingNativeDragPaths = null;
 
-ipcMain.on("drag:startNative", (event, paths) => {
-  pendingNativeDragPaths = paths;
-  event.returnValue = true;
+ipcMain.on("drag:startNative", (event, rawPaths) => {
+  try {
+    const paths = Array.isArray(rawPaths)
+      ? [...new Set(rawPaths.filter((p) => typeof p === "string" && p && fs.existsSync(toLongPath(p))))]
+      : [];
+    // #region debug-point C:main-start-drag
+    fetch("http://127.0.0.1:7778/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"media-viewer-drop",runId:"pre-fix",hypothesisId:"C",location:"main/index.js:drag:startNative",msg:"[DEBUG] Main process queued native drag payload",data:{rawCount:Array.isArray(rawPaths)?rawPaths.length:0,validCount:paths.length},ts:Date.now()})}).catch(()=>{});
+    // #endregion
+    pendingNativeDragPaths = paths.length ? paths : null;
+    event.returnValue = { ok: !!pendingNativeDragPaths, count: paths.length };
+  } catch (err) {
+    pendingNativeDragPaths = null;
+    console.error("[native-drag] queue failed:", err?.message || err);
+    event.returnValue = { ok: false, reason: err?.message || "Failed to queue native drag" };
+  }
+});
+
+// Backwards-compatible IPC: start native drag directly (renderer -> main)
+// Usage: ipcRenderer.send('start-native-drag', pathOrPaths)
+ipcMain.on("start-native-drag", (event, rawPaths) => {
+  try {
+    const paths = Array.isArray(rawPaths)
+      ? [...new Set(rawPaths.filter((p) => typeof p === "string" && p && fs.existsSync(toLongPath(p))))]
+      : (typeof rawPaths === "string" && rawPaths && fs.existsSync(toLongPath(rawPaths))) ? [rawPaths] : [];
+
+    if (!paths.length) {
+      event.returnValue = { ok: false, reason: "No valid paths provided" };
+      return;
+    }
+
+    // Try to load an explicit drag icon file from renderer assets if present
+    let iconImage = FILE_DRAG_ICON;
+    try {
+      const candidate = path.join(__dirname, "../renderer/assets/drag-icon.svg");
+      if (fs.existsSync(candidate)) {
+        const ni = nativeImage.createFromPath(candidate);
+        if (!ni.isEmpty()) iconImage = ni;
+      }
+    } catch (e) {}
+
+    // If single file, pass `file`, otherwise `files` for multiple
+    try {
+      if (paths.length === 1) event.sender.startDrag({ file: paths[0], icon: iconImage });
+      else                   event.sender.startDrag({ files: paths, icon: iconImage });
+      event.returnValue = { ok: true, count: paths.length };
+    } catch (err) {
+      console.error("[native-drag] startDrag failed:", err?.message || err);
+      event.returnValue = { ok: false, reason: err?.message || "startDrag failed" };
+    }
+  } catch (err) {
+    console.error("[native-drag] handler failed:", err?.message || err);
+    event.returnValue = { ok: false, reason: err?.message || "handler error" };
+  }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -779,13 +933,18 @@ function createWindow() {
   if (wasMaximized) win.maximize();
   win.show();
 
-  // ── Native file drag: outgoing drag to OS/external apps ──────────────
   win.webContents.on("will-start-drag", (event) => {
     const paths = pendingNativeDragPaths;
-    if (paths && paths.length) {
-      event.preventDefault();
-      pendingNativeDragPaths = null;
-      win.webContents.startDrag({ files: paths });
+    pendingNativeDragPaths = null;
+    if (!paths?.length) return;
+    event.preventDefault();
+    // #region debug-point C:will-start-drag
+    fetch("http://127.0.0.1:7778/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"media-viewer-drop",runId:"pre-fix",hypothesisId:"C",location:"main/index.js:will-start-drag",msg:"[DEBUG] Main process will-start-drag fired",data:{count:paths.length},ts:Date.now()})}).catch(()=>{});
+    // #endregion
+    try {
+      win.webContents.startDrag(paths.length === 1 ? { file: paths[0], icon: FILE_DRAG_ICON } : { files: paths, icon: FILE_DRAG_ICON });
+    } catch (err) {
+      console.error("[native-drag] startDrag failed:", err?.message || err);
     }
   });
 

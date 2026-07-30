@@ -84,6 +84,18 @@ const FolderNode = ({
     onContextMenu(entry.path);
   }, [entry.path, onContextMenu]);
 
+  const handleDragStart = useCallback((e) => {
+    // Do NOT call preventDefault() here — allow the browser's drag lifecycle
+    // to proceed so the main process can perform `startDrag` inside
+    // the `will-start-drag` event after we synchronously queued paths.
+    e.stopPropagation();
+    try { e.dataTransfer.effectAllowed = "copy"; } catch {}
+
+    const isMulti = selectedPaths && selectedPaths.size > 1 && selectedPaths.has(entry.path);
+    const pathsToSend = isMulti ? [...selectedPaths] : [entry.path];
+    try { window.electronAPI.startNativeDrag(pathsToSend); } catch (err) { /* ignore */ }
+  }, [entry.path, selectedPaths]);
+
   const mightHaveChildren = !hasLoaded || (children && children.length > 0);
 
   return (
@@ -95,6 +107,8 @@ const FolderNode = ({
           isCut      ? "pe-node__row--cut"      : "",
         ].filter(Boolean).join(" ")}
         style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        draggable={!isRenaming}
+        onDragStart={handleDragStart}
         onClick={handleClick}
         onDoubleClick={handleDblClick}
         onContextMenu={handleCtxMenu}

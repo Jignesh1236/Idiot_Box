@@ -483,6 +483,10 @@
   outline-offset: -1px;
 }
 
+.pw-item--dragging {
+  opacity: 0.5;
+}
+
 /* ── pw-content must be relative for rubber band ────────────────────────── */
 .pw-content { position: relative; }
 

@@ -129,8 +129,9 @@ const ProjectWindow = () => {
       switch (op.type) {
         case "move": {
           for (const { from, to } of op.pairs) {
-            const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
-            const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
+            const srcParent  = from.replace(/[\\/][^\\/]+$/, "") || from;
+            const destParent = to.replace(/[\\/][^\\/]+$/, "")   || to;
+            // Undo: move the file from its destination back to the original parent dir
             try { await window.electronAPI.moveItem(to, srcParent); } catch (err) {
               await window.electronAPI.showAlert(`Undo move failed:\n${err.message}`);
               continue;
@@ -187,9 +188,11 @@ const ProjectWindow = () => {
       switch (op.type) {
         case "move": {
           for (const { from, to } of op.pairs) {
-            const srcParent = from.replace(/[\\/][^\\/]+$/, "") || from;
+            const srcParent  = from.replace(/[\\/][^\\/]+$/, "") || from;
+            // FIX: `to` is the full destination path (file/folder name included).
+            // moveItem expects a *directory*, so extract the parent from `to`.
             const destParent = to.replace(/[\\/][^\\/]+$/, "") || to;
-            try { await window.electronAPI.moveItem(from, to); } catch (err) {
+            try { await window.electronAPI.moveItem(from, destParent); } catch (err) {
               await window.electronAPI.showAlert(`Redo move failed:\n${err.message}`);
               continue;
             }
@@ -381,9 +384,11 @@ const ProjectWindow = () => {
           <SidebarTree
             rootPath={rootPath}
             selectedPath={selectedPath}
+            selectedItems={selectedItems}
             expandedSet={expandedSet}
             childCache={childCache}
             clipboard={clipboard}
+            onClipboardChange={setClipboard}
             onSelect={handleSidebarSelect}
             onToggle={handleToggle}
             loadChildren={loadChildren}

@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import VscodeIcon from "../shared/VscodeIcon.jsx";
 import { useInputDialog } from "../shared/InputDialog.jsx";
+import {
+  hasAnyDraggedPayload,
+  resolveInternalDraggedPaths,
+  scheduleDraggedPathsCleanup,
+  setDraggedPaths,
+} from "../shared/dragDrop.js";
 import { PreviewIcon } from "./ContentArea.jsx";
 
 const ArrowSvg = () => (
@@ -12,6 +18,7 @@ const ArrowSvg = () => (
 // ── TreeRow ───────────────────────────────────────────────────────────────────
 const TreeRow = ({
   label, iconEl, depth, hasChildren, isOpen, isSelected, isDropTarget,
+  draggable = false, onDragStart, onDragEnd,
   onClick, onDoubleClick, onArrowClick, onDragOver, onDragLeave, onDrop, onContextMenu,
 }) => (
   <div
@@ -21,6 +28,9 @@ const TreeRow = ({
       isDropTarget ? "pw-tree-row--drop-target" : "",
     ].filter(Boolean).join(" ")}
     style={{ paddingLeft: `${6 + depth * 14}px` }}
+    draggable={draggable}
+    onDragStart={onDragStart}
+    onDragEnd={onDragEnd}
     onClick={onClick}
     onDoubleClick={onDoubleClick}
     onDragOver={onDragOver}
@@ -52,6 +62,7 @@ const FolderNode = ({
   dropTarget, setDropTarget, onContextMenu,
   showHidden, showFolders, showFiles, showPreview,
   onFileClick, onFileDblClick, onFileCtxMenu,
+  onItemDragStart, onItemDragEnd,
   onExternalDrop,
 }) => {
   const isOpen     = expandedSet.has(entry.path);
@@ -93,13 +104,15 @@ const FolderNode = ({
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
     if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
     expandHoverRef.current = null;
-    // Internal native drag (from startDrag) fallback
-    if (window.__ppooDragPaths?.length) {
-      const paths = window.__ppooDragPaths; window.__ppooDragPaths = null;
-      onDrop(entry.path, paths); return;
+    // #region debug-point C:sidebar-folder-drop
+    fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"drag-drop-broken",runId:"pre-fix",hypothesisId:"C",location:"SidebarTree.jsx:FolderNode.handleDrop",msg:"[DEBUG] Sidebar folder drop received",data:{targetPath:entry.path,hasWindowPaths:!!window.__ppooDragPaths?.length,types:Array.from(e.dataTransfer?.types||[])},ts:Date.now()})}).catch(()=>{});
+    // #endregion
+    const internalPaths = resolveInternalDraggedPaths(e, { consumeGlobal: true });
+    if (internalPaths?.length) {
+      onDrop(entry.path, internalPaths);
+      return;
     }
     if (await onExternalDrop?.(e, entry.path)) return;
-    try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(entry.path, paths); } catch {}
   }, [entry.path, onDrop, setDropTarget, onExternalDrop]);
   const handleCtxMenu   = useCallback((e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(entry.path, e.shiftKey); }, [entry.path, onContextMenu]);
 
@@ -113,6 +126,9 @@ const FolderNode = ({
         isOpen={isOpen}
         isSelected={isSelected}
         isDropTarget={dropTarget === entry.path}
+        draggable={true}
+        onDragStart={(e) => onItemDragStart?.(e, entry.path)}
+        onDragEnd={onItemDragEnd}
         onClick={() => onSelect(entry.path)}
         onDoubleClick={() => onToggle(entry.path)}
         onArrowClick={() => onToggle(entry.path)}
@@ -145,6 +161,8 @@ const FolderNode = ({
           onFileClick={onFileClick}
           onFileDblClick={onFileDblClick}
           onFileCtxMenu={onFileCtxMenu}
+          onItemDragStart={onItemDragStart}
+          onItemDragEnd={onItemDragEnd}
           onExternalDrop={onExternalDrop}
         />
       ) : (
@@ -157,6 +175,9 @@ const FolderNode = ({
           isOpen={false}
           isSelected={selectedPath === child.path}
           isDropTarget={false}
+          draggable={true}
+          onDragStart={(e) => onItemDragStart?.(e, child.path)}
+          onDragEnd={onItemDragEnd}
           onClick={() => onFileClick?.(child.path)}
           onDoubleClick={() => onFileDblClick?.(child.path)}
           onArrowClick={() => {}}
@@ -175,9 +196,9 @@ const FolderNode = ({
 
 // ── SidebarTree root ──────────────────────────────────────────────────────────
 const SidebarTree = ({
-  rootPath, selectedPath, expandedSet, childCache,
+  rootPath, selectedPath, selectedItems, expandedSet, childCache,
   onSelect, onToggle, loadChildren, onDrop,
-  clipboard, invalidateCache,
+  clipboard, invalidateCache, onClipboardChange,
   showHidden, showFolders, showFiles, showPreview,
   onFileSelect, pushUndo,
 }) => {
@@ -265,24 +286,25 @@ const SidebarTree = ({
   const handleRootDragLeave = ()  => setDropTarget((p) => p === rootPath ? null : p);
   const handleRootDrop      = async (e) => {
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
-    // Internal native drag (from startDrag) fallback
-    if (window.__ppooDragPaths?.length) {
-      const paths = window.__ppooDragPaths; window.__ppooDragPaths = null;
-      onDrop(rootPath, paths); return;
+    // #region debug-point C:sidebar-root-drop
+    fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"drag-drop-broken",runId:"pre-fix",hypothesisId:"C",location:"SidebarTree.jsx:handleRootDrop",msg:"[DEBUG] Sidebar root drop received",data:{targetPath:rootPath,hasWindowPaths:!!window.__ppooDragPaths?.length,types:Array.from(e.dataTransfer?.types||[])},ts:Date.now()})}).catch(()=>{});
+    // #endregion
+    const internalPaths = resolveInternalDraggedPaths(e, { consumeGlobal: true });
+    if (internalPaths?.length) {
+      onDrop(rootPath, internalPaths);
+      return;
     }
     // External files
     if (await handleExternalDrop(e, rootPath)) return;
-    // Internal drag
-    try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(rootPath, paths); } catch {}
   };
 
   // ── Blank-area (sidebar empty space) drop handlers ────────────────────────
   const handleSidebarDragOver = useCallback((e) => {
     if (!rootPath) return;
-    if (!e.dataTransfer.types?.includes("Files")) return;
+    if (!hasAnyDraggedPayload(e)) return;
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = "copy";
+    e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
   }, [rootPath]);
 
   const handleSidebarDrop = useCallback(async (e) => {
@@ -310,6 +332,28 @@ const SidebarTree = ({
     await window.electronAPI.writePinConfig(rootPath, next);
     window.dispatchEvent(new CustomEvent("pin-changed"));
   }, [rootPath, pinned]);
+
+  const handleItemDragStart = useCallback((e, itemPath) => {
+    if (!itemPath) {
+      e.preventDefault();
+      return;
+    }
+    const selected = selectedItems instanceof Set ? selectedItems : new Set();
+    const toDrag = selected.size > 1 && selected.has(itemPath) ? [...selected] : [itemPath];
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("application/ppoo-paths", JSON.stringify(toDrag));
+    e.dataTransfer.setData("text/uri-list", toDrag.map((p) => `file:///${p.replace(/\\/g, "/")}`).join("\r\n"));
+    setDraggedPaths(toDrag);
+    // #region debug-point A:sidebar-drag-start
+    fetch("http://127.0.0.1:7778/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"media-viewer-drop",runId:"pre-fix",hypothesisId:"A",location:"SidebarTree.jsx:handleItemDragStart",msg:"[DEBUG] Sidebar drag started for Media Viewer repro",data:{itemPath,dragCount:toDrag.length,types:Array.from(e.dataTransfer?.types||[]),hasCustomPayload:!!e.dataTransfer?.getData("application/ppoo-paths"),hasUriList:!!e.dataTransfer?.getData("text/uri-list")},ts:Date.now()})}).catch(()=>{});
+    // #endregion
+    window.electronAPI.startNativeDrag?.(toDrag);
+  }, [selectedItems]);
+
+  const handleItemDragEnd = useCallback(() => {
+    scheduleDraggedPathsCleanup();
+  }, []);
 
   // ── Context menu for any sidebar folder ───────────────────────────────────
   const handleContextMenu = useCallback(async (folderPath, shiftKey = false) => {
@@ -394,7 +438,8 @@ const SidebarTree = ({
         } catch (err) { await window.electronAPI.showAlert(`Cannot duplicate:\n${err.message}`); }
         break;
       }
-      case "copy":     break;
+      case "copy": onClipboardChange?.({ paths: [folderPath], mode: "copy" }); break;
+      case "cut":  onClipboardChange?.({ paths: [folderPath], mode: "cut"  }); break;
       case "reveal":   window.electronAPI.revealInExplorer(folderPath); break;
       case "copyPath": navigator.clipboard.writeText(folderPath); break;
       case "openInTerminal": {
@@ -410,7 +455,7 @@ const SidebarTree = ({
       }
       case "refresh":  refresh(); break;
     }
-  }, [selectedPath, onSelect, clipboard, invalidateCache, handlePinToggle]);
+  }, [selectedPath, onSelect, clipboard, invalidateCache, handlePinToggle, onClipboardChange]);
 
   // ── File handlers ────────────────────────────────────────────────────────
   const handleFileClick = useCallback((filePath) => {
@@ -490,6 +535,9 @@ const SidebarTree = ({
         } catch (err) { await window.electronAPI.showAlert(`Cannot duplicate:\n${err.message}`); }
         break;
       }
+      // FIX: copy/cut were no-ops; now properly update clipboard state
+      case "copy": onClipboardChange?.({ paths: [filePath], mode: "copy" }); break;
+      case "cut":  onClipboardChange?.({ paths: [filePath], mode: "cut"  }); break;
       case "reveal":
         window.electronAPI.revealInExplorer(filePath);
         break;
@@ -509,7 +557,7 @@ const SidebarTree = ({
         break;
       }
     }
-  }, [selectedPath, onSelect, clipboard, invalidateCache, findTrashRoot]);
+  }, [selectedPath, onSelect, clipboard, invalidateCache, findTrashRoot, onClipboardChange]);
 
   // ── Blank area context menu (right-click empty space) ─────────────────────
   const handleBlankContext = useCallback(async (e) => {
@@ -592,6 +640,9 @@ const SidebarTree = ({
                     isOpen={false}
                     isSelected={selectedPath === fullPath}
                     isDropTarget={false}
+                  draggable={true}
+                  onDragStart={(e) => handleItemDragStart(e, fullPath)}
+                  onDragEnd={handleItemDragEnd}
                     onClick={() => onSelect(fullPath)}
                     onDoubleClick={() => onToggle(fullPath)}
                     onArrowClick={() => {}}
@@ -657,8 +708,8 @@ const SidebarTree = ({
                           } catch (err) { await window.electronAPI.showAlert(`Cannot duplicate:\n${err.message}`); }
                           break;
                         }
-                        case "copy": break;
-                        case "cut": break;
+                        case "copy": onClipboardChange?.({ paths: [fullPath], mode: "copy" }); break;
+                        case "cut":  onClipboardChange?.({ paths: [fullPath], mode: "cut"  }); break;
                         case "paste": {
                           if (!clipboard?.paths?.length) break;
                           for (const src of clipboard.paths) {
@@ -695,6 +746,9 @@ const SidebarTree = ({
             isOpen={expandedSet.has(rootPath)}
             isSelected={selectedPath === rootPath}
             isDropTarget={dropTarget === rootPath}
+            draggable={true}
+            onDragStart={(e) => handleItemDragStart(e, rootPath)}
+            onDragEnd={handleItemDragEnd}
             onClick={() => onSelect(rootPath)}
             onDoubleClick={() => onToggle(rootPath)}
             onArrowClick={() => onToggle(rootPath)}
@@ -728,6 +782,8 @@ const SidebarTree = ({
               onFileClick={handleFileClick}
               onFileDblClick={handleFileDoubleClick}
               onFileCtxMenu={handleFileContextMenu}
+              onItemDragStart={handleItemDragStart}
+              onItemDragEnd={handleItemDragEnd}
               onExternalDrop={handleExternalDrop}
             />
           ) : (
@@ -740,6 +796,9 @@ const SidebarTree = ({
               isOpen={false}
               isSelected={selectedPath === entry.path}
               isDropTarget={false}
+              draggable={true}
+              onDragStart={(e) => handleItemDragStart(e, entry.path)}
+              onDragEnd={handleItemDragEnd}
               onClick={() => handleFileClick(entry.path)}
               onDoubleClick={() => handleFileDoubleClick(entry.path)}
               onArrowClick={() => {}}

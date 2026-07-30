@@ -10,6 +10,7 @@ import BrowserPanel from "./components/BrowserPanel.jsx";
 import ProjectPanel from "./components/ProjectPanel.jsx";
 import Panel5 from "./components/Panel5.jsx";
 import TerminalPanel from "./components/Terminal.jsx";
+import FileManagerPanel from "./components/FileManagerPanel.jsx";
 import BlankPanel from "./components/BlankPanel.jsx";
 
 const DEFAULT_JSON = {
@@ -42,7 +43,8 @@ const DEFAULT_JSON = {
             type: "tabset", weight: 35,
             children: [
               { type: "tab", name: "Project", component: "projectPanel" },
-              { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
+                { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
+                { type: "tab", name: "File Manager", component: "fileManager", id: "filemanager-tab" },
             ],
           },
         ],
@@ -62,6 +64,7 @@ const factory = (node) => {
     case "projectPanel":  return <ProjectPanel />;
     case "panel5":        return <Panel5 />;
     case "terminal":      return <TerminalPanel />;
+    case "fileManager":   return <FileManagerPanel />;
     case "blank":         return <BlankPanel />;
     default:              return null;
   }
@@ -158,6 +161,11 @@ const App = () => {
                 case "terminal":
                   m.doAction(Actions.selectTab("terminal-tab"));
                   window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
+                  break;
+                case "fileManager":
+                  m.doAction(Actions.addNode({
+                    type: "tab", component: "fileManager", name: "File Manager", enableClose: true,
+                  }, node.getId(), DockLocation.CENTER));
                   break;
                 default:
                   if (result.action.startsWith("port:")) {

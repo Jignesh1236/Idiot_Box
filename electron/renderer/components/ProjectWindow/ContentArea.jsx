@@ -1,7 +1,13 @@
 import React, {
   useState, useEffect, useCallback, useMemo, useRef,
 } from "react";
+import { DndContext, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core";
 import VscodeIcon  from "../shared/VscodeIcon.jsx";
+import {
+  resolveInternalDraggedPaths,
+  scheduleDraggedPathsCleanup,
+  setDraggedPaths,
+} from "../shared/dragDrop.js";
 import useSettings from "../shared/useSettings.jsx";
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
@@ -128,6 +134,76 @@ const Bar = ({ rootPath, currentPath, onNavigate, query, onQuery, showFolders, o
   );
 };
 
+// ── Draggable + Droppable grid cell ───────────────────────────────────────────
+const GridItemCell = ({
+  entry, isListView, itemW, zoom, iconSize,
+  isSelected, isCut, isRenaming, isDropTarget,
+  showPreview,
+  onRenameCommit, onCancelRename,
+  onClick, onDoubleClick, onContextMenu,
+  onNativeDragStart, onNativeDragEnd,
+}) => {
+  const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
+    id: entry.path,
+    data: { entry, path: entry.path },
+  });
+  const { setNodeRef: dropRef, isOver } = useDroppable({
+    id: entry.path + "--drop",
+    data: { isDir: entry.isDir, path: entry.path },
+    disabled: !entry.isDir,
+  });
+  const mergedRef = useCallback((node) => { dragRef(node); dropRef(node); }, [dragRef, dropRef]);
+  const showDrop = isOver && entry.isDir;
+
+  return (
+    <div
+      ref={mergedRef}
+      className={[
+        isListView ? "pw-item-list" : "pw-item",
+        isSelected  ? (isListView ? "pw-item-list--selected" : "pw-item--selected") : "",
+        isCut       ? (isListView ? "pw-item-list--cut" : "pw-item--cut") : "",
+        isDropTarget || showDrop ? "pw-item--drop-target" : "",
+        isDragging  ? "pw-item--dragging" : "",
+      ].filter(Boolean).join(" ")}
+      role="listitem"
+      title={isRenaming ? undefined : entry.name}
+      draggable={!isRenaming}
+      onDragStart={(e) => { if (!isRenaming) onNativeDragStart(e, entry); }}
+      onDragEnd={onNativeDragEnd}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
+      style={!isListView ? { width: `${itemW}px` } : undefined}
+      {...attributes}
+      {...listeners}
+    >
+      {isListView ? (
+        <>
+          <span className="pw-item-list__icon">
+            <PreviewIcon entry={entry} showPreview={showPreview} size={iconSize}/>
+          </span>
+          {isRenaming ? (
+            <RenameInput initialValue={entry.name} onCommit={onRenameCommit} onCancel={onCancelRename} />
+          ) : (
+            <span className="pw-item-list__label">{entry.name}</span>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="pw-item__icon-wrap" style={{ width: `${iconSize}px`, height: `${iconSize}px` }}>
+            <PreviewIcon entry={entry} showPreview={showPreview} size={iconSize}/>
+          </div>
+          {isRenaming ? (
+            <RenameInput initialValue={entry.name} onCommit={onRenameCommit} onCancel={onCancelRename} />
+          ) : (
+            <span className="pw-item__label">{entry.name}</span>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 // ── ContentArea ───────────────────────────────────────────────────────────────
 const ContentArea = ({
   rootPath, currentPath, refreshToken,
@@ -148,6 +224,7 @@ const ContentArea = ({
   // showFolders, showFiles, showPreview, showHidden — managed in ProjectWindow
   const [band,        setBand]        = useState(null);
   const [renamingPath, setRenamingPath] = useState(null);
+  const [activeId,    setActiveId]    = useState(null);
 
   const gridRef    = useRef(null);
   const contentRef = useRef(null);
@@ -604,42 +681,85 @@ const ContentArea = ({
     window.addEventListener("mouseup",   onUp);
   }, [renamingPath, onSetSelectedItems]);
 
-  // ── Drag — read selection from ref so it's never stale ───────────────────
-  const dragImageRef = useRef(null);
+  // ── @dnd-kit drag-and-drop ──────────────────────────────────────────────
+  const [dropTargetPath, setDropTargetPath] = useState(null);
+  const expandTimerRef = useRef(null);
+  const expandHoverRef = useRef(null);
+  const dragCountRef = useRef(0);
 
-  const handleDragStart = useCallback((e, entry) => {
+  const handleDndStart = useCallback((event) => {
+    const { active } = event;
+    if (!active?.data?.current?.entry) return;
+    const entry = active.data.current.entry;
+    const sel = selectedItemsRef.current;
+    const toDrag = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
+    setActiveId(active.id);
+    dragCountRef.current = toDrag.length;
+    setDraggedPaths(toDrag);
+    window.electronAPI.startNativeDrag(toDrag);
+  }, []);
+
+  const handleDndOver = useCallback((event) => {
+    const { over } = event;
+    if (!over) { setDropTargetPath(null); return; }
+    const path = over.data.current?.isDir ? over.data.current.path : null;
+    setDropTargetPath(path);
+    if (path && expandHoverRef.current !== path) {
+      expandHoverRef.current = path;
+      if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
+      expandTimerRef.current = setTimeout(() => onNavigate(path), 800);
+    }
+  }, [onNavigate]);
+
+  const handleDndEnd = useCallback(async (event) => {
+    const { active, over } = event;
+    const activeId = active.id;
+    setActiveId(null);
+    setDropTargetPath(null);
+    scheduleDraggedPathsCleanup();
+    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
+    expandHoverRef.current = null;
+    if (!over || !active?.data?.current?.entry) return;
+    const entry = active.data.current.entry;
+    const targetPath = over.data.current?.isDir ? over.data.current.path : currentPathRef.current;
+    if (!targetPath || targetPath === entry.path) return;
+    const sel = selectedItemsRef.current;
+    const paths = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
+    const pairs = [];
+    const sourceParents = new Set();
+    for (const src of paths) {
+      if (src === targetPath) continue;
+      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
+      sourceParents.add(parentDir);
+      try {
+        const dest = await window.electronAPI.moveItem(src, targetPath);
+        if (dest) pairs.push({ from: src, to: dest });
+      } catch {}
+    }
+    if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
+    for (const p of sourceParents) invalidateCache(p);
+    invalidateCache(targetPath);
+    onSetSelectedItems(new Set());
+    loadEntries();
+  }, [invalidateCache, loadEntries, onSetSelectedItems]);
+
+  // ── Native drag-out (HTML5 drag for OS/file-explorer drag-out) ──────────
+  const handleNativeDragStart = useCallback((e, entry) => {
     if (renamingPath) { e.preventDefault(); return; }
-    const sel    = selectedItemsRef.current;
+    const sel = selectedItemsRef.current;
     const toDrag = sel.size > 0 && sel.has(entry.path) ? [...sel] : [entry.path];
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("application/ppoo-paths", JSON.stringify(toDrag));
-    // Store for internal drop fallback (native OS file drag strips custom MIME types)
-    window.__ppooDragPaths = toDrag;
-    // Native OS file drag (to desktop, file explorer, external apps)
-    window.electronAPI.startNativeDrag(toDrag);
-    // text/uri-list for basic external app compatibility
     e.dataTransfer.setData("text/uri-list", toDrag.map(p => "file:///" + p.replace(/\\/g, "/")).join("\r\n"));
-
-    if (toDrag.length > 1) {
-      const el = document.createElement("div");
-      el.textContent = String(toDrag.length);
-      el.style.cssText = "position:fixed;top:-100px;left:0;background:#5a9fd4;color:#fff;" +
-        "font:bold 12px sans-serif;width:24px;height:24px;border-radius:12px;" +
-        "display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999";
-      document.body.appendChild(el);
-      e.dataTransfer.setDragImage(el, 28, 28);
-      dragImageRef.current = el;
-    }
+    setDraggedPaths(toDrag);
+    window.electronAPI.startNativeDrag(toDrag);
   }, [renamingPath]);
 
-  const handleDragEnd = useCallback(() => {
-    if (dragImageRef.current) {
-      dragImageRef.current.remove();
-      dragImageRef.current = null;
-    }
+  const handleNativeDragEnd = useCallback(() => {
+    scheduleDraggedPathsCleanup();
   }, []);
 
-  // ── External file drop helper ────────────────────────────────────────────
+  // ── External file drop helper (OS → app, container level) ──────────────
   const getExternalPaths = useCallback((e) => {
     const dt = e.dataTransfer;
     if (!dt) return null;
@@ -653,10 +773,7 @@ const ContentArea = ({
         if (items[i].kind === "file") {
           try {
             const f = items[i].getAsFile();
-            if (f) {
-              const p = getPath(f);
-              if (p) paths.push(p);
-            }
+            if (f) { const p = getPath(f); if (p) paths.push(p); }
           } catch {}
         }
       }
@@ -665,10 +782,7 @@ const ContentArea = ({
       const files = dt.files;
       if (files?.length) {
         for (let i = 0; i < files.length; i++) {
-          try {
-            const p = getPath(files[i]);
-            if (p) paths.push(p);
-          } catch {}
+          try { const p = getPath(files[i]); if (p) paths.push(p); } catch {}
         }
       }
     }
@@ -688,60 +802,26 @@ const ContentArea = ({
     return copied;
   }, [alertErr]);
 
-  const handleContentAreaDragOver = useCallback((e) => {
+  const handleContainerDragOver = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
   }, []);
 
-  const handleContentAreaDrop = useCallback(async (e) => {
+  const handleContainerDrop = useCallback(async (e) => {
     e.preventDefault();
     e.stopPropagation();
     const cp = currentPathRef.current;
     if (!cp) return;
-    const rp = rootPathRef.current;
+    // If @dnd-kit handled this already, skip
+    if (window.__ppooDragPaths?.length) return;
+    const externalPaths = getExternalPaths(e);
+    if (!externalPaths?.length) return;
+    const copied = await copyExternalFiles(externalPaths, cp);
+    if (copied.length) { invalidateCache(cp); await loadEntries(); }
+  }, [invalidateCache, loadEntries, getExternalPaths, copyExternalFiles]);
 
-    // Resolve paths: custom MIME → internal native drag → external files
-    let paths;
-    let isInternal = true;
-    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch {}
-    if (!paths?.length && window.__ppooDragPaths?.length) {
-      paths = window.__ppooDragPaths;
-      window.__ppooDragPaths = null;
-    }
-    if (!paths?.length) {
-      const externalPaths = getExternalPaths(e);
-      if (externalPaths) {
-        paths = externalPaths;
-        isInternal = false;
-      }
-    }
-    if (!paths?.length) return;
-
-    if (!isInternal) {
-      const copied = await copyExternalFiles(paths, cp);
-      if (copied.length) { invalidateCache(cp); await loadEntries(); }
-      return;
-    }
-    const pairs = [];
-    const sourceParents = new Set();
-    for (const src of paths) {
-      if (src === cp) continue;
-      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
-      sourceParents.add(parentDir);
-      try {
-        const dest = await window.electronAPI.moveItem(src, cp);
-        if (dest) pairs.push({ from: src, to: dest });
-      } catch (err) { /* ignore */ }
-    }
-    if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
-    for (const p of sourceParents) invalidateCache(p);
-    invalidateCache(cp);
-    onSetSelectedItems(new Set());
-    await loadEntries();
-  }, [invalidateCache, loadEntries, onSetSelectedItems, getExternalPaths, copyExternalFiles]);
-
-  // ── Breadcrumb drop targets ─────────────────────────────────────────────
+  // ── Breadcrumb drop targets (keep native HTML5 for external) ────────────
   const crumbsTimerRef = useRef(null);
   const crumbsHoverRef = useRef(null);
 
@@ -749,9 +829,7 @@ const ContentArea = ({
     if (crumbsHoverRef.current !== path) {
       crumbsHoverRef.current = path;
       if (crumbsTimerRef.current) clearTimeout(crumbsTimerRef.current);
-      crumbsTimerRef.current = setTimeout(() => {
-        onNavigate(path);
-      }, 800);
+      crumbsTimerRef.current = setTimeout(() => onNavigate(path), 800);
     }
   }, [onNavigate]);
 
@@ -767,118 +845,12 @@ const ContentArea = ({
     e.stopPropagation();
     if (crumbsTimerRef.current) { clearTimeout(crumbsTimerRef.current); crumbsTimerRef.current = null; }
     crumbsHoverRef.current = null;
-
-    // Resolve paths
-    let paths;
-    let isInternal = true;
-    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch {}
-    if (!paths?.length && window.__ppooDragPaths?.length) {
-      paths = window.__ppooDragPaths;
-      window.__ppooDragPaths = null;
-    }
-    if (!paths?.length) {
-      const externalPaths = getExternalPaths(e);
-      if (externalPaths) { paths = externalPaths; isInternal = false; }
-    }
-    if (!paths?.length) return;
-
-    if (!isInternal) {
-      const copied = await copyExternalFiles(paths, path);
-      if (copied.length) { invalidateCache(path); onNavigate(path); }
-      return;
-    }
-    const pairs = [];
-    const sourceParents = new Set();
-    const failedCrumb = [];
-    for (const src of paths) {
-      if (src === path) continue;
-      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
-      sourceParents.add(parentDir);
-      try {
-        const dest = await window.electronAPI.moveItem(src, path);
-        if (dest) pairs.push({ from: src, to: dest });
-      } catch (err) { failedCrumb.push(src.split(/[\\/]/).pop()); }
-    }
-    if (failedCrumb.length) await alertErr("Cannot move item(s)", new Error(failedCrumb.join(", ")));
-    if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
-    for (const p of sourceParents) invalidateCache(p);
-    invalidateCache(path);
-    onSetSelectedItems(new Set());
-    onNavigate(path);
-  }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr, getExternalPaths, copyExternalFiles]);
-
-  // ── Content-area drop target (folder items) ──────────────────────────────
-  const [dropTargetPath, setDropTargetPath] = useState(null);
-  const expandTimerRef = useRef(null);
-  const expandHoverRef = useRef(null);
-
-  const handleDragOver = useCallback((e, entry) => {
-    if (!entry.isDir) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
-    setDropTargetPath(entry.path);
-
-    if (expandHoverRef.current !== entry.path) {
-      expandHoverRef.current = entry.path;
-      if (expandTimerRef.current) clearTimeout(expandTimerRef.current);
-      expandTimerRef.current = setTimeout(() => {
-        onNavigate(entry.path);
-      }, 800);
-    }
-  }, [onNavigate]);
-
-  const handleDragLeave = useCallback((e, entry) => {
-    e.stopPropagation();
-    setDropTargetPath((p) => p === entry.path ? null : p);
-    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
-  }, []);
-
-  const handleContentDrop = useCallback(async (e, entry) => {
-    if (!entry.isDir) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setDropTargetPath(null);
-    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
-
-    // Resolve paths
-    let paths;
-    let isInternal = true;
-    try { paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); } catch {}
-    if (!paths?.length && window.__ppooDragPaths?.length) {
-      paths = window.__ppooDragPaths;
-      window.__ppooDragPaths = null;
-    }
-    if (!paths?.length) {
-      const externalPaths = getExternalPaths(e);
-      if (externalPaths) { paths = externalPaths; isInternal = false; }
-    }
-    if (!paths?.length) return;
-
-    if (!isInternal) {
-      const copied = await copyExternalFiles(paths, entry.path);
-      if (copied.length) { invalidateCache(entry.path); onNavigate(entry.path); }
-      return;
-    }
-    const pairs = [];
-    const sourceParents = new Set();
-    const failedDrop = [];
-    for (const src of paths) {
-      if (src === entry.path) continue;
-      const parentDir = src.replace(/[\\/][^\\/]+$/, "") || src;
-      sourceParents.add(parentDir);
-      try {
-        const dest = await window.electronAPI.moveItem(src, entry.path);
-        if (dest) pairs.push({ from: src, to: dest });
-      } catch (err) { failedDrop.push(src.split(/[\\/]/).pop()); }
-    }
-    if (failedDrop.length) await alertErr("Cannot move item(s)", new Error(failedDrop.join(", ")));
-    if (pairs.length) pushUndoRef.current?.({ type: "move", pairs });
-    for (const p of sourceParents) invalidateCache(p);
-    invalidateCache(entry.path);
-    onSetSelectedItems(new Set());
-    onNavigate(entry.path);
-  }, [invalidateCache, onNavigate, onSetSelectedItems, alertErr, getExternalPaths, copyExternalFiles]);
+    if (window.__ppooDragPaths?.length) return; // @dnd-kit handled it
+    const externalPaths = getExternalPaths(e);
+    if (!externalPaths?.length) return;
+    const copied = await copyExternalFiles(externalPaths, path);
+    if (copied.length) { invalidateCache(path); onNavigate(path); }
+  }, [invalidateCache, onNavigate, getExternalPaths, copyExternalFiles]);
 
   // ── Context menus ─────────────────────────────────────────────────────────
   const handleBlankContextMenu = useCallback(async (e) => {
@@ -932,8 +904,8 @@ const ContentArea = ({
         onMouseDown={handleMouseDown}
         onClick={handleGridClick}
         onContextMenu={handleBlankContextMenu}
-        onDragOver={handleContentAreaDragOver}
-        onDrop={handleContentAreaDrop}
+        onDragOver={handleContainerDragOver}
+        onDrop={handleContainerDrop}
       >
         {loading && <div className="pw-content__empty">Loading...</div>}
         {!loading && visible.length === 0 && (
@@ -942,71 +914,50 @@ const ContentArea = ({
           </div>
         )}
         {!loading && visible.length > 0 && (
-          <div className={`pw-grid${isListView ? " pw-grid--list" : ""}`} ref={gridRef} role="list" style={isListView ? undefined : { gap: `${Math.round(zoom * 0.02)}px` }}>
-            {visible.map((entry) => {
-              const isRenaming = renamingPath === entry.path;
-              return (
-                <div
-                  key={entry.path}
-                  ref={(el) => { if (el) itemRefs.current[entry.path] = el; else delete itemRefs.current[entry.path]; }}
-                  className={[
-                    isListView ? "pw-item-list" : "pw-item",
-                    selectedItems.has(entry.path)  ? (isListView ? "pw-item-list--selected" : "pw-item--selected") : "",
-                    cutPaths.has(entry.path)       ? (isListView ? "pw-item-list--cut" : "pw-item--cut") : "",
-                    !isListView && dropTargetPath === entry.path  ? "pw-item--drop-target" : "",
-                  ].filter(Boolean).join(" ")}
-                  role="listitem"
-                  title={isRenaming ? undefined : entry.name}
-                  draggable={!isRenaming}
-                  onDragStart={(e) => handleDragStart(e, entry)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={(e) => handleDragOver(e, entry)}
-                  onDragLeave={(e) => handleDragLeave(e, entry)}
-                  onDrop={(e) => handleContentDrop(e, entry)}
-                  onClick={(e) => handleItemClick(e, entry)}
-                  onDoubleClick={() => {
-                    if (isRenaming) return;
-                    if (entry.isDir) onNavigate(entry.path);
-                    else window.electronAPI.openFile(entry.path, settingsRef.current.defaultEditor ?? "system");
-                  }}
-                  onContextMenu={(e) => handleContextMenu(e, entry)}
-                  style={!isListView ? { width: `${itemW}px` } : undefined}
-                >
-                  {isListView ? (
-                    <>
-                      <span className="pw-item-list__icon">
-                        <PreviewIcon entry={entry} showPreview={showPreview} size={iconSize}/>
-                      </span>
-                      {isRenaming ? (
-                        <RenameInput
-                          initialValue={entry.name}
-                          onCommit={(newName) => handleRenameCommit(entry.path, newName)}
-                          onCancel={() => setRenamingPath(null)}
-                        />
-                      ) : (
-                        <span className="pw-item-list__label">{entry.name}</span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="pw-item__icon-wrap" style={{ width: `${iconSize}px`, height: `${iconSize}px` }}>
-                        <PreviewIcon entry={entry} showPreview={showPreview} size={iconSize}/>
-                      </div>
-                      {isRenaming ? (
-                        <RenameInput
-                          initialValue={entry.name}
-                          onCommit={(newName) => handleRenameCommit(entry.path, newName)}
-                          onCancel={() => setRenamingPath(null)}
-                        />
-                      ) : (
-                        <span className="pw-item__label">{entry.name}</span>
-                      )}
-                    </>
-                  )}
+          <DndContext
+            onDragStart={handleDndStart}
+            onDragOver={handleDndOver}
+            onDragEnd={handleDndEnd}
+          >
+            <div className={`pw-grid${isListView ? " pw-grid--list" : ""}`} ref={gridRef} role="list" style={isListView ? undefined : { gap: `${Math.round(zoom * 0.02)}px` }}>
+              {visible.map((entry) => {
+                const isRenaming = renamingPath === entry.path;
+                return (
+                  <GridItemCell
+                    key={entry.path}
+                    entry={entry}
+                    isListView={isListView}
+                    itemW={itemW}
+                    zoom={zoom}
+                    iconSize={iconSize}
+                    isSelected={selectedItems.has(entry.path)}
+                    isCut={cutPaths.has(entry.path)}
+                    isRenaming={isRenaming}
+                    isDropTarget={!isListView && dropTargetPath === entry.path}
+                    showPreview={showPreview}
+                    onRenameCommit={(newName) => handleRenameCommit(entry.path, newName)}
+                    onCancelRename={() => setRenamingPath(null)}
+                    onClick={(e) => handleItemClick(e, entry)}
+                    onDoubleClick={() => {
+                      if (isRenaming) return;
+                      if (entry.isDir) onNavigate(entry.path);
+                      else window.electronAPI.openFile(entry.path, settingsRef.current.defaultEditor ?? "system");
+                    }}
+                    onContextMenu={(e) => handleContextMenu(e, entry)}
+                    onNativeDragStart={handleNativeDragStart}
+                    onNativeDragEnd={handleNativeDragEnd}
+                  />
+                );
+              })}
+            </div>
+            <DragOverlay dropAnimation={null}>
+              {activeId ? (
+                <div style={{ padding: "4px 12px", background: "#5a9fd4", color: "#fff", borderRadius: 4, fontSize: 12, whiteSpace: "nowrap" }}>
+                  {dragCountRef.current > 1 ? `${dragCountRef.current} items` : ""}
                 </div>
-              );
-            })}
-          </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
         {band && band.w > 4 && band.h > 4 && (
           <div className="pw-rubber-band" style={{ left: band.x, top: band.y, width: band.w, height: band.h }}/>

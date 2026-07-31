@@ -28127,7 +28127,6 @@
   var IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico"];
   var VIDEO_EXTS_SUPPORTED = [".mp4", ".webm"];
   var VIDEO_EXTS_UNSUPPORTED = [".avi", ".mov", ".mkv", ".wmv", ".flv"];
-  var VIDEO_EXTS = [...VIDEO_EXTS_SUPPORTED, ...VIDEO_EXTS_UNSUPPORTED];
   var ext = (p) => {
     try {
       return p.slice(p.lastIndexOf(".")).toLowerCase();
@@ -28142,6 +28141,12 @@
       return p;
     }
   };
+  var formatFileSize = (bytes) => {
+    if (!bytes || isNaN(bytes)) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
   var toFileUrl = (p) => {
     if (!p) return null;
     const normalized = p.replace(/\\/g, "/");
@@ -28152,13 +28157,50 @@
     const [content, setContent] = (0, import_react2.useState)(null);
     const [type, setType] = (0, import_react2.useState)(null);
     const [error, setError] = (0, import_react2.useState)(null);
-    const dropRef = (0, import_react2.useRef)(null);
+    const [zoom, setZoom] = (0, import_react2.useState)(1);
+    const [fitMode, setFitMode] = (0, import_react2.useState)(true);
+    const [rotation, setRotation] = (0, import_react2.useState)(0);
+    const [flipH, setFlipH] = (0, import_react2.useState)(false);
+    const [flipV, setFlipV] = (0, import_react2.useState)(false);
+    const [pan, setPan] = (0, import_react2.useState)({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = (0, import_react2.useState)(false);
+    const dragStartRef = (0, import_react2.useRef)({ x: 0, y: 0 });
+    const [fileInfo, setFileInfo] = (0, import_react2.useState)(null);
+    const [showInfo, setShowInfo] = (0, import_react2.useState)(false);
+    const [fontSize, setFontSize] = (0, import_react2.useState)(13);
+    const [lineWrap, setLineWrap] = (0, import_react2.useState)(true);
+    const [videoSpeed, setVideoSpeed] = (0, import_react2.useState)(1);
+    const [videoMuted, setVideoMuted] = (0, import_react2.useState)(false);
+    const containerRef = (0, import_react2.useRef)(null);
+    const videoRef = (0, import_react2.useRef)(null);
+    const resetTransform = (0, import_react2.useCallback)(() => {
+      setZoom(1);
+      setFitMode(true);
+      setRotation(0);
+      setFlipH(false);
+      setFlipV(false);
+      setPan({ x: 0, y: 0 });
+    }, []);
     const openFile = (0, import_react2.useCallback)(async (fp) => {
       if (!fp) return;
       setError(null);
       setContent(null);
       setType(null);
+      setFileInfo(null);
+      resetTransform();
       const e = ext(fp);
+      try {
+        const stats = await window.electronAPI.stat(fp);
+        if (stats?.exists) {
+          setFileInfo({
+            size: stats.size,
+            mtime: stats.mtime ? new Date(stats.mtime).toLocaleString() : null,
+            width: null,
+            height: null
+          });
+        }
+      } catch {
+      }
       if (IMAGE_EXTS.includes(e)) {
         const data = await window.electronAPI.readFileAsDataUrl(fp);
         if (data) {
@@ -28184,7 +28226,7 @@
         return;
       }
       if (VIDEO_EXTS_UNSUPPORTED.includes(e)) {
-        setError(`${e.toUpperCase().slice(1)} videos are not supported. Convert to MP4 or WebM first.`);
+        setError(`${e.toUpperCase().slice(1)} videos are not supported natively. Convert to MP4 or WebM.`);
         setFilePath(fp);
         return;
       }
@@ -28202,7 +28244,7 @@
       }
       setError(`Unsupported file type: ${e || "(no extension)"}`);
       setFilePath(fp);
-    }, []);
+    }, [resetTransform]);
     (0, import_react2.useEffect)(() => {
       const handler = (e) => {
         openFile(e.detail.path);
@@ -28235,43 +28277,515 @@
       setContent(null);
       setType(null);
       setError(null);
+      setFileInfo(null);
+      setShowInfo(false);
+      resetTransform();
+    }, [resetTransform]);
+    const handleZoomIn = (0, import_react2.useCallback)(() => {
+      setFitMode(false);
+      setZoom((z2) => Math.min(10, +(z2 + 0.25).toFixed(2)));
     }, []);
+    const handleZoomOut = (0, import_react2.useCallback)(() => {
+      setFitMode(false);
+      setZoom((z2) => Math.max(0.1, +(z2 - 0.25).toFixed(2)));
+    }, []);
+    const handleResetZoom = (0, import_react2.useCallback)(() => {
+      setFitMode(false);
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    }, []);
+    const handleFitScreen = (0, import_react2.useCallback)(() => {
+      setFitMode(true);
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    }, []);
+    const handleRotateRight = (0, import_react2.useCallback)(() => {
+      setRotation((r) => (r + 90) % 360);
+    }, []);
+    const handleRotateLeft = (0, import_react2.useCallback)(() => {
+      setRotation((r) => (r + 270) % 360);
+    }, []);
+    const handleFlipH = (0, import_react2.useCallback)(() => {
+      setFlipH((f) => !f);
+    }, []);
+    const handleFlipV = (0, import_react2.useCallback)(() => {
+      setFlipV((f) => !f);
+    }, []);
+    const handleWheel = (0, import_react2.useCallback)((e) => {
+      if (!filePath || type !== "image" && type !== "video") return;
+      e.preventDefault();
+      setFitMode(false);
+      const delta = e.deltaY < 0 ? 1.15 : 0.85;
+      setZoom((prevZoom) => {
+        const next = prevZoom * delta;
+        return Math.min(10, Math.max(0.1, +next.toFixed(2)));
+      });
+    }, [filePath, type]);
+    const handleMouseDown = (0, import_react2.useCallback)((e) => {
+      if (e.button !== 0 || type !== "image" && type !== "video") return;
+      setIsDragging(true);
+      dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    }, [type, pan]);
+    const handleMouseMove = (0, import_react2.useCallback)((e) => {
+      if (!isDragging) return;
+      setPan({
+        x: e.clientX - dragStartRef.current.x,
+        y: e.clientY - dragStartRef.current.y
+      });
+    }, [isDragging]);
+    const handleMouseUp = (0, import_react2.useCallback)(() => {
+      setIsDragging(false);
+    }, []);
+    const handleContextMenu = (0, import_react2.useCallback)(async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!filePath) return;
+      const result = await window.electronAPI.showContextMenu("mediaViewer", [filePath]);
+      if (!result) return;
+      switch (result.action) {
+        case "zoomIn":
+          handleZoomIn();
+          break;
+        case "zoomOut":
+          handleZoomOut();
+          break;
+        case "resetZoom":
+          handleResetZoom();
+          break;
+        case "fitWindow":
+          handleFitScreen();
+          break;
+        case "rotateRight":
+          handleRotateRight();
+          break;
+        case "rotateLeft":
+          handleRotateLeft();
+          break;
+        case "flipH":
+          handleFlipH();
+          break;
+        case "flipV":
+          handleFlipV();
+          break;
+        case "copyImage":
+          if (type === "image") {
+            await window.electronAPI.copyImageToClipboard(filePath);
+          }
+          break;
+        case "copyPath":
+          navigator.clipboard.writeText(filePath);
+          break;
+        case "reveal":
+          window.electronAPI.revealInExplorer(filePath);
+          break;
+        case "openWithSystem":
+          window.electronAPI.openFile(filePath, "system");
+          break;
+        case "close":
+          handleClose();
+          break;
+      }
+    }, [filePath, type, handleZoomIn, handleZoomOut, handleResetZoom, handleFitScreen, handleRotateRight, handleRotateLeft, handleFlipH, handleFlipV, handleClose]);
+    (0, import_react2.useEffect)(() => {
+      const handleKeyDown = (e) => {
+        if (!filePath) return;
+        if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+        if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) {
+          e.preventDefault();
+          handleZoomIn();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === "-") {
+          e.preventDefault();
+          handleZoomOut();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+          e.preventDefault();
+          handleResetZoom();
+        } else if (e.key === "f" || e.key === "F") {
+          handleFitScreen();
+        } else if (e.key === "r" && !e.shiftKey) {
+          handleRotateRight();
+        } else if (e.key === "R" || e.key === "r" && e.shiftKey) {
+          handleRotateLeft();
+        } else if (e.key === "h" || e.key === "H") {
+          handleFlipH();
+        } else if (e.key === "v" || e.key === "V") {
+          handleFlipV();
+        } else if (e.key === "Escape") {
+          handleClose();
+        }
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [filePath, handleZoomIn, handleZoomOut, handleResetZoom, handleFitScreen, handleRotateRight, handleRotateLeft, handleFlipH, handleFlipV, handleClose]);
+    const mediaTransform = `translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg) scale(${flipH ? -1 : 1}, ${flipV ? -1 : 1}) scale(${zoom})`;
+    const textStats = type === "text" && content ? {
+      lines: content.split("\n").length,
+      words: content.trim() ? content.trim().split(/\s+/).length : 0,
+      chars: content.length
+    } : null;
     return /* @__PURE__ */ import_react2.default.createElement(
       "div",
       {
         className: "panel",
-        ref: dropRef,
+        ref: containerRef,
         onDragOver: handleDragOver,
         onDrop: handleDrop,
         onPaste: handlePaste,
+        onContextMenu: handleContextMenu,
         tabIndex: 0,
-        style: { display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }
-      },
-      !filePath && !error && /* @__PURE__ */ import_react2.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#555", fontSize: 13, flexDirection: "column", gap: 8 } }, /* @__PURE__ */ import_react2.default.createElement("svg", { width: "32", height: "32", viewBox: "0 0 16 16", fill: "#444" }, /* @__PURE__ */ import_react2.default.createElement("path", { d: "M2 2h5l2 2h5v9H2V2z" })), /* @__PURE__ */ import_react2.default.createElement("span", null, "Drop files here or right-click a file \u2192 Open in Media Viewer")),
-      filePath && /* @__PURE__ */ import_react2.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", background: "#1a1a1a", borderBottom: "1px solid #2a2a2a", flexShrink: 0, fontSize: 12, color: "#999" } }, /* @__PURE__ */ import_react2.default.createElement(
-        "svg",
-        {
-          width: "12",
-          height: "12",
-          viewBox: "0 0 16 16",
-          fill: "#888",
-          style: { cursor: "pointer", flexShrink: 0 },
-          onClick: handleClose,
-          title: "Close"
-        },
-        /* @__PURE__ */ import_react2.default.createElement("path", { d: "M4 4l8 8M12 4l-8 8" })
-      ), /* @__PURE__ */ import_react2.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }, title: filePath }, fileName(filePath))),
-      /* @__PURE__ */ import_react2.default.createElement("div", { style: { flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: "#0d0d0d" } }, error && /* @__PURE__ */ import_react2.default.createElement("div", { style: { color: "#f44747", fontSize: 13, textAlign: "center", padding: "0 20px", maxWidth: 400, lineHeight: 1.6 } }, error), type === "image" && content && /* @__PURE__ */ import_react2.default.createElement("img", { src: content, style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }, alt: "" }), type === "video" && content && /* @__PURE__ */ import_react2.default.createElement(
-        "video",
-        {
-          key: content,
-          controls: true,
-          style: { maxWidth: "100%", maxHeight: "100%" },
-          src: content,
-          onError: () => setError(`Failed to play video. The file may be corrupted or use an unsupported codec.`)
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          width: "100%",
+          overflow: "hidden",
+          position: "relative",
+          background: "#121212",
+          outline: "none",
+          userSelect: "none"
         }
-      ), type === "text" && content !== null && /* @__PURE__ */ import_react2.default.createElement("pre", { style: { margin: 0, padding: 12, color: "#c8c8c8", fontSize: 12, fontFamily: 'Consolas, "Courier New", monospace', whiteSpace: "pre-wrap", wordBreak: "break-word", width: "100%", height: "100%", boxSizing: "border-box", alignSelf: "flex-start" } }, content))
+      },
+      !filePath && !error && /* @__PURE__ */ import_react2.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666", fontSize: 13, flexDirection: "column", gap: 12 } }, /* @__PURE__ */ import_react2.default.createElement("svg", { width: "40", height: "40", viewBox: "0 0 16 16", fill: "#383838" }, /* @__PURE__ */ import_react2.default.createElement("path", { d: "M2 2.5A1.5 1.5 0 0 1 3.5 1h6.086a1.5 1.5 0 0 1 1.06.44l2.914 2.914A1.5 1.5 0 0 1 14 5.414V13.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-11z" })), /* @__PURE__ */ import_react2.default.createElement("span", { style: { color: "#888", fontWeight: 500 } }, "Drop file here to view"), /* @__PURE__ */ import_react2.default.createElement("span", { style: { fontSize: 11, color: "#555" } }, "or right-click any file in project tree \u2192 Open in Media Viewer")),
+      filePath && /* @__PURE__ */ import_react2.default.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "4px 10px",
+            background: "#1c1c1c",
+            borderBottom: "1px solid #2d2d2d",
+            flexShrink: 0,
+            fontSize: 12,
+            color: "#ccc",
+            zIndex: 10,
+            gap: 8,
+            flexWrap: "wrap"
+          }
+        },
+        /* @__PURE__ */ import_react2.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 } }, /* @__PURE__ */ import_react2.default.createElement(
+          "span",
+          {
+            style: {
+              fontWeight: 600,
+              color: "#e0e0e0",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            },
+            title: filePath
+          },
+          fileName(filePath)
+        ), (fileInfo?.size || fileInfo?.width) && /* @__PURE__ */ import_react2.default.createElement("span", { style: { fontSize: 10, background: "#2a2a2a", color: "#aaa", padding: "1px 6px", borderRadius: 3, flexShrink: 0 } }, fileInfo.width ? `${fileInfo.width}\xD7${fileInfo.height} px \u2022 ` : "", formatFileSize(fileInfo.size))),
+        /* @__PURE__ */ import_react2.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4, flexShrink: 0 } }, (type === "image" || type === "video") && /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleZoomOut,
+            title: "Zoom Out (Ctrl+Minus)",
+            style: btnStyle
+          },
+          "\u2212"
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleResetZoom,
+            title: "Reset Zoom (100%)",
+            style: { ...btnStyle, minWidth: 42, fontSize: 11 }
+          },
+          fitMode ? "Fit" : `${Math.round(zoom * 100)}%`
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleZoomIn,
+            title: "Zoom In (Ctrl+Plus)",
+            style: btnStyle
+          },
+          "+"
+        ), /* @__PURE__ */ import_react2.default.createElement("div", { style: dividerStyle }), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleFitScreen,
+            title: "Fit to Screen (F)",
+            style: { ...btnStyle, background: fitMode ? "#333" : "transparent" }
+          },
+          "\u26F6"
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleRotateLeft,
+            title: "Rotate Left (Shift+R)",
+            style: btnStyle
+          },
+          "\u21B6"
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleRotateRight,
+            title: "Rotate Right (R)",
+            style: btnStyle
+          },
+          "\u21B7"
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleFlipH,
+            title: "Flip Horizontal (H)",
+            style: { ...btnStyle, background: flipH ? "#333" : "transparent" }
+          },
+          "\u2194"
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleFlipV,
+            title: "Flip Vertical (V)",
+            style: { ...btnStyle, background: flipV ? "#333" : "transparent" }
+          },
+          "\u2195"
+        ), /* @__PURE__ */ import_react2.default.createElement("div", { style: dividerStyle })), type === "video" && /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, /* @__PURE__ */ import_react2.default.createElement(
+          "select",
+          {
+            value: videoSpeed,
+            onChange: (e) => {
+              const spd = parseFloat(e.target.value);
+              setVideoSpeed(spd);
+              if (videoRef.current) videoRef.current.playbackRate = spd;
+            },
+            style: { background: "#262626", color: "#ccc", border: "1px solid #3c3c3c", borderRadius: 3, fontSize: 11, padding: "1px 4px", outline: "none", cursor: "pointer" },
+            title: "Playback Speed"
+          },
+          /* @__PURE__ */ import_react2.default.createElement("option", { value: 0.5 }, "0.5x"),
+          /* @__PURE__ */ import_react2.default.createElement("option", { value: 1 }, "1.0x"),
+          /* @__PURE__ */ import_react2.default.createElement("option", { value: 1.25 }, "1.25x"),
+          /* @__PURE__ */ import_react2.default.createElement("option", { value: 1.5 }, "1.5x"),
+          /* @__PURE__ */ import_react2.default.createElement("option", { value: 2 }, "2.0x")
+        ), /* @__PURE__ */ import_react2.default.createElement("div", { style: dividerStyle })), type === "text" && /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, /* @__PURE__ */ import_react2.default.createElement("button", { onClick: () => setFontSize((s15) => Math.max(9, s15 - 1)), title: "Decrease font size", style: btnStyle }, "A-"), /* @__PURE__ */ import_react2.default.createElement("span", { style: { fontSize: 11, color: "#888", minWidth: 20, textAlign: "center" } }, fontSize, "px"), /* @__PURE__ */ import_react2.default.createElement("button", { onClick: () => setFontSize((s15) => Math.min(32, s15 + 1)), title: "Increase font size", style: btnStyle }, "A+"), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: () => setLineWrap((w) => !w),
+            title: "Toggle Word Wrap",
+            style: { ...btnStyle, background: lineWrap ? "#333" : "transparent" }
+          },
+          "Wrap"
+        ), /* @__PURE__ */ import_react2.default.createElement("div", { style: dividerStyle })), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: () => setShowInfo((v2) => !v2),
+            title: "File Info",
+            style: { ...btnStyle, color: showInfo ? "#5a9fd4" : "#999" }
+          },
+          "\u24D8"
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: () => window.electronAPI.revealInExplorer(filePath),
+            title: "Reveal in File Explorer",
+            style: btnStyle
+          },
+          "\u{1F4C1}"
+        ), /* @__PURE__ */ import_react2.default.createElement(
+          "button",
+          {
+            onClick: handleClose,
+            title: "Close File (Esc)",
+            style: { ...btnStyle, color: "#e55" }
+          },
+          "\u2715"
+        ))
+      ),
+      /* @__PURE__ */ import_react2.default.createElement(
+        "div",
+        {
+          onWheel: handleWheel,
+          onMouseDown: handleMouseDown,
+          onMouseMove: handleMouseMove,
+          onMouseUp: handleMouseUp,
+          onMouseLeave: handleMouseUp,
+          onDoubleClick: () => {
+            if (type === "image" || type === "video") {
+              if (fitMode) handleResetZoom();
+              else handleFitScreen();
+            }
+          },
+          style: {
+            flex: 1,
+            overflow: "hidden",
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#0a0a0a",
+            cursor: isDragging ? "grabbing" : zoom > 1 || !fitMode ? "grab" : "default"
+          }
+        },
+        error && /* @__PURE__ */ import_react2.default.createElement("div", { style: { color: "#f44747", fontSize: 13, textAlign: "center", padding: 24, maxWidth: 450, lineHeight: 1.6, background: "#1c1414", border: "1px solid #4a2222", borderRadius: 6 } }, error),
+        type === "image" && content && /* @__PURE__ */ import_react2.default.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: fitMode ? "100%" : "auto",
+              height: fitMode ? "100%" : "auto",
+              transition: isDragging ? "none" : "transform 0.1s ease-out"
+            }
+          },
+          /* @__PURE__ */ import_react2.default.createElement(
+            "img",
+            {
+              src: content,
+              onLoad: (e) => {
+                const img = e.target;
+                setFileInfo((prev) => ({
+                  ...prev,
+                  width: img.naturalWidth,
+                  height: img.naturalHeight
+                }));
+              },
+              style: {
+                maxWidth: fitMode ? "100%" : "none",
+                maxHeight: fitMode ? "100%" : "none",
+                objectFit: "contain",
+                transform: mediaTransform,
+                transition: isDragging ? "none" : "transform 0.15s ease-out",
+                pointerEvents: "none"
+              },
+              alt: ""
+            }
+          )
+        ),
+        type === "video" && content && /* @__PURE__ */ import_react2.default.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: fitMode ? "100%" : "auto",
+              height: fitMode ? "100%" : "auto"
+            }
+          },
+          /* @__PURE__ */ import_react2.default.createElement(
+            "video",
+            {
+              ref: videoRef,
+              key: content,
+              controls: true,
+              muted: videoMuted,
+              onLoadedMetadata: (e) => {
+                const vid = e.target;
+                setFileInfo((prev) => ({
+                  ...prev,
+                  width: vid.videoWidth,
+                  height: vid.videoHeight
+                }));
+              },
+              style: {
+                maxWidth: fitMode ? "100%" : "none",
+                maxHeight: fitMode ? "100%" : "none",
+                transform: mediaTransform,
+                transition: isDragging ? "none" : "transform 0.15s ease-out"
+              },
+              src: content,
+              onError: () => setError(`Failed to play video. Unsupported codec or corrupted file.`)
+            }
+          )
+        ),
+        type === "text" && content !== null && /* @__PURE__ */ import_react2.default.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ import_react2.default.createElement(
+          "pre",
+          {
+            style: {
+              margin: 0,
+              padding: 16,
+              color: "#d4d4d4",
+              fontSize: `${fontSize}px`,
+              fontFamily: 'Consolas, "Courier New", monospace',
+              whiteSpace: lineWrap ? "pre-wrap" : "pre",
+              wordBreak: lineWrap ? "break-word" : "normal",
+              lineHeight: 1.5,
+              userSelect: "text"
+            }
+          },
+          content
+        )),
+        showInfo && filePath && /* @__PURE__ */ import_react2.default.createElement(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              top: 12,
+              right: 12,
+              background: "rgba(22, 22, 22, 0.92)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid #383838",
+              borderRadius: 6,
+              padding: 14,
+              fontSize: 11,
+              color: "#ccc",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+              zIndex: 20,
+              minWidth: 240
+            }
+          },
+          /* @__PURE__ */ import_react2.default.createElement("div", { style: { fontWeight: 700, color: "#fff", marginBottom: 8, fontSize: 12, borderBottom: "1px solid #333", paddingBottom: 4 } }, "File Details"),
+          /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Name:"), " ", fileName(filePath)),
+          /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Path:"), " ", /* @__PURE__ */ import_react2.default.createElement("span", { style: { wordBreak: "break-all" } }, filePath)),
+          fileInfo?.size && /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Size:"), " ", formatFileSize(fileInfo.size)),
+          fileInfo?.width && /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Dimensions:"), " ", fileInfo.width, " \xD7 ", fileInfo.height, " px"),
+          fileInfo?.mtime && /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Modified:"), " ", fileInfo.mtime),
+          textStats && /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Lines:"), " ", textStats.lines), /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Words:"), " ", textStats.words), /* @__PURE__ */ import_react2.default.createElement("div", { style: infoRowStyle }, /* @__PURE__ */ import_react2.default.createElement("span", { style: infoLabelStyle }, "Characters:"), " ", textStats.chars))
+        )
+      ),
+      type === "text" && textStats && /* @__PURE__ */ import_react2.default.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "2px 10px",
+            background: "#181818",
+            borderTop: "1px solid #282828",
+            fontSize: 10,
+            color: "#777",
+            flexShrink: 0
+          }
+        },
+        /* @__PURE__ */ import_react2.default.createElement("span", null, "Lines: ", textStats.lines, " | Words: ", textStats.words, " | Chars: ", textStats.chars),
+        /* @__PURE__ */ import_react2.default.createElement("span", null, lineWrap ? "Wrap: On" : "Wrap: Off")
+      )
     );
+  };
+  var btnStyle = {
+    background: "transparent",
+    border: "1px solid transparent",
+    color: "#bbb",
+    borderRadius: 3,
+    padding: "2px 6px",
+    fontSize: 12,
+    cursor: "pointer",
+    outline: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    lineHeight: 1,
+    transition: "background 0.1s, color 0.1s"
+  };
+  var dividerStyle = {
+    width: 1,
+    height: 14,
+    background: "#333",
+    margin: "0 2px"
+  };
+  var infoRowStyle = {
+    display: "flex",
+    marginBottom: 4,
+    lineHeight: 1.4
+  };
+  var infoLabelStyle = {
+    color: "#888",
+    width: 75,
+    flexShrink: 0
   };
   var MediaViewer_default = MediaViewer;
 
@@ -40263,24 +40777,7 @@ ${h2.join(`
   };
 
   // electron/renderer/components/Terminal/index.jsx
-  var ACCENTS = [
-    "#569cd6",
-    "#ce9178",
-    "#6a9955",
-    "#dcdcaa",
-    "#c586c0",
-    "#d16969",
-    "#4ec9b0",
-    "#e5c07b",
-    "#f44747",
-    "#6796e6",
-    "#89d185",
-    "#cca700",
-    "#b392f0",
-    "#79b8ff",
-    "#f97583",
-    "#56b4e9"
-  ];
+  var nextTerminalId = 1;
   var XTERM_CUSTOM_CSS = `
 .xterm { height: 100%; padding: 0 !important; background: transparent !important; }
 .xterm-viewport { scrollbar-width: thin; background: transparent !important; }
@@ -40294,44 +40791,35 @@ ${h2.join(`
 @keyframes xterm-cursor-blink { 50% { opacity: 0; } }
 .xterm-selection div { background: var(--selection) !important; opacity: 0.5; }
 .xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
-.term-xterm { padding: 4px 6px; box-sizing: border-box; background: #1e1e1e; }
+.term-xterm { padding: 4px 6px; box-sizing: border-box; background: #1e1e1e; height: 100%; width: 100%; }
 .term-xterm .xterm { pointer-events: auto; }
 .term-xterm .xterm-viewport { pointer-events: auto; }
 .xterm-screen { background: transparent !important; }
 `;
   var TERMINAL_PANEL_CSS = `
-.term-panel { display:flex; flex-direction:row; height:100%; background:#1e1e1e; }
-.term-content { flex:1; position:relative; overflow:hidden; z-index:1; background:#1e1e1e; }
+.term-panel { display:flex; flex-direction:column; height:100%; width:100%; background:#1e1e1e; position:relative; overflow:hidden; }
+.term-content { flex:1; position:relative; overflow:hidden; z-index:1; background:#1e1e1e; display:flex; flex-direction:column; min-height:0; }
 .term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; background:var(--bg-surface); }
-.term-empty-center { flex-direction:column; gap:14px; }
-.term-empty-btn { background:var(--bg-active); color:var(--text-primary); border:1px solid #3c3c3c; border-radius:4px; padding:6px 20px; cursor:pointer; font-size:12px; }
-.term-empty-btn:hover { background:#383838; }
-.term-pane { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; background:#1e1e1e; }
-.term-status { display:flex; align-items:center; gap:6px; padding:3px 10px; background:var(--bg-raised); border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); flex-shrink:0; }
+.term-status { display:flex; align-items:center; gap:6px; padding:3px 10px; background:var(--bg-raised); border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); flex-shrink:0; user-select:none; }
 .term-status-icon { flex-shrink:0; }
-.term-status-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-
-/* \u2500\u2500 Side tab bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-.term-tabs { width:120px; flex-shrink:0; z-index:3; background:var(--bg-raised); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
-.term-tab { display:flex; align-items:center; gap:4px; padding:6px 6px 6px 8px; cursor:pointer; font-size:12px; user-select:none; transition:background 0.08s; }
-.term-tab:hover { background:var(--bg-hover); }
-.term-tab--active { background:var(--bg-surface); }
-.term-tab-icon { flex-shrink:0; }
-.term-tab-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
-.term-tab-input { flex:1; min-width:0; font-size:12px; background:var(--bg-header); border:1px solid var(--accent-light); border-radius:2px; color:var(--text-highlight); padding:1px 4px; outline:none; }
-.term-tab-close { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:3px; cursor:pointer; font-size:10px; line-height:16px; flex-shrink:0; color:var(--text-secondary); visibility:hidden; }
-.term-tab:hover .term-tab-close { visibility:visible; }
-.term-tab-close:hover { background:var(--scrollbar); color:var(--text-highlight); }
-.term-tab-add { display:flex; align-items:center; justify-content:center; padding:8px 0; cursor:pointer; color:var(--text-secondary); font-size:18px; line-height:1; transition:background 0.08s,color 0.08s; }
-.term-tab-add:hover { background:var(--bg-hover); color:var(--text-highlight); }
+.term-status-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.term-status-actions { display:flex; align-items:center; gap:4px; }
+.term-status-btn { background:transparent; border:none; color:#888; cursor:pointer; padding:2px 4px; border-radius:2px; font-size:11px; }
+.term-status-btn:hover { background:#333; color:#fff; }
 `;
   var TerminalStyle = () => /* @__PURE__ */ import_react12.default.createElement("style", null, XTERM_CUSTOM_CSS, TERMINAL_PANEL_CSS);
-  var TabContent = ({ tabId, cwd, writersRef, isActive }) => {
+  var TerminalPanel = ({ nodeId, config }) => {
     const elRef = (0, import_react12.useRef)(null);
     const termRef = (0, import_react12.useRef)(null);
     const fitRef = (0, import_react12.useRef)(null);
+    const tabIdRef = (0, import_react12.useRef)(null);
     const [initError, setInitError] = (0, import_react12.useState)(null);
-    const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "";
+    const [cwd, setCwd] = (0, import_react12.useState)(null);
+    if (!tabIdRef.current) {
+      const safeNodeId = nodeId ? String(nodeId).replace(/[^a-zA-Z0-9_]/g, "_") : `term_${nextTerminalId++}`;
+      tabIdRef.current = `term_${safeNodeId}`;
+    }
+    const tabId = tabIdRef.current;
     const handleContextMenu = (0, import_react12.useCallback)(async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -40348,7 +40836,7 @@ ${h2.join(`
       const result = await window.electronAPI.showTerminalContextMenu(hasSelection);
       if (!result) return;
       switch (result.action) {
-        case "copy": {
+        case "copy":
           if (selText) {
             try {
               window.electronAPI.clipboardWrite(selText);
@@ -40360,20 +40848,37 @@ ${h2.join(`
             }
           }
           break;
-        }
         case "paste": {
           const text = window.electronAPI.clipboardRead();
           if (text) window.electronAPI.writeToTerminal(tabId, text);
           break;
         }
-        case "kill":
-          window.electronAPI.closeTerminal(tabId);
+        case "addPanel":
+          window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { nodeId, location: "CENTER" } }));
+          break;
+        case "splitRight":
+          window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { nodeId, location: "RIGHT" } }));
+          break;
+        case "splitDown":
+          window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { nodeId, location: "BOTTOM" } }));
+          break;
+        case "clear":
+          term?.clear();
+          window.electronAPI.writeToTerminal(tabId, "\x1Bc");
           break;
         case "restart":
           window.electronAPI.openTerminal(tabId, cwd);
           break;
+        case "close":
+          window.dispatchEvent(new CustomEvent("close-flex-tab", { detail: { nodeId } }));
+          break;
       }
-    }, [tabId, cwd]);
+    }, [tabId, cwd, nodeId]);
+    (0, import_react12.useEffect)(() => {
+      window.electronAPI.getProjectPath().then((p) => {
+        if (p) setCwd(p);
+      });
+    }, []);
     (0, import_react12.useEffect)(() => {
       let term;
       let fit;
@@ -40426,7 +40931,6 @@ ${h2.join(`
           });
           termRef.current = term;
           fitRef.current = fit;
-          writersRef.current[tabId] = (data) => term.write(data);
           ro2 = new ResizeObserver(() => {
             if (fit && term) {
               try {
@@ -40458,7 +40962,6 @@ ${h2.join(`
       return () => {
         disposed = true;
         if (rafId !== void 0) cancelAnimationFrame(rafId);
-        delete writersRef.current[tabId];
         window.electronAPI.closeTerminal(tabId);
         if (term) {
           try {
@@ -40472,286 +40975,82 @@ ${h2.join(`
       };
     }, [tabId, cwd]);
     (0, import_react12.useEffect)(() => {
-      if (!isActive) return;
-      const id = requestAnimationFrame(() => {
-        const fit = fitRef.current;
-        const term = termRef.current;
-        if (fit && term) {
+      const unsubData = window.electronAPI.onTerminalData(({ tabId: tId, data }) => {
+        if (tId === tabId && termRef.current) {
           try {
-            fit.fit();
-            if (term.cols > 0 && term.rows > 0) {
-              window.electronAPI.resizeTerminal(tabId, term.cols, term.rows);
-            }
+            termRef.current.write(data);
           } catch {
           }
         }
       });
-      return () => cancelAnimationFrame(id);
-    }, [isActive, tabId]);
-    if (initError) {
-      return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" } }, "Terminal init error: ", initError);
-    }
-    return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%", background: "#1e1e1e" } }, /* @__PURE__ */ import_react12.default.createElement(
-      "div",
-      {
-        ref: elRef,
-        className: "term-xterm",
-        style: { flex: 1, minHeight: 0, overflow: "hidden" },
-        onContextMenu: handleContextMenu
-      }
-    ), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-status" }, /* @__PURE__ */ import_react12.default.createElement("svg", { className: "term-status-icon", width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { className: "term-status-path" }, dirName)));
-  };
-  var TerminalPanel = () => {
-    const [tabs, setTabs] = (0, import_react12.useState)([]);
-    const [activeTabId, setActiveTabId] = (0, import_react12.useState)(null);
-    const [projectOpen, setProjectOpen] = (0, import_react12.useState)(false);
-    const [renamingTabId, setRenamingTabId] = (0, import_react12.useState)(null);
-    const renameRef = (0, import_react12.useRef)(null);
-    const nextId = (0, import_react12.useRef)(1);
-    const projPath = (0, import_react12.useRef)(null);
-    const writersRef = (0, import_react12.useRef)({});
-    const tabsRef = (0, import_react12.useRef)(tabs);
-    tabsRef.current = tabs;
-    const activeRef = (0, import_react12.useRef)(activeTabId);
-    activeRef.current = activeTabId;
-    (0, import_react12.useEffect)(() => {
-      const unsub = window.electronAPI.onTerminalData(({ tabId, data }) => {
-        const w = writersRef.current[tabId];
-        if (w) try {
-          w(data);
-        } catch {
-        }
-      });
-      return unsub;
-    }, []);
-    (0, import_react12.useEffect)(() => {
-      const unsub = window.electronAPI.onTerminalExit(({ tabId, code }) => {
-        const w = writersRef.current[tabId];
-        if (w) {
+      const unsubExit = window.electronAPI.onTerminalExit(({ tabId: tId, code }) => {
+        if (tId === tabId && termRef.current) {
           try {
-            w(`\x1B[33m\r
+            termRef.current.write(`\x1B[33m\r
 [Process exited with code ${code}]\x1B[0m\r
 `);
           } catch {
           }
         }
       });
-      return unsub;
-    }, []);
-    const createTab = (0, import_react12.useCallback)((cwd) => {
-      const dir = cwd || projPath.current;
-      if (!dir) return;
-      const num = nextId.current++;
-      const id = `term_${num}`;
-      const explicitCwd = cwd !== void 0;
-      const name = explicitCwd ? dir.replace(/[\\/]$/, "").split(/[\\/]/).pop() || `Terminal ${num}` : `Terminal ${num}`;
-      setTabs((prev) => [...prev, { id, name, cwd: dir }]);
-      setActiveTabId(id);
-    }, []);
-    const closeTab = (0, import_react12.useCallback)((tabId) => {
-      delete writersRef.current[tabId];
-      setTabs((prev) => {
-        const idx = prev.findIndex((t) => t.id === tabId);
-        const next = prev.filter((t) => t.id !== tabId);
-        if (activeRef.current === tabId) {
-          setActiveTabId(next[Math.min(idx, next.length - 1)]?.id || null);
-        }
-        return next;
-      });
-    }, []);
-    const startRename = (0, import_react12.useCallback)((tabId, currentName) => {
-      setRenamingTabId(tabId);
-      requestAnimationFrame(() => {
-        if (renameRef.current) {
-          renameRef.current.value = currentName;
-          renameRef.current.select();
-        }
-      });
-    }, []);
-    const commitRename = (0, import_react12.useCallback)(() => {
-      if (!renamingTabId || !renameRef.current) return;
-      const newName = renameRef.current.value.trim() || `Terminal ${renamingTabId.replace("term_", "")}`;
-      setTabs((prev) => prev.map((t) => t.id === renamingTabId ? { ...t, name: newName } : t));
-      setRenamingTabId(null);
-    }, [renamingTabId]);
-    const cancelRename = (0, import_react12.useCallback)(() => {
-      setRenamingTabId(null);
-    }, []);
-    const handleTabContextMenu = (0, import_react12.useCallback)(async (e, tabId) => {
-      e.preventDefault();
-      const result = await window.electronAPI.showTerminalTabContextMenu();
-      if (!result) return;
-      switch (result.action) {
-        case "kill":
-          try {
-            await window.electronAPI.closeTerminal(tabId);
-          } catch {
-          }
-          break;
-        case "restart": {
-          const t = tabsRef.current.find((x) => x.id === tabId);
-          if (t) {
-            try {
-              await window.electronAPI.openTerminal(tabId, t.cwd);
-            } catch {
-            }
-          }
-          break;
-        }
-        case "rename": {
-          const tab = tabsRef.current.find((t) => t.id === tabId);
-          startRename(tabId, tab?.name || "");
-          break;
-        }
-        case "close":
-          try {
-            await window.electronAPI.closeTerminal(tabId);
-          } catch {
-          }
-          closeTab(tabId);
-          break;
-      }
-    }, [closeTab, startRename]);
+      return () => {
+        unsubData();
+        unsubExit();
+      };
+    }, [tabId]);
     (0, import_react12.useEffect)(() => {
       const handler = (e) => {
-        const dir = e.detail.dir;
+        const dir = e.detail?.dir;
         if (dir) {
-          projPath.current = dir;
-          setProjectOpen(true);
-          createTab(dir);
-          window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
+          setCwd(dir);
+          window.electronAPI.openTerminal(tabId, dir);
         }
       };
       window.addEventListener("open-terminal", handler);
       return () => window.removeEventListener("open-terminal", handler);
-    }, [createTab]);
+    }, [tabId]);
     (0, import_react12.useEffect)(() => {
-      window.electronAPI.getProjectPath().then((p) => {
-        if (p) {
-          projPath.current = p;
-          setProjectOpen(true);
-          createTab();
-        }
-      });
       const u1 = window.electronAPI.onMenuEvent("menu:openProject", (p) => {
         if (p) {
-          projPath.current = p;
-          setProjectOpen(true);
-          createTab();
+          setCwd(p);
+          window.electronAPI.openTerminal(tabId, p);
         }
       });
       const u2 = window.electronAPI.onMenuEvent("menu:newProject", (p) => {
         if (p) {
-          projPath.current = p;
-          setProjectOpen(true);
-          createTab();
+          setCwd(p);
+          window.electronAPI.openTerminal(tabId, p);
         }
       });
       const u3 = window.electronAPI.onMenuEvent("menu:closeProject", () => {
-        projPath.current = null;
-        setProjectOpen(false);
-        for (const id of Object.keys(writersRef.current)) {
-          try {
-            window.electronAPI.closeTerminal(id);
-          } catch {
-          }
-        }
-        writersRef.current = {};
-        setTabs([]);
-        setActiveTabId(null);
+        setCwd(null);
+        window.electronAPI.closeTerminal(tabId);
+        termRef.current?.clear();
       });
       return () => {
         u1();
         u2();
         u3();
       };
-    }, [createTab]);
-    return /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-panel" }, /* @__PURE__ */ import_react12.default.createElement(TerminalStyle, null), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-content" }, !projectOpen ? /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-empty" }, "Open a project to use the terminal") : tabs.length === 0 ? /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-empty term-empty-center" }, /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-empty" }, "No open terminals"), /* @__PURE__ */ import_react12.default.createElement(
+    }, [tabId]);
+    const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "Terminal";
+    return /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-panel" }, /* @__PURE__ */ import_react12.default.createElement(TerminalStyle, null), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-content", onContextMenu: handleContextMenu }, initError ? /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" } }, "Terminal init error: ", initError) : /* @__PURE__ */ import_react12.default.createElement("div", { ref: elRef, className: "term-xterm", style: { flex: 1, minHeight: 0, overflow: "hidden" } })), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-status" }, /* @__PURE__ */ import_react12.default.createElement("svg", { className: "term-status-icon", width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { className: "term-status-path" }, dirName), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-status-actions" }, /* @__PURE__ */ import_react12.default.createElement(
       "button",
       {
-        onClick: () => createTab(),
-        className: "term-empty-btn"
+        className: "term-status-btn",
+        title: "Split Right",
+        onClick: () => window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { nodeId, location: "RIGHT" } }))
       },
-      "+ Create Terminal"
-    )) : tabs.map((tab) => /* @__PURE__ */ import_react12.default.createElement(
-      "div",
+      "\u29C9 Right"
+    ), /* @__PURE__ */ import_react12.default.createElement(
+      "button",
       {
-        key: tab.id,
-        className: "term-pane",
-        style: { display: tab.id === activeTabId ? "block" : "none" }
+        className: "term-status-btn",
+        title: "Split Down",
+        onClick: () => window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { nodeId, location: "BOTTOM" } }))
       },
-      /* @__PURE__ */ import_react12.default.createElement(
-        TabContent,
-        {
-          tabId: tab.id,
-          cwd: tab.cwd,
-          writersRef,
-          isActive: tab.id === activeTabId
-        }
-      )
-    ))), projectOpen && /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-tabs" }, tabs.map((tab, i) => {
-      const active = tab.id === activeTabId;
-      return /* @__PURE__ */ import_react12.default.createElement(
-        "div",
-        {
-          key: tab.id,
-          "data-term-tab": "",
-          onClick: () => setActiveTabId(tab.id),
-          onContextMenu: (e) => handleTabContextMenu(e, tab.id),
-          className: "term-tab" + (active ? " term-tab--active" : ""),
-          style: { borderLeft: `3px solid ${active ? ACCENTS[i % ACCENTS.length] : "transparent"}` }
-        },
-        /* @__PURE__ */ import_react12.default.createElement("svg", { className: "term-tab-icon", width: "10", height: "10", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: active ? "#aaa" : "#666", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })),
-        renamingTabId === tab.id ? /* @__PURE__ */ import_react12.default.createElement(
-          "input",
-          {
-            ref: renameRef,
-            defaultValue: tab.name,
-            onKeyDown: (e) => {
-              if (e.key === "Enter") commitRename();
-              if (e.key === "Escape") cancelRename();
-              e.stopPropagation();
-            },
-            onBlur: commitRename,
-            onClick: (e) => e.stopPropagation(),
-            className: "term-tab-input"
-          }
-        ) : /* @__PURE__ */ import_react12.default.createElement(
-          "span",
-          {
-            onDoubleClick: (e) => {
-              e.stopPropagation();
-              startRename(tab.id, tab.name);
-            },
-            className: "term-tab-name"
-          },
-          tab.name
-        ),
-        /* @__PURE__ */ import_react12.default.createElement(
-          "span",
-          {
-            onClick: (e) => {
-              e.stopPropagation();
-              try {
-                window.electronAPI.closeTerminal(tab.id);
-              } catch {
-              }
-              closeTab(tab.id);
-            },
-            className: "term-tab-close"
-          },
-          "\u2715"
-        )
-      );
-    }), /* @__PURE__ */ import_react12.default.createElement(
-      "div",
-      {
-        onClick: () => window.dispatchEvent(new CustomEvent("add-terminal-panel")),
-        title: "New Terminal Panel",
-        className: "term-tab-add"
-      },
-      "+"
-    )));
+      "\u29C9 Down"
+    ))));
   };
   var Terminal_default = TerminalPanel;
 
@@ -40819,7 +41118,7 @@ ${h2.join(`
       case "panel5":
         return /* @__PURE__ */ import_react13.default.createElement(Panel5_default, null);
       case "terminal":
-        return /* @__PURE__ */ import_react13.default.createElement(Terminal_default, null);
+        return /* @__PURE__ */ import_react13.default.createElement(Terminal_default, { config: node.getConfig(), nodeId: node.getId() });
       case "blank":
         return /* @__PURE__ */ import_react13.default.createElement(Blank_default, null);
       default:
@@ -40863,32 +41162,54 @@ ${h2.join(`
       return () => window.removeEventListener("focus-terminal-tab", handler);
     }, []);
     (0, import_react13.useEffect)(() => {
-      const handler = () => {
+      const handler = (e) => {
         const m = modelRef.current;
         if (!m) return;
-        const terminalNode = m.getNodeById("terminal-tab");
-        const parentId = terminalNode ? terminalNode.getParent()?.getId() : null;
+        const targetNodeId = e.detail?.nodeId;
+        const locationName = e.detail?.location || "CENTER";
+        let location = DockLocation.CENTER;
+        if (locationName === "RIGHT") location = DockLocation.RIGHT;
+        if (locationName === "BOTTOM") location = DockLocation.BOTTOM;
+        if (locationName === "LEFT") location = DockLocation.LEFT;
+        if (locationName === "TOP") location = DockLocation.TOP;
+        let targetNode = targetNodeId ? m.getNodeById(targetNodeId) : null;
+        let parentId = null;
+        if (targetNode) {
+          parentId = location === DockLocation.CENTER ? targetNode.getParent()?.getId() : targetNode.getId();
+        }
+        if (!parentId) {
+          const terminalNode = m.getNodeById("terminal-tab");
+          parentId = terminalNode ? m.getNodeById(terminalNode.getParent()?.getId()) : null;
+        }
+        if (!parentId) {
+          const root = m.getRoot();
+          parentId = root?.getId();
+        }
         if (parentId) {
           m.doAction(Actions.addNode({
             type: "tab",
             component: "terminal",
             name: "Terminal",
             enableClose: true
-          }, parentId, DockLocation.CENTER));
-        } else {
-          const root = m.getRoot();
-          if (root?.getId()) {
-            m.doAction(Actions.addNode({
-              type: "tab",
-              component: "terminal",
-              name: "Terminal",
-              enableClose: true
-            }, root.getId(), DockLocation.BOTTOM));
-          }
+          }, parentId, location));
         }
       };
       window.addEventListener("add-terminal-panel", handler);
       return () => window.removeEventListener("add-terminal-panel", handler);
+    }, []);
+    (0, import_react13.useEffect)(() => {
+      const handler = (e) => {
+        const m = modelRef.current;
+        const nodeId = e.detail?.nodeId;
+        if (m && nodeId) {
+          try {
+            m.doAction(Actions.deleteTab(nodeId));
+          } catch {
+          }
+        }
+      };
+      window.addEventListener("close-flex-tab", handler);
+      return () => window.removeEventListener("close-flex-tab", handler);
     }, []);
     (0, import_react13.useEffect)(() => {
       const unsub = window.electronAPI.onMenuEvent("menu:resetLayout", () => {

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getFilePreview: (filePath) => ipcRenderer.invoke("fs:getFilePreview", filePath),
   readTextFile:   (filePath) => ipcRenderer.invoke("fs:readTextFile", filePath),
   readFileAsDataUrl: (filePath) => ipcRenderer.invoke("fs:readFileAsDataUrl", filePath),
+  copyImageToClipboard: (filePath) => ipcRenderer.invoke("media:copyImage", filePath),
 
   // ── Directory access ───────────────────────────────────────────────────────
   openFolder:  ()      => ipcRenderer.invoke("dialog:openFolder"),

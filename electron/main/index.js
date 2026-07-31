@@ -308,8 +308,18 @@ ipcMain.handle("fs:moveItem", async (_e, { srcPath, destDir }) => {
 ipcMain.handle("fs:revealInExplorer", (_e, { itemPath }) => shell.showItemInFolder(itemPath));
 
 ipcMain.handle("fs:stat", async (_e, itemPath) => {
-  try { const s = fs.statSync(toLongPath(itemPath)); return { isDir: s.isDirectory(), exists: true }; }
+  try { const s = fs.statSync(toLongPath(itemPath)); return { isDir: s.isDirectory(), exists: true, size: s.size, mtime: s.mtime, birthtime: s.birthtime }; }
   catch { return { isDir: false, exists: false }; }
+});
+
+ipcMain.handle("media:copyImage", async (_e, filePath) => {
+  try {
+    const img = nativeImage.createFromPath(toLongPath(filePath));
+    clipboard.writeImage(img);
+    return true;
+  } catch {
+    return false;
+  }
 });
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -504,7 +514,7 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
         { label: "Copy Path",               accelerator: "Ctrl+Shift+C", click: () => act("copyPath") },
         { label: "Refresh",                 accelerator: "F5",           click: () => act("refresh")  },
       ];
-    } else {
+    } else if (type === "file") {
       const openWithSubmenu = [
         { label: "System Default", accelerator: "Ctrl+Enter", click: () => act("openWithSystem") },
         { type: "separator" },
@@ -525,6 +535,28 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
         sep,
         { label: "Reveal in File Explorer", accelerator: "Ctrl+Shift+R", click: () => act("reveal")   },
         { label: "Copy Path",               accelerator: "Ctrl+Shift+C", click: () => act("copyPath") },
+      ];
+    } else if (type === "mediaViewer") {
+      const filePath = selectedPaths?.[0] || "";
+      const extName = path.extname(filePath).toLowerCase();
+      const isImg = IMAGE_EXTS.includes(extName);
+      items = [
+        { label: "Zoom In (+25%)",           accelerator: "Ctrl+=",       click: () => act("zoomIn") },
+        { label: "Zoom Out (-25%)",          accelerator: "Ctrl+-",       click: () => act("zoomOut") },
+        { label: "Reset Zoom (100%)",        accelerator: "Ctrl+0",       click: () => act("resetZoom") },
+        { label: "Fit to Screen",            accelerator: "F",            click: () => act("fitWindow") },
+        sep,
+        { label: "Rotate 90° Right",         accelerator: "R",            click: () => act("rotateRight") },
+        { label: "Rotate 90° Left",          accelerator: "Shift+R",      click: () => act("rotateLeft") },
+        { label: "Flip Horizontally",        accelerator: "H",            click: () => act("flipH") },
+        { label: "Flip Vertically",          accelerator: "V",            click: () => act("flipV") },
+        sep,
+        { label: "Copy Image to Clipboard",  enabled: isImg,              click: () => act("copyImage") },
+        { label: "Copy File Path",           accelerator: "Ctrl+Shift+C", click: () => act("copyPath") },
+        { label: "Reveal in File Explorer",  accelerator: "Ctrl+Shift+R", click: () => act("reveal") },
+        { label: "Open in System Default",   accelerator: "Enter",        click: () => act("openWithSystem") },
+        sep,
+        { label: "Close Media Viewer",       accelerator: "Esc",          click: () => act("close") },
       ];
     }
 
@@ -612,11 +644,16 @@ ipcMain.handle("terminal:contextMenu", (event, { hasSelection }) => {
   return new Promise((resolve) => {
     const act = (action) => resolve({ action });
     const items = [
-      { label: "Copy",      accelerator: "Ctrl+Shift+C", enabled: hasSelection, click: () => act("copy") },
-      { label: "Paste",     accelerator: "Ctrl+Shift+V",                       click: () => act("paste") },
+      { label: "Copy",                  accelerator: "Ctrl+Shift+C", enabled: hasSelection, click: () => act("copy") },
+      { label: "Paste",                 accelerator: "Ctrl+Shift+V",                       click: () => act("paste") },
       { type: "separator" },
-      { label: "Kill Terminal",                                                 click: () => act("kill") },
-      { label: "Restart",                                                       click: () => act("restart") },
+      { label: "New Terminal Panel",     accelerator: "Ctrl+Shift+T",                        click: () => act("addPanel") },
+      { label: "Split Right",           accelerator: "Ctrl+Shift+\\",                       click: () => act("splitRight") },
+      { label: "Split Down",            accelerator: "Ctrl+Shift+-",                        click: () => act("splitDown") },
+      { type: "separator" },
+      { label: "Clear Terminal",        accelerator: "Ctrl+K",                              click: () => act("clear") },
+      { label: "Restart Shell",         accelerator: "Ctrl+Shift+R",                        click: () => act("restart") },
+      { label: "Close Panel",           accelerator: "Ctrl+W",                              click: () => act("close") },
     ];
     const menu = Menu.buildFromTemplate(items);
     const win = BrowserWindow.fromWebContents(event.sender);

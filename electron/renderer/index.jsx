@@ -61,7 +61,7 @@ const factory = (node) => {
     case "panel3":        return <BrowserPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "projectPanel":  return <ProjectPanel />;
     case "panel5":        return <Panel5 />;
-    case "terminal":      return <TerminalPanel />;
+    case "terminal":      return <TerminalPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "blank":         return <BlankPanel />;
     default:              return null;
   }
@@ -105,30 +105,58 @@ const App = () => {
     return () => window.removeEventListener("focus-terminal-tab", handler);
   }, []);
 
-  // Add a new terminal panel to the layout
+  // Add/Split terminal panel in flexlayout
   useEffect(() => {
-    const handler = () => {
+    const handler = (e) => {
       const m = modelRef.current;
       if (!m) return;
-      // Find the terminal tab's parent tab set and add there
-      const terminalNode = m.getNodeById("terminal-tab");
-      const parentId = terminalNode ? terminalNode.getParent()?.getId() : null;
+      const targetNodeId = e.detail?.nodeId;
+      const locationName = e.detail?.location || "CENTER";
+      let location = DockLocation.CENTER;
+      if (locationName === "RIGHT") location = DockLocation.RIGHT;
+      if (locationName === "BOTTOM") location = DockLocation.BOTTOM;
+      if (locationName === "LEFT") location = DockLocation.LEFT;
+      if (locationName === "TOP") location = DockLocation.TOP;
+
+      let targetNode = targetNodeId ? m.getNodeById(targetNodeId) : null;
+      let parentId = null;
+
+      if (targetNode) {
+        parentId = location === DockLocation.CENTER ? targetNode.getParent()?.getId() : targetNode.getId();
+      }
+      if (!parentId) {
+        const terminalNode = m.getNodeById("terminal-tab");
+        parentId = terminalNode ? m.getNodeById(terminalNode.getParent()?.getId()) : null;
+      }
+      if (!parentId) {
+        const root = m.getRoot();
+        parentId = root?.getId();
+      }
+
       if (parentId) {
         m.doAction(Actions.addNode({
-          type: "tab", component: "terminal", name: "Terminal", enableClose: true,
-        }, parentId, DockLocation.CENTER));
-      } else {
-        // Fallback: add at root
-        const root = m.getRoot();
-        if (root?.getId()) {
-          m.doAction(Actions.addNode({
-            type: "tab", component: "terminal", name: "Terminal", enableClose: true,
-          }, root.getId(), DockLocation.BOTTOM));
-        }
+          type: "tab",
+          component: "terminal",
+          name: "Terminal",
+          enableClose: true,
+        }, parentId, location));
       }
     };
     window.addEventListener("add-terminal-panel", handler);
     return () => window.removeEventListener("add-terminal-panel", handler);
+  }, []);
+
+  // Close flex tab by ID
+  useEffect(() => {
+    const handler = (e) => {
+      const m = modelRef.current;
+      const nodeId = e.detail?.nodeId;
+      if (m && nodeId) {
+        try { m.doAction(Actions.deleteTab(nodeId)); } catch {}
+      }
+    };
+    window.addEventListener("close-flex-tab", handler);
+    return () => window.removeEventListener("close-flex-tab", handler);
   }, []);
 
   // Reset panels to default layout

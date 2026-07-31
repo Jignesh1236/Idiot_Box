@@ -31,11 +31,59 @@ ipcMain.handle("settings:read",  () => readSettings());
 ipcMain.handle("settings:write", (_e, data) => writeSettings(data));
 
 // ─── Browser extensions ─────────────────────────────────────────────────────────
+const EXTENSIONS_DIR  = path.join(app.getPath("userData"), "browser-extensions");
 const EXTENSIONS_FILE = path.join(app.getPath("userData"), "browser-extensions.json");
 const readExtensions  = () => { try { return JSON.parse(fs.readFileSync(EXTENSIONS_FILE, "utf8")); } catch { return []; } };
 const writeExtensions = (d) => { try { fs.writeFileSync(EXTENSIONS_FILE, JSON.stringify(d, null, 2)); return true; } catch { return false; } };
 ipcMain.handle("extensions:read",   () => readExtensions());
 ipcMain.handle("extensions:write",  (_e, data) => writeExtensions(data));
+
+// Upload a ZIP or .crx extension file — copies it into userData/browser-extensions/
+ipcMain.handle("extensions:upload", async (event, { name, sourcePath }) => {
+  try {
+    fs.mkdirSync(EXTENSIONS_DIR, { recursive: true });
+    const extname = path.extname(sourcePath).toLowerCase();
+    const safeId  = "ext_" + Date.now();
+    const destName = safeId + extname;
+    const destPath = path.join(EXTENSIONS_DIR, destName);
+    fs.copyFileSync(sourcePath, destPath);
+    const entry = { id: safeId, name: name || path.basename(sourcePath), file: destName, filePath: destPath, enabled: true, addedAt: Date.now() };
+    const list = readExtensions();
+    list.push(entry);
+    writeExtensions(list);
+    return { success: true, entry };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Delete extension file from disk when removed
+ipcMain.handle("extensions:delete", async (_e, { id }) => {
+  try {
+    const list = readExtensions();
+    const entry = list.find((e) => e.id === id);
+    if (entry && entry.filePath) {
+      try { fs.unlinkSync(entry.filePath); } catch {}
+    }
+    writeExtensions(list.filter((e) => e.id !== id));
+    return true;
+  } catch { return false; }
+});
+
+// Pick a ZIP or .crx file via native dialog
+ipcMain.handle("extensions:pickFile", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: "Select Extension File",
+    filters: [
+      { name: "Extension Files", extensions: ["zip", "crx"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+    properties: ["openFile"],
+  });
+  if (canceled || !filePaths.length) return null;
+  return filePaths[0];
+});
 
 // ─── Editors ─────────────────────────────────────────────────────────────────
 const KNOWN_EDITORS = [
@@ -52,24 +100,57 @@ const KNOWN_EDITORS = [
   { id: "android",  label: "Android Studio",     commands: ["studio"]             },
   { id: "vim",      label: "Vim",                commands: ["vim"]                },
   { id: "nvim",     label: "Neovim",             commands: ["nvim"]               },
-  { id: "system",   label: "System Default",     commands: []                     },
+  { id: "editor",   label: "Editor",               commands: []                     },
+  { id: "system",   label: "System Default",       commands: []                     },
 ];
 let _availableEditors = null;
 const getAvailableEditors = () => {
   if (_availableEditors) return _availableEditors;
   const cmdExists = (cmd) => { try { require("child_process").execSync(process.platform === "win32" ? `where ${cmd}` : `which ${cmd}`, { stdio: "ignore" }); return true; } catch { return false; } };
-  _availableEditors = KNOWN_EDITORS
-    .filter((e) => e.id !== "system" && e.commands.some(cmdExists))
-    .map((e) => ({ id: e.id, label: e.label }));
+  _availableEditors = [
+    { id: "editor", label: "Editor" },
+    ...KNOWN_EDITORS
+      .filter((e) => e.id !== "system" && e.id !== "editor" && e.commands.some(cmdExists))
+      .map((e) => ({ id: e.id, label: e.label }))
+  ];
   return _availableEditors;
 };
 ipcMain.handle("editors:list", () => getAvailableEditors().map((e) => ({ id: e.id, label: e.label, available: true })));
 
-ipcMain.handle("fs:openFile", async (_e, { filePath, editorId }) => {
+ipcMain.handle("fs:openFile", async (event, { filePath, editorId }) => {
+  if (editorId === "editor" || editorId === "panel5") {
+    try { event.sender.send("editor:openFile", { filePath }); } catch {}
+    return;
+  }
   const editor = KNOWN_EDITORS.find((e) => e.id === editorId);
   if (!editor || editor.id === "system" || !editor.commands.length) { await shell.openPath(filePath); return; }
   try { require("child_process").spawn(editor.commands[0], [filePath], { detached: true, stdio: "ignore" }).unref(); }
   catch { await shell.openPath(filePath); }
+});
+
+ipcMain.handle("fs:writeFile", async (_e, { filePath, text }) => {
+  try {
+    fs.writeFileSync(toLongPath(filePath), text, "utf8");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("fs:saveFileAs", async (event, { filePath, text }) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const defaultName = filePath ? filePath.replace(/.*[\\/]/, "") : "untitled.txt";
+  const { canceled, filePath: newPath } = await dialog.showSaveDialog(win, {
+    title: "Save As",
+    defaultPath: defaultName,
+  });
+  if (canceled || !newPath) return { canceled: true };
+  try {
+    fs.writeFileSync(toLongPath(newPath), text, "utf8");
+    return { canceled: false, path: newPath };
+  } catch (err) {
+    return { canceled: false, error: err.message };
+  }
 });
 
 ipcMain.handle("dialog:confirm", async (event, message) => {
@@ -125,10 +206,28 @@ ipcMain.handle("fs:readDirAll", async (_e, dirPath) => {
   } catch { return []; }
 });
 
-// ─── Pin config ────────────────────────────────────────────────────────────────
+// ─── Project config (tabs state + pin config) ──────────────────────────────────
 const PIN_DIR  = ".project_config";
 const PIN_FILE = ".pinconfig";
+const TABS_FILE = "tabs.json";
 
+ipcMain.handle("projectConfig:readTabs", async (_e, rootPath) => {
+  const filePath = path.join(rootPath, PIN_DIR, TABS_FILE);
+  try { return JSON.parse(fs.readFileSync(filePath, "utf8")); }
+  catch { return null; }
+});
+
+ipcMain.handle("projectConfig:writeTabs", async (_e, rootPath, data) => {
+  const dir = path.join(rootPath, PIN_DIR);
+  const filePath = path.join(dir, TABS_FILE);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    return true;
+  } catch { return false; }
+});
+
+// ─── Pin config ────────────────────────────────────────────────────────────────
 ipcMain.handle("fs:readPinConfig", async (_e, rootPath) => {
   const filePath = path.join(rootPath, PIN_DIR, PIN_FILE);
   try { return JSON.parse(fs.readFileSync(filePath, "utf8")); }
@@ -431,6 +530,78 @@ ipcMain.handle("fs:unwatch", async (event, rootPath) => {
   if (w) { await w.close(); watchers.delete(key); }
 });
 
+// ─── Browser webview context menu ────────────────────────────────────────────
+ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionText, linkURL, srcURL, isEditable, pageURL }) => {
+  return new Promise((resolve) => {
+    const act = (action, data) => resolve({ action, data });
+    const sep = { type: "separator" };
+    const items = [];
+
+    // Link actions
+    if (linkURL) {
+      items.push({ label: "Open Link in New Tab",  click: () => act("openLinkNewTab", { url: linkURL }) });
+      items.push({ label: "Copy Link Address",     click: () => act("copyLink",       { url: linkURL }) });
+      items.push(sep);
+    }
+
+    // Image / media
+    if (srcURL) {
+      items.push({ label: "Open Image in New Tab", click: () => act("openImageNewTab", { url: srcURL }) });
+      items.push({ label: "Copy Image Address",    click: () => act("copyImageURL",    { url: srcURL }) });
+      items.push(sep);
+    }
+
+    // Selection
+    if (hasSelection && selectionText) {
+      items.push({ label: "Copy",                  accelerator: "Ctrl+C",  click: () => act("copy") });
+      items.push({ label: `Search for "${selectionText.slice(0, 20)}${selectionText.length > 20 ? "…" : ""}"`, click: () => act("searchSelection", { text: selectionText }) });
+      items.push(sep);
+    }
+
+    // Editable input
+    if (isEditable) {
+      if (!hasSelection) items.push({ label: "Copy",    accelerator: "Ctrl+C",  click: () => act("copy")  });
+      items.push({ label: "Paste",   accelerator: "Ctrl+V",  click: () => act("paste") });
+      items.push({ label: "Cut",     accelerator: "Ctrl+X",  click: () => act("cut")   });
+      items.push({ label: "Select All", accelerator: "Ctrl+A", click: () => act("selectAll") });
+      items.push(sep);
+    }
+
+    // Navigation
+    items.push({ label: "Back",    click: () => act("back"),    enabled: true });
+    items.push({ label: "Forward", click: () => act("forward"), enabled: true });
+    items.push({ label: "Reload",  click: () => act("reload") });
+    items.push(sep);
+
+    // Page actions
+    items.push({ label: "Save Page As…", click: () => act("saveAs") });
+    items.push({ label: "Print…",        click: () => act("print") });
+    items.push(sep);
+    items.push({ label: "View Page Source", click: () => act("viewSource", { url: pageURL }) });
+    items.push({ label: "Inspect Element",  click: () => act("inspect") });
+
+    const menu = Menu.buildFromTemplate(items);
+    const win  = BrowserWindow.fromWebContents(event.sender);
+    menu.popup({ window: win, callback: () => resolve(null) });
+  });
+});
+
+// ─── Browser tab context menu ─────────────────────────────────────────────────
+ipcMain.handle("browser:tabContextMenu", (event) => {
+  return new Promise((resolve) => {
+    const act = (action) => resolve({ action });
+    const items = [
+      { label: "Settings",           click: () => act("settings") },
+      { label: "Refresh",            click: () => act("refresh") },
+      { type: "separator" },
+      { label: "Extension Manager",  click: () => act("extensionManager") },
+    ];
+    const menu = Menu.buildFromTemplate(items);
+    const win  = BrowserWindow.fromWebContents(event.sender);
+    menu.popup({ window: win, callback: () => resolve(null) });
+  });
+});
+
 // ─── Context menu ─────────────────────────────────────────────────────────────
 // type:  "none" | "file" | "folder" | "multi"
 // selectedPaths: string[]
@@ -523,6 +694,7 @@ ipcMain.handle("contextMenu:show", (event, { type, selectedPaths = [], clipboard
 
       items = [
         { label: "Open",                    accelerator: "Enter",        click: () => act("open")     },
+        { label: "Open in New Editor Tab",                               click: () => act("openInNewEditorTab") },
         { label: "Open with", submenu: openWithSubmenu },
         sep,
         { label: "Rename",                  accelerator: "F2",           click: () => act("rename")    },
@@ -767,6 +939,8 @@ function openSettingsWindow() {
   settingsWin.on("closed", () => { settingsWin = null; });
 }
 
+ipcMain.handle("settings:openWindow", () => openSettingsWindow());
+
 // ─── App menu ─────────────────────────────────────────────────────────────────
 function buildMenu() {
   return Menu.buildFromTemplate([
@@ -775,7 +949,11 @@ function buildMenu() {
         { label: "Open Project", accelerator: "CmdOrCtrl+O",       click: async () => { const r = await dialog.showOpenDialog({ title: "Open Project", properties: ["openDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:openProject", r.filePaths[0]); } } },
         { label: "New Project",  accelerator: "CmdOrCtrl+Shift+N", click: async () => { const r = await dialog.showOpenDialog({ title: "Select folder for new project", properties: ["openDirectory","createDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:newProject", r.filePaths[0]); } } },
         { type: "separator" },
-        { label: "Save Project",  accelerator: "CmdOrCtrl+S", click: () => sendToRenderer("menu:saveProject", null) },
+        { label: "Save",            accelerator: "CmdOrCtrl+S",          click: () => sendToRenderer("menu:saveFile", null) },
+        { label: "Save As",         accelerator: "CmdOrCtrl+Shift+S",    click: () => sendToRenderer("menu:saveFileAs", null) },
+        { label: "AutoSave", type: "checkbox", checked: false,           click: (item) => sendToRenderer("menu:toggleAutoSave", item.checked) },
+        { type: "separator" },
+        { label: "Save Project", click: () => sendToRenderer("menu:saveProject", null) },
         { type: "separator" },
         { label: "Close Project", accelerator: "CmdOrCtrl+W", click: () => { lastProjectPath = null; sendToRenderer("menu:closeProject", null); } },
         { type: "separator" },

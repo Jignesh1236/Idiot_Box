@@ -21480,60 +21480,39 @@
   // electron/renderer/components/Settings/pages/EditorPage.jsx
   var import_react2 = __toESM(require_react());
   var EditorPage = ({ settings, onSave }) => {
-    const [editors, setEditors] = (0, import_react2.useState)([]);
-    const [query, setQuery] = (0, import_react2.useState)("");
-    const [selected, setSelected] = (0, import_react2.useState)(settings.defaultEditor ?? "system");
-    const [saved, setSaved] = (0, import_react2.useState)(false);
-    (0, import_react2.useEffect)(() => {
-      window.electronAPI.listEditors().then(setEditors);
-    }, []);
-    (0, import_react2.useEffect)(() => {
-      setSelected(settings.defaultEditor ?? "system");
-    }, [settings.defaultEditor]);
-    const filtered = (0, import_react2.useMemo)(() => {
-      const q = query.trim().toLowerCase();
-      if (!q) return editors;
-      return editors.filter((e) => e.label.toLowerCase().includes(q));
-    }, [editors, query]);
-    const handleSave = async () => {
-      await onSave({ defaultEditor: selected });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2e3);
-    };
-    return /* @__PURE__ */ import_react2.default.createElement("div", null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sw-row" }, /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-row__label" }, "Default File Editor"), /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-row__desc" }, "Application used when opening files from the Project Explorer. Green dot means detected on this system."), /* @__PURE__ */ import_react2.default.createElement(
-      "input",
-      {
-        className: "sw-search",
-        type: "text",
-        placeholder: "Search editors...",
-        value: query,
-        onChange: (e) => setQuery(e.target.value),
-        spellCheck: false
+    const minimap = settings.minimap !== false;
+    const wordWrap = settings.wordWrap !== false;
+    const toggle = async (key, currentVal) => {
+      await onSave({ [key]: !currentVal });
+      window.opener?.dispatchEvent(new CustomEvent("editor:settings-changed", { detail: { [key]: !currentVal } }));
+      try {
+        const bc = new BroadcastChannel("editor-settings");
+        bc.postMessage({ [key]: !currentVal });
+        bc.close();
+      } catch {
       }
-    ), /* @__PURE__ */ import_react2.default.createElement("div", { className: "sw-editor-list", role: "listbox", "aria-label": "Editor list" }, filtered.map((ed) => {
-      const isSelected = selected === ed.id;
-      return /* @__PURE__ */ import_react2.default.createElement(
-        "div",
-        {
-          key: ed.id,
-          className: [
-            "sw-editor-item",
-            isSelected ? "sw-editor-item--selected" : "",
-            !ed.available ? "sw-editor-item--unavailable" : ""
-          ].filter(Boolean).join(" "),
-          role: "option",
-          "aria-selected": isSelected,
-          onClick: () => ed.available !== false && setSelected(ed.id)
-        },
-        /* @__PURE__ */ import_react2.default.createElement("span", { className: [
-          "sw-editor-item__dot",
-          isSelected ? "sw-editor-item__dot--selected" : "",
-          ed.available ? "sw-editor-item__dot--available" : ""
-        ].filter(Boolean).join(" ") }),
-        /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-editor-item__label" }, ed.label),
-        ed.available && !isSelected && /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-editor-item__badge" }, "installed")
-      );
-    }), filtered.length === 0 && /* @__PURE__ */ import_react2.default.createElement("div", { style: { padding: "10px 12px", color: "#555", fontSize: 11, fontStyle: "italic" } }, "No editors match"))), /* @__PURE__ */ import_react2.default.createElement("button", { className: "sw-save-btn", onClick: handleSave }, "Save"), saved && /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-saved-hint" }, "Saved"));
+    };
+    return /* @__PURE__ */ import_react2.default.createElement("div", null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sw-row" }, /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-row__label" }, "Minimap"), /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-row__desc" }, "Show the minimap scrollbar overview on the right side of the editor."), /* @__PURE__ */ import_react2.default.createElement("label", { className: "sw-toggle-row" }, /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-toggle-label" }, minimap ? "Enabled" : "Disabled"), /* @__PURE__ */ import_react2.default.createElement(
+      "button",
+      {
+        className: `sw-toggle-btn${minimap ? " sw-toggle-btn--on" : ""}`,
+        onClick: () => toggle("minimap", minimap),
+        "aria-checked": minimap,
+        role: "switch",
+        "aria-label": "Toggle minimap"
+      },
+      /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-toggle-thumb" })
+    ))), /* @__PURE__ */ import_react2.default.createElement("div", { className: "sw-row" }, /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-row__label" }, "Word Wrap"), /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-row__desc" }, "Wrap long lines in the editor instead of scrolling horizontally."), /* @__PURE__ */ import_react2.default.createElement("label", { className: "sw-toggle-row" }, /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-toggle-label" }, wordWrap ? "Enabled" : "Disabled"), /* @__PURE__ */ import_react2.default.createElement(
+      "button",
+      {
+        className: `sw-toggle-btn${wordWrap ? " sw-toggle-btn--on" : ""}`,
+        onClick: () => toggle("wordWrap", wordWrap),
+        "aria-checked": wordWrap,
+        role: "switch",
+        "aria-label": "Toggle word wrap"
+      },
+      /* @__PURE__ */ import_react2.default.createElement("span", { className: "sw-toggle-thumb" })
+    ))));
   };
   var EditorPage_default = EditorPage;
 

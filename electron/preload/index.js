@@ -17,8 +17,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getIcon:        (filePath) => ipcRenderer.invoke("fs:getIcon", filePath),
   getFilePreview: (filePath) => ipcRenderer.invoke("fs:getFilePreview", filePath),
   readTextFile:   (filePath) => ipcRenderer.invoke("fs:readTextFile", filePath),
+  writeFileText:  (filePath, text) => ipcRenderer.invoke("fs:writeFile", { filePath, text }),
+  saveFileAs:     (filePath, text) => ipcRenderer.invoke("fs:saveFileAs", { filePath, text }),
   readFileAsDataUrl: (filePath) => ipcRenderer.invoke("fs:readFileAsDataUrl", filePath),
   copyImageToClipboard: (filePath) => ipcRenderer.invoke("media:copyImage", filePath),
+  onOpenFileInEditor: (callback) => {
+    const handler = (_e, payload) => callback(payload);
+    ipcRenderer.on("editor:openFile", handler);
+    return () => ipcRenderer.removeListener("editor:openFile", handler);
+  },
 
   // ── Directory access ───────────────────────────────────────────────────────
   openFolder:  ()      => ipcRenderer.invoke("dialog:openFolder"),
@@ -56,10 +63,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readSettings:  ()     => ipcRenderer.invoke("settings:read"),
   writeSettings: (data) => ipcRenderer.invoke("settings:write", data),
   listEditors:   ()     => ipcRenderer.invoke("editors:list"),
+  openSettingsWindow: () => ipcRenderer.invoke("settings:openWindow"),
 
   // ── Browser extensions ─────────────────────────────────────────────────────
-  readExtensions:  ()     => ipcRenderer.invoke("extensions:read"),
-  writeExtensions: (data) => ipcRenderer.invoke("extensions:write", data),
+  readExtensions:   ()                     => ipcRenderer.invoke("extensions:read"),
+  writeExtensions:  (data)                 => ipcRenderer.invoke("extensions:write", data),
+  uploadExtension:  (name, sourcePath)     => ipcRenderer.invoke("extensions:upload", { name, sourcePath }),
+  deleteExtension:  (id)                   => ipcRenderer.invoke("extensions:delete", { id }),
+  pickExtensionFile: ()                    => ipcRenderer.invoke("extensions:pickFile"),
+  showBrowserTabContextMenu: ()            => ipcRenderer.invoke("browser:tabContextMenu"),
+  showBrowserWebviewContextMenu: (params) => ipcRenderer.invoke("browser:webviewContextMenu", params),
 
   // ── Filesystem watcher ─────────────────────────────────────────────────────
   watchDir:   (rootPath) => ipcRenderer.invoke("fs:watch",   rootPath),
@@ -73,7 +86,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ── Menu events ────────────────────────────────────────────────────────────
   onMenuEvent: (channel, callback) => {
-    const valid = ["menu:openProject","menu:newProject","menu:saveProject","menu:closeProject","menu:resetLayout"];
+    const valid = ["menu:openProject","menu:newProject","menu:saveProject","menu:closeProject","menu:resetLayout","menu:saveFile","menu:saveFileAs","menu:toggleAutoSave"];
     if (!valid.includes(channel)) return () => {};
     const handler = (_e, payload) => callback(payload);
     ipcRenderer.on(channel, handler);
@@ -101,6 +114,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ── Panel Add Menu ──────────────────────────────────────────────────────────
   showPanelAddMenu: () => ipcRenderer.invoke("panel:addMenu"),
+
+  // ── Project config (per-project tab state) ────────────────────────────────
+  readProjectTabs:  (rootPath)        => ipcRenderer.invoke("projectConfig:readTabs",  rootPath),
+  writeProjectTabs: (rootPath, data)  => ipcRenderer.invoke("projectConfig:writeTabs", rootPath, data),
 
   // ── Session ─────────────────────────────────────────────────────────────────
   saveSession:   (data) => ipcRenderer.invoke("session:save", data),

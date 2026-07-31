@@ -438,6 +438,7 @@ const SidebarTree = ({
   // ── File handlers ────────────────────────────────────────────────────────
   const handleFileClick = useCallback((filePath) => {
     onFileSelect?.(filePath);
+    window.dispatchEvent(new CustomEvent("open-file-in-editor", { detail: { path: filePath } }));
   }, [onFileSelect]);
 
   const handleFileDoubleClick = useCallback(async (filePath) => {
@@ -457,6 +458,9 @@ const SidebarTree = ({
     switch (result.action) {
       case "open":
         await window.electronAPI.openFile(filePath, "system");
+        break;
+      case "openInNewEditorTab":
+        window.dispatchEvent(new CustomEvent("open-file-in-new-editor-tab", { detail: { path: filePath } }));
         break;
       case "openWithSystem":
         await window.electronAPI.openFile(filePath, "system");

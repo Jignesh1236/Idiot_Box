@@ -235,6 +235,12 @@ const ContentArea = ({
         }
         return;
       }
+      case "openInNewEditorTab": {
+        for (const p of targetPaths) {
+          window.dispatchEvent(new CustomEvent("open-file-in-new-editor-tab", { detail: { path: p } }));
+        }
+        return;
+      }
       case "openWithSystem": {
         for (const p of targetPaths) await window.electronAPI.openFile(p, "system");
         return;
@@ -550,6 +556,9 @@ const ContentArea = ({
     } else {
       anchorRef.current = entry.path;
       onSetSelectedItems(new Set([entry.path]));
+      if (!entry.isDir) {
+        window.dispatchEvent(new CustomEvent("open-file-in-editor", { detail: { path: entry.path } }));
+      }
     }
   }, [renamingPath, onSetSelectedItems]);
 

@@ -8,7 +8,7 @@ import "./layout.css";
 import MediaViewer from "./components/MediaViewer/index.jsx";
 import BrowserPanel from "./components/Browser/index.jsx";
 import ProjectPanel from "./components/Project/index.jsx";
-import Panel5 from "./components/Panel5/index.jsx";
+import EditorPanel from "./components/Panel5/index.jsx";
 import TerminalPanel from "./components/Terminal/index.jsx";
 import BlankPanel from "./components/Blank/index.jsx";
 
@@ -48,8 +48,8 @@ const DEFAULT_JSON = {
         ],
       },
       {
-        type: "tabset", weight: 25,
-        children: [{ type: "tab", name: "panel5", component: "panel5" }],
+        type: "tabset", weight: 25, id: "editor-tabset",
+        children: [{ type: "tab", name: "Editor", component: "editor" }],
       },
     ],
   },
@@ -60,16 +60,60 @@ const factory = (node) => {
     case "mediaViewer":   return <MediaViewer />;
     case "panel3":        return <BrowserPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "projectPanel":  return <ProjectPanel />;
-    case "panel5":        return <Panel5 />;
+    case "editor":        return <EditorPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "terminal":      return <TerminalPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "blank":         return <BlankPanel />;
     default:              return null;
   }
 };
 
+// ── Helpers to walk the flex model tree ────────────────────────────────────
+const collectEditorTabs = (node, result = []) => {
+  if (node.getType?.() === "tab" && node.getComponent?.() === "editor") {
+    const fp = node.getConfig?.()?.filePath;
+    if (fp) result.push(fp);
+  }
+  node.getChildren?.()?.forEach((c) => collectEditorTabs(c, result));
+  return result;
+};
+
+const findTabByFilePath = (node, filePath) => {
+  if (node.getType?.() === "tab" && node.getComponent?.() === "editor") {
+    if (node.getConfig?.()?.filePath === filePath) return node;
+  }
+  const children = node.getChildren?.();
+  if (children) for (const c of children) { const r = findTabByFilePath(c, filePath); if (r) return r; }
+  return null;
+};
+
+const findEmptyEditorTab = (node) => {
+  if (node.getType?.() === "tab" && node.getComponent?.() === "editor" && !node.getConfig?.()?.filePath) return node;
+  const children = node.getChildren?.();
+  if (children) for (const c of children) { const r = findEmptyEditorTab(c); if (r) return r; }
+  return null;
+};
+
+const findEditorTabset = (node) => {
+  if (node.getType?.() === "tabset") {
+    const children = node.getChildren?.();
+    if (children && children.some((c) => c.getType() === "tab" && c.getComponent() === "editor")) return node;
+  }
+  const children = node.getChildren?.();
+  if (children) for (const c of children) { const r = findEditorTabset(c); if (r) return r; }
+  return null;
+};
+
+const forceLayoutRedraw = (m) => {
+  try {
+    [...m.getwindowsMap().values()].forEach((lw) => lw?.layout?.redraw?.("force"));
+  } catch { /* ignore */ }
+};
+
 const App = () => {
-  const modelRef = useRef(null);
-  const readyRef = useRef(false);
+  const modelRef          = useRef(null);
+  const readyRef          = useRef(false);
+  const currentProjectRef = useRef(null);  // currently open project root path
+  const saveTabsTimer     = useRef(null);
   const [, setTick] = useState(0);
 
   // Expose layout JSON for main process to grab on close, and model for BrowserPanel to update tabs
@@ -79,16 +123,70 @@ const App = () => {
     return () => { delete window.__flexModel; delete window.__getLayoutJSON; };
   }, []);
 
+  // ── Save current open editor tabs to .project_config/tabs.json ────────────
+  const doSaveProjectTabs = () => {
+    const rootPath = currentProjectRef.current;
+    if (!rootPath) return;
+    const m = modelRef.current;
+    if (!m) return;
+    const tabs = collectEditorTabs(m.getRoot());
+    window.electronAPI.writeProjectTabs(rootPath, { tabs }).catch(() => {});
+  };
+
+  const scheduleSaveProjectTabs = () => {
+    clearTimeout(saveTabsTimer.current);
+    saveTabsTimer.current = setTimeout(doSaveProjectTabs, 600);
+  };
+
+  // ── Restore editor tabs from .project_config/tabs.json ───────────────────
+  const restoreProjectTabs = async (rootPath) => {
+    if (!rootPath) return;
+    let data = null;
+    try { data = await window.electronAPI.readProjectTabs(rootPath); } catch {}
+    const tabs = Array.isArray(data?.tabs) ? data.tabs.filter(Boolean) : [];
+    if (!tabs.length) return;
+
+    const m = modelRef.current;
+    if (!m) return;
+
+    const IMAGE_VIDEO_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".mp4", ".webm"];
+
+    for (const filePath of tabs) {
+      const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+      if (IMAGE_VIDEO_EXTS.includes(ext)) continue;
+      if (findTabByFilePath(m.getRoot(), filePath)) continue; // already open
+
+      const name = filePath.replace(/.*[\\/]/, "") || filePath;
+      const empty = findEmptyEditorTab(m.getRoot());
+      if (empty) {
+        m.doAction(Actions.updateNodeAttributes(empty.getId(), { name, config: { filePath } }));
+        m.doAction(Actions.selectTab(empty.getId()));
+        forceLayoutRedraw(m);
+      } else {
+        const tabset = findEditorTabset(m.getRoot());
+        const parentId = tabset ? tabset.getId() : m.getRoot().getId();
+        m.doAction(Actions.addNode({
+          type: "tab", component: "editor", name, enableClose: true,
+          id: "editor-tab-" + Date.now() + "-" + Math.random().toString(36).slice(2),
+          config: { filePath },
+        }, parentId, DockLocation.CENTER, -1, true));
+      }
+    }
+    setTick((t) => t + 1);
+  };
+
   // Load session → create model → render
   useEffect(() => {
     window.electronAPI.loadSession().then((session) => {
       const json = (session && session.layout) ? JSON.parse(JSON.stringify(session.layout)) : DEFAULT_JSON;
-      // Migrate old "panel1" → "mediaViewer" component and "panel1" → "Media Viewer" name
+      // Migrate old component names
       if (session && session.layout) {
         (function migrate(node) {
           if (node.type === "tab") {
             if (node.component === "panel1") node.component = "mediaViewer";
             if (node.name === "panel1") node.name = "Media Viewer";
+            if (node.component === "panel5") node.component = "editor";
+            if (node.name === "panel5") node.name = "Editor";
           }
           if (node.children) node.children.forEach(migrate);
         })(json);
@@ -98,6 +196,32 @@ const App = () => {
       setTick((t) => t + 1);
     });
   }, []);
+
+  // ── Project open / close → save & restore tabs ───────────────────────────
+  useEffect(() => {
+    const handleOpen = async (folderPath) => {
+      // Save tabs for whatever project was open before switching
+      doSaveProjectTabs();
+      currentProjectRef.current = folderPath;
+      window.__currentProjectPath = folderPath;
+      // Notify editor panels
+      window.dispatchEvent(new CustomEvent("project:opened", { detail: { path: folderPath } }));
+      await restoreProjectTabs(folderPath);
+    };
+
+    const handleClose = () => {
+      doSaveProjectTabs();
+      currentProjectRef.current = null;
+      window.__currentProjectPath = null;
+      // Notify editor panels
+      window.dispatchEvent(new CustomEvent("project:closed"));
+    };
+
+    const u1 = window.electronAPI.onMenuEvent("menu:openProject", handleOpen);
+    const u2 = window.electronAPI.onMenuEvent("menu:newProject",  handleOpen);
+    const u3 = window.electronAPI.onMenuEvent("menu:closeProject", handleClose);
+    return () => { u1(); u2(); u3(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handler = () => { if (modelRef.current) modelRef.current.doAction(Actions.selectTab("terminal-tab")); };
@@ -168,20 +292,225 @@ const App = () => {
     return unsub;
   }, []);
 
+  // Open settings window when browser panel requests it
+  useEffect(() => {
+    const handler = () => {
+      // Trigger the same Settings menu item as the app menu does
+      // The main process opens the settings window via the "Settings" menu click.
+      // We reuse the existing IPC by simulating a menu click programmatically
+      // via a dedicated channel exposed below (or just send an ipc message).
+      // Simplest: dispatch to main via a dedicated IPC if available, else noop.
+      try {
+        window.electronAPI.openSettingsWindow?.();
+      } catch {}
+    };
+    window.addEventListener("browser:openSettings", handler);
+    return () => window.removeEventListener("browser:openSettings", handler);
+  }, []);
+
+  // ── Open files in the Editor as flexlayout tabs ──────────────────────────
+  useEffect(() => {
+    const IMAGE_VIDEO_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".mp4", ".webm"];
+
+    // Find the currently active/selected editor tab node
+    const findActiveEditorTab = (m) => {
+      try {
+        const tabset = m.getActiveTabset();
+        if (tabset) {
+          const node = tabset.getSelectedNode?.();
+          if (node?.getType() === "tab" && node.getComponent() === "editor") return node;
+        }
+      } catch {}
+      // Fallback: find any selected editor tab across all tabsets
+      const findSelected = (node) => {
+        if (node.getType?.() === "tab" && node.getComponent?.() === "editor") {
+          const parent = node.getParent?.();
+          if (parent?.getSelectedNode?.() === node) return node;
+        }
+        const children = node.getChildren?.();
+        if (children) for (const c of children) { const r = findSelected(c); if (r) return r; }
+        return null;
+      };
+      return findSelected(m.getRoot());
+    };
+
+    // Single-click: replace the active editor tab (VS Code preview-mode style).
+    // If the file is already open somewhere, switch to it.
+    // If no editor tab exists yet, create one.
+    const openFileInEditor = (filePath) => {
+      const m = modelRef.current;
+      if (!m || !filePath) return;
+      const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+      if (IMAGE_VIDEO_EXTS.includes(ext)) {
+        window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: filePath } }));
+        return;
+      }
+
+      // If already open, just activate that tab
+      const existing = findTabByFilePath(m.getRoot(), filePath);
+      if (existing) { m.doAction(Actions.selectTab(existing.getId())); return; }
+
+      const name = filePath.replace(/.*[\\/]/, "") || filePath;
+
+      // Replace the currently active editor tab
+      const active = findActiveEditorTab(m);
+      if (active) {
+        m.doAction(Actions.updateNodeAttributes(active.getId(), { name, config: { filePath } }));
+        m.doAction(Actions.selectTab(active.getId()));
+        forceLayoutRedraw(m);
+        scheduleSaveProjectTabs();
+        return;
+      }
+
+      // Fallback: reuse any empty editor tab
+      const empty = findEmptyEditorTab(m.getRoot());
+      if (empty) {
+        m.doAction(Actions.updateNodeAttributes(empty.getId(), { name, config: { filePath } }));
+        m.doAction(Actions.selectTab(empty.getId()));
+        forceLayoutRedraw(m);
+        scheduleSaveProjectTabs();
+        return;
+      }
+
+      // No editor tab at all — create one
+      const tabset = findEditorTabset(m.getRoot());
+      const parentId = tabset ? tabset.getId() : m.getRoot().getId();
+      m.doAction(Actions.addNode({
+        type: "tab", component: "editor", name, enableClose: true,
+        id: "editor-tab-" + Date.now(),
+        config: { filePath },
+      }, parentId, DockLocation.CENTER, -1, true));
+      scheduleSaveProjectTabs();
+    };
+
+    // Force new tab — always adds alongside existing tabs (right-click / drag-drop)
+    const openFileInNewTab = (filePath) => {
+      const m = modelRef.current;
+      if (!m || !filePath) return;
+      const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+      if (IMAGE_VIDEO_EXTS.includes(ext)) {
+        window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: filePath } }));
+        return;
+      }
+
+      // If already open, just switch to it
+      const existing = findTabByFilePath(m.getRoot(), filePath);
+      if (existing) { m.doAction(Actions.selectTab(existing.getId())); return; }
+
+      const name = filePath.replace(/.*[\\/]/, "") || filePath;
+      const tabset = findEditorTabset(m.getRoot());
+      const parentId = tabset ? tabset.getId() : m.getRoot().getId();
+      m.doAction(Actions.addNode({
+        type: "tab", component: "editor", name, enableClose: true,
+        id: "editor-tab-" + Date.now(),
+        config: { filePath },
+      }, parentId, DockLocation.CENTER, -1, true));
+      scheduleSaveProjectTabs();
+    };
+
+    const onIpc    = window.electronAPI.onOpenFileInEditor?.(({ filePath }) => openFileInEditor(filePath));
+    const onCustom = (e) => { const p = e.detail?.path ?? e.detail?.filePath; if (p) openFileInEditor(p); };
+    const onNewTab = (e) => { const p = e.detail?.path ?? e.detail?.filePath; if (p) openFileInNewTab(p); };
+
+    window.addEventListener("open-file-in-editor",         onCustom);
+    window.addEventListener("open-file-in-new-editor-tab", onNewTab);
+    return () => {
+      onIpc?.();
+      window.removeEventListener("open-file-in-editor",         onCustom);
+      window.removeEventListener("open-file-in-new-editor-tab", onNewTab);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── File menu → editor commands (Save / Save As / AutoSave) ──────────────
+  useEffect(() => {
+    const activeEditorPath = () => {
+      const m = modelRef.current;
+      if (!m) return null;
+      try {
+        const tabset = m.getActiveTabset();
+        const node = tabset?.getSelectedNode?.();
+        if (node?.getType() === "tab" && node.getComponent() === "editor") {
+          return node.getConfig()?.filePath || null;
+        }
+      } catch { /* ignore */ }
+      return null;
+    };
+    const dispatch = (cmd) => {
+      const path = activeEditorPath();
+      if (!path) return;
+      window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd, path } }));
+    };
+    const unsubs = [
+      window.electronAPI.onMenuEvent("menu:saveFile", () => dispatch("save")),
+      window.electronAPI.onMenuEvent("menu:saveFileAs", () => dispatch("saveAs")),
+      window.electronAPI.onMenuEvent("menu:toggleAutoSave", (enabled) =>
+        window.dispatchEvent(new CustomEvent("editor:autosave", { detail: { enabled } }))),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, []);
+
   if (!readyRef.current) return null;
 
   return (
     <Layout
       model={modelRef.current}
       factory={factory}
+      onDrop={(node, e) => {
+        // Intercept file drops from the Project Panel onto any tabset.
+        // window.__ppooDragPaths is set by ContentArea/SidebarTree dragStart.
+        const paths = window.__ppooDragPaths;
+        if (!paths?.length) return;
+        window.__ppooDragPaths = null;
+
+        const IMAGE_VIDEO_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".mp4", ".webm"];
+        const m = modelRef.current;
+        if (!m) return;
+
+        // Find the editor tabset that was dropped onto
+        let targetTabsetId = null;
+        if (node?.getType?.() === "tabset") targetTabsetId = node.getId();
+        else if (node?.getType?.() === "tab") targetTabsetId = node.getParent?.()?.getId();
+        if (!targetTabsetId) {
+          const ts = findEditorTabset(m.getRoot());
+          targetTabsetId = ts ? ts.getId() : m.getRoot().getId();
+        }
+
+        for (const filePath of paths) {
+          if (!filePath) continue;
+          const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+          if (IMAGE_VIDEO_EXTS.includes(ext)) {
+            window.dispatchEvent(new CustomEvent("media-viewer:open", { detail: { path: filePath } }));
+            continue;
+          }
+          // If already open, just switch to it
+          const existing = findTabByFilePath(m.getRoot(), filePath);
+          if (existing) { m.doAction(Actions.selectTab(existing.getId())); continue; }
+
+          const name = filePath.replace(/.*[\\/]/, "") || filePath;
+          m.doAction(Actions.addNode({
+            type: "tab", component: "editor", name, enableClose: true,
+            id: "editor-tab-" + Date.now() + "-" + Math.random().toString(36).slice(2),
+            config: { filePath },
+          }, targetTabsetId, DockLocation.CENTER, -1, true));
+        }
+        scheduleSaveProjectTabs();
+      }}
       onRenderTab={(node, renderValues) => {
         const cfg = node.getConfig();
         const isBrowser = cfg?.type === "browser" || node.getComponent() === "panel3";
         if (isBrowser) {
           const title = cfg?.title || "Browser";
           const favicon = cfg?.favicon;
+          const nId = node.getId();
           renderValues.content = (
-            <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent("browser:tabContextMenu", { detail: { nodeId: nId } }));
+              }}
+            >
               {favicon ? (
                 <img src={favicon} width={14} height={14} style={{ flexShrink: 0 }}
                   onError={(e) => { e.target.style.display = "none"; }} />

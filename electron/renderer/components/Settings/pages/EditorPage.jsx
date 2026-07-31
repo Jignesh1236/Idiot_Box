@@ -1,93 +1,67 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 
 // ─── EditorPage ───────────────────────────────────────────────────────────────
-// Lets the user pick a default file editor from detected installed applications.
+// Editor-specific settings: Minimap and Word Wrap.
+// Removing "Choose Editor" per requirements.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const EditorPage = ({ settings, onSave }) => {
-  const [editors,  setEditors]  = useState([]);
-  const [query,    setQuery]    = useState("");
-  const [selected, setSelected] = useState(settings.defaultEditor ?? "system");
-  const [saved,    setSaved]    = useState(false);
+  const minimap  = settings.minimap  !== false; // default true
+  const wordWrap = settings.wordWrap !== false; // default true ("on")
 
-  useEffect(() => {
-    window.electronAPI.listEditors().then(setEditors);
-  }, []);
-
-  // Sync when parent settings change (e.g. on first load)
-  useEffect(() => {
-    setSelected(settings.defaultEditor ?? "system");
-  }, [settings.defaultEditor]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return editors;
-    return editors.filter((e) => e.label.toLowerCase().includes(q));
-  }, [editors, query]);
-
-  const handleSave = async () => {
-    await onSave({ defaultEditor: selected });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const toggle = async (key, currentVal) => {
+    await onSave({ [key]: !currentVal });
+    // Notify all open editor panels to pick up the new setting
+    window.opener?.dispatchEvent(new CustomEvent("editor:settings-changed", { detail: { [key]: !currentVal } }));
+    try {
+      // Also broadcast via BroadcastChannel so both windows get it
+      const bc = new BroadcastChannel("editor-settings");
+      bc.postMessage({ [key]: !currentVal });
+      bc.close();
+    } catch {}
   };
 
   return (
     <div>
+      {/* ── Minimap ──────────────────────────────────────────────────────── */}
       <div className="sw-row">
-        <span className="sw-row__label">Default File Editor</span>
+        <span className="sw-row__label">Minimap</span>
         <span className="sw-row__desc">
-          Application used when opening files from the Project Explorer.
-          Green dot means detected on this system.
+          Show the minimap scrollbar overview on the right side of the editor.
         </span>
-
-        <input
-          className="sw-search"
-          type="text"
-          placeholder="Search editors..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          spellCheck={false}
-        />
-
-        <div className="sw-editor-list" role="listbox" aria-label="Editor list">
-          {filtered.map((ed) => {
-            const isSelected = selected === ed.id;
-            return (
-              <div
-                key={ed.id}
-                className={[
-                  "sw-editor-item",
-                  isSelected            ? "sw-editor-item--selected"   : "",
-                  !ed.available         ? "sw-editor-item--unavailable" : "",
-                ].filter(Boolean).join(" ")}
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => ed.available !== false && setSelected(ed.id)}
-              >
-                <span className={[
-                  "sw-editor-item__dot",
-                  isSelected    ? "sw-editor-item__dot--selected"  : "",
-                  ed.available  ? "sw-editor-item__dot--available" : "",
-                ].filter(Boolean).join(" ")} />
-                <span className="sw-editor-item__label">{ed.label}</span>
-                {ed.available && !isSelected && (
-                  <span className="sw-editor-item__badge">installed</span>
-                )}
-              </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div style={{ padding: "10px 12px", color: "#555", fontSize: 11, fontStyle: "italic" }}>
-              No editors match
-            </div>
-          )}
-        </div>
+        <label className="sw-toggle-row">
+          <span className="sw-toggle-label">{minimap ? "Enabled" : "Disabled"}</span>
+          <button
+            className={`sw-toggle-btn${minimap ? " sw-toggle-btn--on" : ""}`}
+            onClick={() => toggle("minimap", minimap)}
+            aria-checked={minimap}
+            role="switch"
+            aria-label="Toggle minimap"
+          >
+            <span className="sw-toggle-thumb" />
+          </button>
+        </label>
       </div>
 
-      <button className="sw-save-btn" onClick={handleSave}>
-        Save
-      </button>
-      {saved && <span className="sw-saved-hint">Saved</span>}
+      {/* ── Word Wrap ─────────────────────────────────────────────────────── */}
+      <div className="sw-row">
+        <span className="sw-row__label">Word Wrap</span>
+        <span className="sw-row__desc">
+          Wrap long lines in the editor instead of scrolling horizontally.
+        </span>
+        <label className="sw-toggle-row">
+          <span className="sw-toggle-label">{wordWrap ? "Enabled" : "Disabled"}</span>
+          <button
+            className={`sw-toggle-btn${wordWrap ? " sw-toggle-btn--on" : ""}`}
+            onClick={() => toggle("wordWrap", wordWrap)}
+            aria-checked={wordWrap}
+            role="switch"
+            aria-label="Toggle word wrap"
+          >
+            <span className="sw-toggle-thumb" />
+          </button>
+        </label>
+      </div>
     </div>
   );
 };

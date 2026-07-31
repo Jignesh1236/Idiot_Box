@@ -13,8 +13,8 @@ const ACCENTS = [
 
 // ─── Custom xterm CSS overrides (injected once) ────────────────────────────
 const XTERM_CUSTOM_CSS = `
-.xterm { height: 100%; padding: 0 6px; background: var(--bg-surface); }
-.xterm-viewport { scrollbar-width: thin; }
+.xterm { height: 100%; padding: 0 !important; background: transparent !important; }
+.xterm-viewport { scrollbar-width: thin; background: transparent !important; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
@@ -25,19 +25,21 @@ const XTERM_CUSTOM_CSS = `
 @keyframes xterm-cursor-blink { 50% { opacity: 0; } }
 .xterm-selection div { background: var(--selection) !important; opacity: 0.5; }
 .xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
+.term-xterm { padding: 4px 6px; box-sizing: border-box; background: #1e1e1e; }
 .term-xterm .xterm { pointer-events: auto; }
 .term-xterm .xterm-viewport { pointer-events: auto; }
+.xterm-screen { background: transparent !important; }
 `;
 
 // ─── Terminal panel CSS ═══════════════════════════════════════════════════
 const TERMINAL_PANEL_CSS = `
-.term-panel { display:flex; flex-direction:row; height:100%; background:var(--bg-surface); }
-.term-content { flex:1; position:relative; overflow:hidden; z-index:1; }
-.term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; }
+.term-panel { display:flex; flex-direction:row; height:100%; background:#1e1e1e; }
+.term-content { flex:1; position:relative; overflow:hidden; z-index:1; background:#1e1e1e; }
+.term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; background:var(--bg-surface); }
 .term-empty-center { flex-direction:column; gap:14px; }
 .term-empty-btn { background:var(--bg-active); color:var(--text-primary); border:1px solid #3c3c3c; border-radius:4px; padding:6px 20px; cursor:pointer; font-size:12px; }
 .term-empty-btn:hover { background:#383838; }
-.term-pane { position:absolute; inset:0; z-index:2; }
+.term-pane { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; background:#1e1e1e; }
 .term-status { display:flex; align-items:center; gap:6px; padding:3px 10px; background:var(--bg-raised); border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); flex-shrink:0; }
 .term-status-icon { flex-shrink:0; }
 .term-status-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -217,9 +219,9 @@ const TabContent = ({ tabId, cwd, writersRef, isActive }) => {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#1e1e1e" }}>
       <div ref={elRef} className="term-xterm"
-        style={{ flex: 1, minHeight: 0 }}
+        style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
         onContextMenu={handleContextMenu}
       />
       <div className="term-status">

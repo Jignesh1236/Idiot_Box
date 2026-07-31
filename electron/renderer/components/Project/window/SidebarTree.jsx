@@ -12,7 +12,7 @@ const ArrowSvg = () => (
 // ── TreeRow ───────────────────────────────────────────────────────────────────
 const TreeRow = ({
   label, iconEl, depth, hasChildren, isOpen, isSelected, isDropTarget,
-  onClick, onDoubleClick, onArrowClick, onDragOver, onDragLeave, onDrop, onContextMenu,
+  onClick, onDoubleClick, onArrowClick, onDragEnter, onDragOver, onDragLeave, onDrop, onContextMenu,
 }) => (
   <div
     className={[
@@ -23,6 +23,7 @@ const TreeRow = ({
     style={{ paddingLeft: `${6 + depth * 14}px` }}
     onClick={onClick}
     onDoubleClick={onDoubleClick}
+    onDragEnter={onDragEnter}
     onDragOver={onDragOver}
     onDragLeave={onDragLeave}
     onDrop={onDrop}
@@ -70,7 +71,11 @@ const FolderNode = ({
     }
   }, [isOpen, hasLoaded, entry.path, loadChildren]);
 
-  const hasChildren = !hasLoaded || (raw && raw.length > 0);
+  // hasChildren: if not loaded yet, show arrow. If loaded, check after applying folder/file filter.
+  const filteredChildren = children
+    ? children.filter((c) => c.isDir ? showFolders : showFiles)
+    : null;
+  const hasChildren = !hasLoaded || (filteredChildren && filteredChildren.length > 0);
 
   const handleDragOver  = useCallback((e) => {
     e.preventDefault(); e.stopPropagation();
@@ -84,10 +89,20 @@ const FolderNode = ({
       }, 800);
     }
   }, [entry.path, setDropTarget, isOpen, onToggle]);
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
+    setDropTarget(entry.path);
+  }, [entry.path, setDropTarget]);
   const handleDragLeave = useCallback((e) => {
-    e.stopPropagation(); setDropTarget((p) => p === entry.path ? null : p);
-    if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
-    expandHoverRef.current = null;
+    e.stopPropagation();
+    // Only clear if relatedTarget is outside this node
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDropTarget((p) => p === entry.path ? null : p);
+      if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; }
+      expandHoverRef.current = null;
+    }
   }, [entry.path, setDropTarget]);
   const handleDrop      = useCallback(async (e) => {
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
@@ -116,13 +131,13 @@ const FolderNode = ({
         onClick={() => onSelect(entry.path)}
         onDoubleClick={() => onToggle(entry.path)}
         onArrowClick={() => onToggle(entry.path)}
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onContextMenu={handleCtxMenu}
       />
-      {isOpen && hasLoaded && children && children
-        .filter((c) => c.isDir ? showFolders : showFiles)
+      {isOpen && hasLoaded && filteredChildren && filteredChildren
         .map((child) => child.isDir ? (
         <FolderNode
           key={child.path}
@@ -160,9 +175,9 @@ const FolderNode = ({
           onClick={() => onFileClick?.(child.path)}
           onDoubleClick={() => onFileDblClick?.(child.path)}
           onArrowClick={() => {}}
-          onDragOver={() => {}}
-          onDragLeave={() => {}}
-          onDrop={() => {}}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(entry.path); }}
+          onDragLeave={(e) => { e.stopPropagation(); if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget((p) => p === entry.path ? null : p); }}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(e); }}
           onContextMenu={(e) => onFileCtxMenu?.(e, child.path)}
         />
       ))}
@@ -261,8 +276,9 @@ const SidebarTree = ({
   }, [invalidateCache]);
 
   // ── Root row drag handlers ────────────────────────────────────────────────
+  const handleRootDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move"; setDropTarget(rootPath); };
   const handleRootDragOver  = (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move"; setDropTarget(rootPath); };
-  const handleRootDragLeave = ()  => setDropTarget((p) => p === rootPath ? null : p);
+  const handleRootDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget((p) => p === rootPath ? null : p); };
   const handleRootDrop      = async (e) => {
     e.preventDefault(); e.stopPropagation(); setDropTarget(null);
     // Internal native drag (from startDrag) fallback
@@ -279,18 +295,24 @@ const SidebarTree = ({
   // ── Blank-area (sidebar empty space) drop handlers ────────────────────────
   const handleSidebarDragOver = useCallback((e) => {
     if (!rootPath) return;
-    if (!e.dataTransfer.types?.includes("Files")) return;
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = "copy";
+    e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
   }, [rootPath]);
 
   const handleSidebarDrop = useCallback(async (e) => {
     if (!rootPath) return;
     e.preventDefault();
     e.stopPropagation();
-    await handleExternalDrop(e, rootPath);
-  }, [rootPath, handleExternalDrop]);
+    // External file drop onto blank sidebar area
+    if (await handleExternalDrop(e, rootPath)) return;
+    // Internal drag onto blank area → move to root
+    if (window.__ppooDragPaths?.length) {
+      const paths = window.__ppooDragPaths; window.__ppooDragPaths = null;
+      onDrop(rootPath, paths); return;
+    }
+    try { const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths")); if (paths?.length) onDrop(rootPath, paths); } catch {}
+  }, [rootPath, handleExternalDrop, onDrop]);
 
   // ── Pin config ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -702,6 +724,7 @@ const SidebarTree = ({
             onClick={() => onSelect(rootPath)}
             onDoubleClick={() => onToggle(rootPath)}
             onArrowClick={() => onToggle(rootPath)}
+            onDragEnter={handleRootDragEnter}
             onDragOver={handleRootDragOver}
             onDragLeave={handleRootDragLeave}
             onDrop={handleRootDrop}

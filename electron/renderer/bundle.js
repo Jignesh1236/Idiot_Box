@@ -29711,6 +29711,7 @@ ${msg}`);
     onClick,
     onDoubleClick,
     onArrowClick,
+    onDragEnter,
     onDragOver,
     onDragLeave,
     onDrop,
@@ -29726,6 +29727,7 @@ ${msg}`);
       style: { paddingLeft: `${6 + depth * 14}px` },
       onClick,
       onDoubleClick,
+      onDragEnter,
       onDragOver,
       onDragLeave,
       onDrop,
@@ -29785,7 +29787,8 @@ ${msg}`);
         loadChildren(entry.path).finally(() => setLoading(false));
       }
     }, [isOpen, hasLoaded, entry.path, loadChildren]);
-    const hasChildren = !hasLoaded || raw && raw.length > 0;
+    const filteredChildren = children ? children.filter((c) => c.isDir ? showFolders : showFiles) : null;
+    const hasChildren = !hasLoaded || filteredChildren && filteredChildren.length > 0;
     const handleDragOver = (0, import_react8.useCallback)((e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -29802,14 +29805,22 @@ ${msg}`);
         }, 800);
       }
     }, [entry.path, setDropTarget, isOpen, onToggle]);
+    const handleDragEnter = (0, import_react8.useCallback)((e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
+      setDropTarget(entry.path);
+    }, [entry.path, setDropTarget]);
     const handleDragLeave = (0, import_react8.useCallback)((e) => {
       e.stopPropagation();
-      setDropTarget((p) => p === entry.path ? null : p);
-      if (expandTimerRef.current) {
-        clearTimeout(expandTimerRef.current);
-        expandTimerRef.current = null;
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        setDropTarget((p) => p === entry.path ? null : p);
+        if (expandTimerRef.current) {
+          clearTimeout(expandTimerRef.current);
+          expandTimerRef.current = null;
+        }
+        expandHoverRef.current = null;
       }
-      expandHoverRef.current = null;
     }, [entry.path, setDropTarget]);
     const handleDrop = (0, import_react8.useCallback)(async (e) => {
       e.preventDefault();
@@ -29851,12 +29862,13 @@ ${msg}`);
         onClick: () => onSelect(entry.path),
         onDoubleClick: () => onToggle(entry.path),
         onArrowClick: () => onToggle(entry.path),
+        onDragEnter: handleDragEnter,
         onDragOver: handleDragOver,
         onDragLeave: handleDragLeave,
         onDrop: handleDrop,
         onContextMenu: handleCtxMenu
       }
-    ), isOpen && hasLoaded && children && children.filter((c) => c.isDir ? showFolders : showFiles).map((child) => child.isDir ? /* @__PURE__ */ import_react8.default.createElement(
+    ), isOpen && hasLoaded && filteredChildren && filteredChildren.map((child) => child.isDir ? /* @__PURE__ */ import_react8.default.createElement(
       FolderNode,
       {
         key: child.path,
@@ -29896,11 +29908,19 @@ ${msg}`);
         onDoubleClick: () => onFileDblClick?.(child.path),
         onArrowClick: () => {
         },
-        onDragOver: () => {
+        onDragOver: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDropTarget(entry.path);
         },
-        onDragLeave: () => {
+        onDragLeave: (e) => {
+          e.stopPropagation();
+          if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget((p) => p === entry.path ? null : p);
         },
-        onDrop: () => {
+        onDrop: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDrop(e);
         },
         onContextMenu: (e) => onFileCtxMenu?.(e, child.path)
       }
@@ -30002,13 +30022,21 @@ ${failed.join(", ")}`);
       }
       return true;
     }, [invalidateCache]);
+    const handleRootDragEnter = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
+      setDropTarget(rootPath);
+    };
     const handleRootDragOver = (e) => {
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
       setDropTarget(rootPath);
     };
-    const handleRootDragLeave = () => setDropTarget((p) => p === rootPath ? null : p);
+    const handleRootDragLeave = (e) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget((p) => p === rootPath ? null : p);
+    };
     const handleRootDrop = async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -30028,17 +30056,27 @@ ${failed.join(", ")}`);
     };
     const handleSidebarDragOver = (0, import_react8.useCallback)((e) => {
       if (!rootPath) return;
-      if (!e.dataTransfer.types?.includes("Files")) return;
       e.preventDefault();
       e.stopPropagation();
-      e.dataTransfer.dropEffect = "copy";
+      e.dataTransfer.dropEffect = e.dataTransfer.types?.includes("Files") ? "copy" : "move";
     }, [rootPath]);
     const handleSidebarDrop = (0, import_react8.useCallback)(async (e) => {
       if (!rootPath) return;
       e.preventDefault();
       e.stopPropagation();
-      await handleExternalDrop(e, rootPath);
-    }, [rootPath, handleExternalDrop]);
+      if (await handleExternalDrop(e, rootPath)) return;
+      if (window.__ppooDragPaths?.length) {
+        const paths = window.__ppooDragPaths;
+        window.__ppooDragPaths = null;
+        onDrop(rootPath, paths);
+        return;
+      }
+      try {
+        const paths = JSON.parse(e.dataTransfer.getData("application/ppoo-paths"));
+        if (paths?.length) onDrop(rootPath, paths);
+      } catch {
+      }
+    }, [rootPath, handleExternalDrop, onDrop]);
     (0, import_react8.useEffect)(() => {
       if (!rootPath) {
         setPinned([]);
@@ -30528,6 +30566,7 @@ ${err.message}`);
           onClick: () => onSelect(rootPath),
           onDoubleClick: () => onToggle(rootPath),
           onArrowClick: () => onToggle(rootPath),
+          onDragEnter: handleRootDragEnter,
           onDragOver: handleRootDragOver,
           onDragLeave: handleRootDragLeave,
           onDrop: handleRootDrop,
@@ -40243,8 +40282,8 @@ ${h2.join(`
     "#56b4e9"
   ];
   var XTERM_CUSTOM_CSS = `
-.xterm { height: 100%; padding: 0 6px; background: var(--bg-surface); }
-.xterm-viewport { scrollbar-width: thin; }
+.xterm { height: 100%; padding: 0 !important; background: transparent !important; }
+.xterm-viewport { scrollbar-width: thin; background: transparent !important; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
@@ -40255,17 +40294,19 @@ ${h2.join(`
 @keyframes xterm-cursor-blink { 50% { opacity: 0; } }
 .xterm-selection div { background: var(--selection) !important; opacity: 0.5; }
 .xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
+.term-xterm { padding: 4px 6px; box-sizing: border-box; background: #1e1e1e; }
 .term-xterm .xterm { pointer-events: auto; }
 .term-xterm .xterm-viewport { pointer-events: auto; }
+.xterm-screen { background: transparent !important; }
 `;
   var TERMINAL_PANEL_CSS = `
-.term-panel { display:flex; flex-direction:row; height:100%; background:var(--bg-surface); }
-.term-content { flex:1; position:relative; overflow:hidden; z-index:1; }
-.term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; }
+.term-panel { display:flex; flex-direction:row; height:100%; background:#1e1e1e; }
+.term-content { flex:1; position:relative; overflow:hidden; z-index:1; background:#1e1e1e; }
+.term-empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; background:var(--bg-surface); }
 .term-empty-center { flex-direction:column; gap:14px; }
 .term-empty-btn { background:var(--bg-active); color:var(--text-primary); border:1px solid #3c3c3c; border-radius:4px; padding:6px 20px; cursor:pointer; font-size:12px; }
 .term-empty-btn:hover { background:#383838; }
-.term-pane { position:absolute; inset:0; z-index:2; }
+.term-pane { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; background:#1e1e1e; }
 .term-status { display:flex; align-items:center; gap:6px; padding:3px 10px; background:var(--bg-raised); border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); flex-shrink:0; }
 .term-status-icon { flex-shrink:0; }
 .term-status-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -40450,12 +40491,12 @@ ${h2.join(`
     if (initError) {
       return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f44747", fontSize: 12, padding: 20, textAlign: "center" } }, "Terminal init error: ", initError);
     }
-    return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%" } }, /* @__PURE__ */ import_react12.default.createElement(
+    return /* @__PURE__ */ import_react12.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%", background: "#1e1e1e" } }, /* @__PURE__ */ import_react12.default.createElement(
       "div",
       {
         ref: elRef,
         className: "term-xterm",
-        style: { flex: 1, minHeight: 0 },
+        style: { flex: 1, minHeight: 0, overflow: "hidden" },
         onContextMenu: handleContextMenu
       }
     ), /* @__PURE__ */ import_react12.default.createElement("div", { className: "term-status" }, /* @__PURE__ */ import_react12.default.createElement("svg", { className: "term-status-icon", width: "11", height: "11", viewBox: "0 0 16 16", fill: "none" }, /* @__PURE__ */ import_react12.default.createElement("rect", { x: "2", y: "3", width: "12", height: "10", rx: "1", stroke: "#777", strokeWidth: "1.2", fill: "none" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M5 7L7 9L5 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ import_react12.default.createElement("path", { d: "M9 7L11 9L9 11", stroke: "#777", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round" })), /* @__PURE__ */ import_react12.default.createElement("span", { className: "term-status-path" }, dirName)));

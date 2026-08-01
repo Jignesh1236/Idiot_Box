@@ -66,11 +66,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openSettingsWindow: () => ipcRenderer.invoke("settings:openWindow"),
 
   // ── Browser extensions ─────────────────────────────────────────────────────
-  readExtensions:   ()                     => ipcRenderer.invoke("extensions:read"),
-  writeExtensions:  (data)                 => ipcRenderer.invoke("extensions:write", data),
-  uploadExtension:  (name, sourcePath)     => ipcRenderer.invoke("extensions:upload", { name, sourcePath }),
-  deleteExtension:  (id)                   => ipcRenderer.invoke("extensions:delete", { id }),
-  pickExtensionFile: ()                    => ipcRenderer.invoke("extensions:pickFile"),
+  readExtensions:    ()                => ipcRenderer.invoke("extensions:read"),
+  uploadExtension:   (name, src)       => ipcRenderer.invoke("extensions:upload",      { name, sourcePath: src }),
+  loadUnpackedExtension: ()            => ipcRenderer.invoke("extensions:loadUnpacked"),
+  deleteExtension:   (id)              => ipcRenderer.invoke("extensions:delete",      { id }),
+  toggleExtension:   (id)              => ipcRenderer.invoke("extensions:toggle",      { id }),
+  openExtensionPopup:(extId, tabUrl)   => ipcRenderer.invoke("extensions:openPopup",   { extensionId: extId, currentTabUrl: tabUrl }),
+  pickExtensionFile: ()                => ipcRenderer.invoke("extensions:pickFile"),
   showBrowserTabContextMenu: ()            => ipcRenderer.invoke("browser:tabContextMenu"),
   showBrowserWebviewContextMenu: (params) => ipcRenderer.invoke("browser:webviewContextMenu", params),
 
@@ -94,8 +96,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // ── Terminal ──────────────────────────────────────────────────────────────
-  getProjectPath:  ()              => ipcRenderer.invoke("terminal:getProjectPath"),
-  openTerminal:    (tabId, cwd)    => ipcRenderer.invoke("terminal:open",  { tabId, cwd }),
+  getProjectPath:  ()                          => ipcRenderer.invoke("terminal:getProjectPath"),
+  openTerminal:    (tabId, cwd, forceRestart)  => ipcRenderer.invoke("terminal:open",  { tabId, cwd, forceRestart: !!forceRestart }),
   writeToTerminal: (tabId, data)   => ipcRenderer.invoke("terminal:write", { tabId, data }),
   resizeTerminal:  (tabId, cols, rows) => ipcRenderer.invoke("terminal:resize", { tabId, cols, rows }),
   closeTerminal:   (tabId)         => ipcRenderer.invoke("terminal:close", { tabId }),

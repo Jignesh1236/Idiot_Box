@@ -30,47 +30,518 @@ const writeSettings = (d) => { try { fs.writeFileSync(SETTINGS_FILE, JSON.string
 ipcMain.handle("settings:read",  () => readSettings());
 ipcMain.handle("settings:write", (_e, data) => writeSettings(data));
 
-// ─── Browser extensions ─────────────────────────────────────────────────────────
-const EXTENSIONS_DIR  = path.join(app.getPath("userData"), "browser-extensions");
-const EXTENSIONS_FILE = path.join(app.getPath("userData"), "browser-extensions.json");
-const readExtensions  = () => { try { return JSON.parse(fs.readFileSync(EXTENSIONS_FILE, "utf8")); } catch { return []; } };
-const writeExtensions = (d) => { try { fs.writeFileSync(EXTENSIONS_FILE, JSON.stringify(d, null, 2)); return true; } catch { return false; } };
-ipcMain.handle("extensions:read",   () => readExtensions());
-ipcMain.handle("extensions:write",  (_e, data) => writeExtensions(data));
+// ─── Browser extensions ───────────────────────────────────────────────────────
+//
+// Storage layout:
+//   userData/
+//     browser-extensions.json          ← array of extension metadata entries
+//     browser-extensions/
+//       <id>/                          ← unpacked extension directory
+//         manifest.json
+//         ...
+//
+// Metadata entry shape:
+//   {
+//     id          : string             ← "ext_<timestamp>"  (our stable key)
+//     electronId  : string | null      ← id returned by session.loadExtension()
+//     name        : string
+//     version     : string
+//     description : string
+//     iconDataUrl : string | null      ← base64 data-url of best icon
+//     unpackedDir : string             ← absolute path to unpacked dir
+//     enabled     : boolean
+//     loadError   : string | null      ← set when last load failed
+//     addedAt     : number
+//   }
 
-// Upload a ZIP or .crx extension file — copies it into userData/browser-extensions/
-ipcMain.handle("extensions:upload", async (event, { name, sourcePath }) => {
+const EXTENSIONS_BASE = path.join(app.getPath("userData"), "browser-extensions");
+const EXTENSIONS_FILE = path.join(app.getPath("userData"), "browser-extensions.json");
+
+const readExtensionsMeta  = () => { try { return JSON.parse(fs.readFileSync(EXTENSIONS_FILE, "utf8")); } catch { return []; } };
+const writeExtensionsMeta = (d) => { try { fs.writeFileSync(EXTENSIONS_FILE, JSON.stringify(d, null, 2)); return true; } catch { return false; } };
+
+// ── CRX unpacker ──────────────────────────────────────────────────────────────
+// CRX3 format:
+//   4 bytes  magic  "Cr24"
+//   4 bytes  version (little-endian uint32) — expect 3
+//   4 bytes  header size (little-endian uint32)
+//   <header size> bytes  protobuf CrxFileHeader  (we skip; just need the ZIP)
+//   rest     ZIP archive of the extension
+//
+// CRX2 format (legacy):
+//   4 bytes  magic  "Cr24"
+//   4 bytes  version (2)
+//   4 bytes  pubkeyLen
+//   4 bytes  sigLen
+//   pubkeyLen bytes  public key
+//   sigLen bytes     signature
+//   rest     ZIP archive
+function crxToZipBuffer(crxBuf) {
+  const magic = crxBuf.slice(0, 4).toString("ascii");
+  if (magic !== "Cr24") throw new Error("Not a valid CRX file (bad magic)");
+  const version = crxBuf.readUInt32LE(4);
+  if (version === 3) {
+    const headerSize = crxBuf.readUInt32LE(8);
+    return crxBuf.slice(12 + headerSize);
+  } else if (version === 2) {
+    const pubkeyLen = crxBuf.readUInt32LE(8);
+    const sigLen    = crxBuf.readUInt32LE(12);
+    return crxBuf.slice(16 + pubkeyLen + sigLen);
+  }
+  throw new Error(`Unsupported CRX version: ${version}`);
+}
+
+// ── ZIP extractor (pure Node — no extra dependency) ──────────────────────────
+// We parse the ZIP End-of-Central-Directory record to find all entries and
+// extract them safely (no path traversal).
+function extractZipBuffer(zipBuf, destDir) {
+  // Find End of Central Directory signature (0x06054b50)
+  const EOCD_SIG = 0x06054b50;
+  let eocdOffset = -1;
+  for (let i = zipBuf.length - 22; i >= 0; i--) {
+    if (zipBuf.readUInt32LE(i) === EOCD_SIG) { eocdOffset = i; break; }
+  }
+  if (eocdOffset === -1) throw new Error("Invalid ZIP: EOCD not found");
+
+  const cdOffset = zipBuf.readUInt32LE(eocdOffset + 16);
+  const cdCount  = zipBuf.readUInt16LE(eocdOffset + 10);
+
+  const CD_SIG = 0x02014b50;
+  let pos = cdOffset;
+
+  for (let i = 0; i < cdCount; i++) {
+    if (zipBuf.readUInt32LE(pos) !== CD_SIG) break;
+    const compMethod   = zipBuf.readUInt16LE(pos + 10);
+    const compSize     = zipBuf.readUInt32LE(pos + 20);
+    const uncompSize   = zipBuf.readUInt32LE(pos + 24);
+    const fnLen        = zipBuf.readUInt16LE(pos + 28);
+    const extraLen     = zipBuf.readUInt16LE(pos + 30);
+    const commentLen   = zipBuf.readUInt16LE(pos + 32);
+    const localOffset  = zipBuf.readUInt32LE(pos + 42);
+    const filename     = zipBuf.slice(pos + 46, pos + 46 + fnLen).toString("utf8");
+    pos += 46 + fnLen + extraLen + commentLen;
+
+    // Security: prevent path traversal
+    const safeName = filename.replace(/\\/g, "/").split("/").filter((p) => p && p !== ".." && p !== ".").join("/");
+    if (!safeName) continue;
+    const fullDest = path.join(destDir, safeName);
+    if (!fullDest.startsWith(destDir + path.sep) && fullDest !== destDir) continue;
+
+    if (filename.endsWith("/")) {
+      // directory entry
+      fs.mkdirSync(fullDest, { recursive: true });
+      continue;
+    }
+
+    // Read local file header to find actual data offset
+    const LFH_SIG = 0x04034b50;
+    if (zipBuf.readUInt32LE(localOffset) !== LFH_SIG) continue;
+    const lfhFnLen    = zipBuf.readUInt16LE(localOffset + 26);
+    const lfhExtraLen = zipBuf.readUInt16LE(localOffset + 28);
+    const dataOffset  = localOffset + 30 + lfhFnLen + lfhExtraLen;
+    const compData    = zipBuf.slice(dataOffset, dataOffset + compSize);
+
+    fs.mkdirSync(path.dirname(fullDest), { recursive: true });
+
+    if (compMethod === 0) {
+      // Stored (no compression)
+      fs.writeFileSync(fullDest, compData);
+    } else if (compMethod === 8) {
+      // Deflate — use Node's built-in zlib (inflateRawSync)
+      const { inflateRawSync } = require("zlib");
+      fs.writeFileSync(fullDest, inflateRawSync(compData));
+    } else {
+      // Unsupported compression method — skip file
+      console.warn(`[extensions] Skipping "${filename}": unsupported compression method ${compMethod}`);
+    }
+  }
+}
+
+// ── Locate manifest.json inside an extracted directory ───────────────────────
+// Sometimes ZIP contains a single root folder; we dig one level if needed.
+function findManifestDir(dir) {
+  const direct = path.join(dir, "manifest.json");
+  if (fs.existsSync(direct)) return dir;
+  // Try one level deep
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      const nested = path.join(dir, e.name, "manifest.json");
+      if (fs.existsSync(nested)) return path.join(dir, e.name);
+    }
+  }
+  return null;
+}
+
+// ── Read best icon as data-url ────────────────────────────────────────────────
+function readExtensionIcon(manifestDir, manifest) {
   try {
-    fs.mkdirSync(EXTENSIONS_DIR, { recursive: true });
+    const icons = manifest.icons || manifest.action?.default_icon || {};
+    const sizes = Object.keys(icons).map(Number).filter(Boolean).sort((a, b) => b - a);
+    const iconFile = sizes.length ? icons[String(sizes[0])] : null;
+    if (!iconFile) return null;
+    const iconPath = path.join(manifestDir, iconFile);
+    if (!fs.existsSync(iconPath)) return null;
+    const ext  = path.extname(iconFile).toLowerCase();
+    const mime = ext === ".svg" ? "image/svg+xml" : ext === ".png" ? "image/png"
+      : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".ico" ? "image/x-icon" : null;
+    if (!mime) return null;
+    const data = fs.readFileSync(iconPath);
+    if (data.length > 256 * 1024) return null; // skip oversized icons
+    return `data:${mime};base64,${data.toString("base64")}`;
+  } catch { return null; }
+}
+
+// ── Load a single extension into the Electron session ────────────────────────
+async function loadExtensionIntoSession(unpackedDir) {
+  try {
+    const { session } = require("electron");
+    const ext = await session.defaultSession.loadExtension(unpackedDir, { allowFileAccess: true });
+    return { ok: true, electronId: ext.id };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+// ── Unload a single extension from the Electron session ──────────────────────
+function unloadExtensionFromSession(electronId) {
+  if (!electronId) return;
+  try {
+    const { session } = require("electron");
+    session.defaultSession.removeExtension(electronId);
+  } catch (err) {
+    console.warn("[extensions] unload failed:", err.message);
+  }
+}
+
+// ── IPC: read list ────────────────────────────────────────────────────────────
+ipcMain.handle("extensions:read", () => readExtensionsMeta());
+
+// ── IPC: upload ZIP or CRX ────────────────────────────────────────────────────
+ipcMain.handle("extensions:upload", async (_event, { name: _name, sourcePath }) => {
+  try {
+    fs.mkdirSync(EXTENSIONS_BASE, { recursive: true });
+
     const extname = path.extname(sourcePath).toLowerCase();
-    const safeId  = "ext_" + Date.now();
-    const destName = safeId + extname;
-    const destPath = path.join(EXTENSIONS_DIR, destName);
-    fs.copyFileSync(sourcePath, destPath);
-    const entry = { id: safeId, name: name || path.basename(sourcePath), file: destName, filePath: destPath, enabled: true, addedAt: Date.now() };
-    const list = readExtensions();
+    if (extname !== ".zip" && extname !== ".crx") {
+      return { success: false, error: "Only .zip and .crx files are supported" };
+    }
+
+    const safeId    = "ext_" + Date.now();
+    const unpackDir = path.join(EXTENSIONS_BASE, safeId);
+    fs.mkdirSync(unpackDir, { recursive: true });
+
+    // Read source into buffer
+    const srcBuf = fs.readFileSync(sourcePath);
+
+    // For CRX: strip the CRX header to get the ZIP payload
+    const zipBuf = extname === ".crx" ? crxToZipBuffer(srcBuf) : srcBuf;
+
+    // Extract ZIP into unpackDir
+    extractZipBuffer(zipBuf, unpackDir);
+
+    // Locate manifest.json (may be inside a sub-folder)
+    const manifestDir = findManifestDir(unpackDir);
+    if (!manifestDir) {
+      fs.rmSync(unpackDir, { recursive: true, force: true });
+      return { success: false, error: "Invalid Extension: manifest.json not found" };
+    }
+
+    // Parse manifest
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(path.join(manifestDir, "manifest.json"), "utf8"));
+    } catch (e) {
+      fs.rmSync(unpackDir, { recursive: true, force: true });
+      return { success: false, error: `Invalid manifest.json: ${e.message}` };
+    }
+
+    if (!manifest.manifest_version || !manifest.name) {
+      fs.rmSync(unpackDir, { recursive: true, force: true });
+      return { success: false, error: "Invalid manifest: missing required fields (manifest_version, name)" };
+    }
+
+    // If manifest was inside a sub-folder, move contents up so unpackDir IS the extension root
+    if (manifestDir !== unpackDir) {
+      const children = fs.readdirSync(manifestDir);
+      for (const child of children) {
+        fs.renameSync(path.join(manifestDir, child), path.join(unpackDir, child));
+      }
+      // Remove now-empty sub-folder
+      try { fs.rmSync(manifestDir, { recursive: true, force: true }); } catch {}
+    }
+
+    // Read icon
+    const iconDataUrl = readExtensionIcon(unpackDir, manifest);
+
+    // Report unsupported permissions as warnings (non-blocking)
+    const UNSUPPORTED = ["nativeMessaging","downloads","proxy","webRequest","declarativeNetRequest","devtools"];
+    const permissions = [...(manifest.permissions || []), ...(manifest.optional_permissions || [])];
+    const unsupported = permissions.filter((p) => UNSUPPORTED.includes(p));
+
+    // Load into Electron session
+    const loadResult = await loadExtensionIntoSession(unpackDir);
+
+    const entry = {
+      id:          safeId,
+      electronId:  loadResult.ok ? loadResult.electronId : null,
+      name:        manifest.name,
+      version:     manifest.version || "?",
+      description: manifest.description || "",
+      iconDataUrl,
+      unpackedDir,
+      enabled:     true,
+      loadError:   loadResult.ok ? null : loadResult.error,
+      addedAt:     Date.now(),
+      unsupportedPermissions: unsupported.length ? unsupported : undefined,
+    };
+
+    const list = readExtensionsMeta();
     list.push(entry);
-    writeExtensions(list);
+    writeExtensionsMeta(list);
+
     return { success: true, entry };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-// Delete extension file from disk when removed
+// ── IPC: delete extension ─────────────────────────────────────────────────────
 ipcMain.handle("extensions:delete", async (_e, { id }) => {
   try {
-    const list = readExtensions();
+    const list  = readExtensionsMeta();
     const entry = list.find((e) => e.id === id);
-    if (entry && entry.filePath) {
-      try { fs.unlinkSync(entry.filePath); } catch {}
+    if (!entry) return true;
+
+    // Unload from session
+    if (entry.electronId) unloadExtensionFromSession(entry.electronId);
+
+    // Remove unpacked directory
+    if (entry.unpackedDir && fs.existsSync(entry.unpackedDir)) {
+      try { fs.rmSync(entry.unpackedDir, { recursive: true, force: true }); } catch {}
     }
-    writeExtensions(list.filter((e) => e.id !== id));
+
+    writeExtensionsMeta(list.filter((e) => e.id !== id));
     return true;
   } catch { return false; }
 });
 
-// Pick a ZIP or .crx file via native dialog
+// ── IPC: toggle extension enabled/disabled ────────────────────────────────────
+ipcMain.handle("extensions:toggle", async (_e, { id }) => {
+  try {
+    const list  = readExtensionsMeta();
+    const entry = list.find((e) => e.id === id);
+    if (!entry) return { success: false, error: "Extension not found" };
+
+    const willEnable = !entry.enabled;
+
+    if (willEnable) {
+      // Guard: unpackedDir must exist (old entries from pre-upgrade may lack it)
+      if (!entry.unpackedDir || !fs.existsSync(path.join(entry.unpackedDir, "manifest.json"))) {
+        entry.loadError = "Extension directory or manifest.json not found — please re-install this extension.";
+        entry.enabled   = false;
+        writeExtensionsMeta(list);
+        return { success: true, entry };
+      }
+      const loadResult = await loadExtensionIntoSession(entry.unpackedDir);
+      entry.enabled    = true;
+      entry.electronId = loadResult.ok ? loadResult.electronId : entry.electronId;
+      entry.loadError  = loadResult.ok ? null : loadResult.error;
+    } else {
+      if (entry.electronId) unloadExtensionFromSession(entry.electronId);
+      entry.enabled   = false;
+      entry.loadError = null;
+    }
+
+    writeExtensionsMeta(list);
+    return { success: true, entry };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ── IPC: load all saved extensions on startup ─────────────────────────────────
+ipcMain.handle("extensions:loadAll", async () => {
+  const list = readExtensionsMeta();
+  let changed = false;
+
+  for (const entry of list) {
+    if (!entry.enabled) continue;
+
+    // Guard: unpackedDir missing entirely (old pre-upgrade entry with only filePath/file)
+    if (!entry.unpackedDir) {
+      entry.loadError = "Extension was installed before the current version. Please remove and re-install it.";
+      entry.enabled   = false;
+      changed = true;
+      continue;
+    }
+
+    // Guard: directory or manifest gone (deleted outside the app)
+    if (!fs.existsSync(path.join(entry.unpackedDir, "manifest.json"))) {
+      entry.loadError = "Extension directory or manifest.json not found";
+      entry.enabled   = false;
+      changed = true;
+      continue;
+    }
+
+    // Backfill icon if missing
+    if (!entry.iconDataUrl) {
+      try {
+        const m = JSON.parse(fs.readFileSync(path.join(entry.unpackedDir, "manifest.json"), "utf8"));
+        entry.iconDataUrl = readExtensionIcon(entry.unpackedDir, m);
+        changed = true;
+      } catch {}
+    }
+
+    const loadResult = await loadExtensionIntoSession(entry.unpackedDir);
+    entry.electronId = loadResult.ok ? loadResult.electronId : entry.electronId;
+    entry.loadError  = loadResult.ok ? null : loadResult.error;
+    changed = true;
+  }
+
+  if (changed) writeExtensionsMeta(list);
+  return list;
+});
+
+// ── IPC: load an unpacked extension folder (user picks the manifest.json folder) ──
+ipcMain.handle("extensions:loadUnpacked", async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: "Select Unpacked Extension Folder (containing manifest.json)",
+      properties: ["openDirectory"],
+    });
+    if (canceled || !filePaths.length) return { success: false, canceled: true };
+
+    const srcDir = filePaths[0];
+    const manifestPath = path.join(srcDir, "manifest.json");
+
+    if (!fs.existsSync(manifestPath)) {
+      return { success: false, error: "Invalid Extension: manifest.json not found in selected folder" };
+    }
+
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    } catch (e) {
+      return { success: false, error: `Invalid manifest.json: ${e.message}` };
+    }
+
+    if (!manifest.manifest_version || !manifest.name) {
+      return { success: false, error: "Invalid manifest: missing required fields (manifest_version, name)" };
+    }
+
+    // Copy the folder into our managed extensions directory so it persists
+    // even if the user moves/deletes the original folder.
+    fs.mkdirSync(EXTENSIONS_BASE, { recursive: true });
+    const safeId    = "ext_" + Date.now();
+    const unpackDir = path.join(EXTENSIONS_BASE, safeId);
+    fs.cpSync(srcDir, unpackDir, { recursive: true });
+
+    // Read icon from the copied location
+    const iconDataUrl = readExtensionIcon(unpackDir, manifest);
+
+    // Unsupported permission warnings
+    const UNSUPPORTED = ["nativeMessaging","downloads","proxy","webRequest","declarativeNetRequest","devtools"];
+    const permissions = [...(manifest.permissions || []), ...(manifest.optional_permissions || [])];
+    const unsupported = permissions.filter((p) => UNSUPPORTED.includes(p));
+
+    // Load into Electron session
+    const loadResult = await loadExtensionIntoSession(unpackDir);
+
+    const entry = {
+      id:          safeId,
+      electronId:  loadResult.ok ? loadResult.electronId : null,
+      name:        manifest.name,
+      version:     manifest.version || "?",
+      description: manifest.description || "",
+      iconDataUrl,
+      unpackedDir,
+      enabled:     true,
+      loadError:   loadResult.ok ? null : loadResult.error,
+      addedAt:     Date.now(),
+      unsupportedPermissions: unsupported.length ? unsupported : undefined,
+    };
+
+    const list = readExtensionsMeta();
+    list.push(entry);
+    writeExtensionsMeta(list);
+
+    return { success: true, entry };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ── IPC: open extension popup window ─────────────────────────────────────────
+ipcMain.handle("extensions:openPopup", async (event, { extensionId, currentTabUrl }) => {
+  try {
+    const list  = readExtensionsMeta();
+    const entry = list.find((e) => e.id === extensionId);
+    if (!entry || !entry.enabled || !entry.electronId) {
+      return { success: false, error: "Extension not loaded" };
+    }
+
+    // Read manifest to find popup page
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(path.join(entry.unpackedDir, "manifest.json"), "utf8"));
+    } catch {
+      return { success: false, error: "Could not read extension manifest" };
+    }
+
+    const popupPage = manifest.action?.default_popup
+      || manifest.browser_action?.default_popup
+      || manifest.page_action?.default_popup;
+
+    if (!popupPage) {
+      return { success: false, error: "Extension has no popup" };
+    }
+
+    // Build the chrome-extension:// URL for this popup
+    const popupUrl = `chrome-extension://${entry.electronId}/${popupPage}`;
+
+    const parentWin = BrowserWindow.fromWebContents(event.sender);
+    const parentBounds = parentWin ? parentWin.getBounds() : { x: 200, y: 200, width: 1280, height: 720 };
+
+    // Default popup size
+    const PW = 350;
+    const PH = 500;
+
+    const popupWin = new BrowserWindow({
+      width:  PW,
+      height: PH,
+      minWidth:  200,
+      minHeight: 100,
+      resizable: true,
+      frame:     true,
+      show:      false,
+      title:     entry.name,
+      backgroundColor: "#ffffff",
+      // Position near top-right of parent (where extension button lives)
+      x: Math.max(0, parentBounds.x + parentBounds.width - PW - 40),
+      y: parentBounds.y + 80,
+      parent: parentWin || undefined,
+      modal:  false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration:  false,
+        // Use the same session partition so extension APIs work
+        session: require("electron").session.defaultSession,
+      },
+    });
+
+    popupWin.setMenuBarVisibility(false);
+    popupWin.loadURL(popupUrl);
+    popupWin.once("ready-to-show", () => popupWin.show());
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ── IPC: pick ZIP/CRX file via native dialog ──────────────────────────────────
 ipcMain.handle("extensions:pickFile", async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
@@ -765,9 +1236,15 @@ function termKey(sender, tabId) { return `${sender.id}:${tabId}`; }
 
 ipcMain.handle("terminal:getProjectPath", () => lastProjectPath);
 
-ipcMain.handle("terminal:open", async (event, { tabId, cwd }) => {
+ipcMain.handle("terminal:open", async (event, { tabId, cwd, forceRestart }) => {
   const key = termKey(event.sender, tabId);
+
+  // If a PTY is already running for this tabId, don't kill it — just return.
+  // The renderer now sends cd commands to change directory instead of
+  // calling terminal:open again. Only kill when forceRestart is explicitly set
+  // (e.g. from the context-menu "Restart" action).
   if (termProcesses.has(key)) {
+    if (!forceRestart) return true; // reuse existing PTY
     termProcesses.get(key).kill();
     termProcesses.delete(key);
   }
@@ -1012,6 +1489,50 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => { getShell(); Menu.setApplicationMenu(buildMenu()); createWindow(); });
+app.whenReady().then(async () => {
+  getShell();
+  Menu.setApplicationMenu(buildMenu());
+  createWindow();
+  // Load all previously-installed extensions into the default session on startup.
+  // We do this AFTER createWindow so the session is fully initialised.
+  try {
+    const list = readExtensionsMeta();
+    let changed = false;
+    for (const entry of list) {
+      if (!entry.enabled) continue;
+
+      // Old pre-upgrade entry — lacks unpackedDir
+      if (!entry.unpackedDir) {
+        entry.loadError = "Extension was installed before the current version. Please remove and re-install it.";
+        entry.enabled   = false;
+        changed = true;
+        continue;
+      }
+
+      if (!fs.existsSync(path.join(entry.unpackedDir, "manifest.json"))) {
+        entry.loadError = "Extension directory or manifest.json not found";
+        entry.enabled   = false;
+        changed = true;
+        continue;
+      }
+
+      // Backfill icon if missing (entries from before this upgrade)
+      if (!entry.iconDataUrl) {
+        try {
+          const m = JSON.parse(fs.readFileSync(path.join(entry.unpackedDir, "manifest.json"), "utf8"));
+          entry.iconDataUrl = readExtensionIcon(entry.unpackedDir, m);
+          changed = true;
+        } catch {}
+      }
+      const result = await loadExtensionIntoSession(entry.unpackedDir);
+      entry.electronId = result.ok ? result.electronId : entry.electronId;
+      entry.loadError  = result.ok ? null : result.error;
+      changed = true;
+    }
+    if (changed) writeExtensionsMeta(list);
+  } catch (err) {
+    console.error("[extensions] startup load failed:", err);
+  }
+});
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });

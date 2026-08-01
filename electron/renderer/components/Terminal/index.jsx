@@ -99,13 +99,17 @@ const TerminalPanel = ({ nodeId, config }) => {
         window.electronAPI.writeToTerminal(tabId, "\x1bc");
         break;
       case "restart":
-        window.electronAPI.openTerminal(tabId, cwd);
+        window.electronAPI.openTerminal(tabId, cwdRef.current ?? cwd, true); // force restart
         break;
       case "close":
         window.dispatchEvent(new CustomEvent("close-flex-tab", { detail: { nodeId } }));
         break;
     }
   }, [tabId, cwd, nodeId]);
+
+  // cwdRef keeps latest cwd accessible inside effects without re-triggering them
+  const cwdRef = useRef(cwd);
+  useEffect(() => { cwdRef.current = cwd; }, [cwd]);
 
   // ── Initialize Project Working Directory ──────────────────────────────────
   useEffect(() => {
@@ -115,6 +119,8 @@ const TerminalPanel = ({ nodeId, config }) => {
   }, []);
 
   // ── Initialize xterm + PTY ────────────────────────────────────────────────
+  // Depends ONLY on tabId — cwd change should NOT kill/restart the terminal.
+  // Project open/close events handle cd-ing via a separate effect below.
   useEffect(() => {
     let term;
     let fit;
@@ -185,7 +191,8 @@ const TerminalPanel = ({ nodeId, config }) => {
           }
         });
 
-        await window.electronAPI.openTerminal(tabId, cwd);
+        // Use cwdRef so we read the latest value without adding cwd to deps
+        await window.electronAPI.openTerminal(tabId, cwdRef.current);
       } catch (err) {
         if (!disposed) setInitError(err?.message || String(err));
       }
@@ -200,7 +207,7 @@ const TerminalPanel = ({ nodeId, config }) => {
       fitRef.current = null;
       if (ro && el) ro.disconnect();
     };
-  }, [tabId, cwd]);
+  }, [tabId]); // ← cwd removed: tab switch / cwd update will NOT kill the PTY
 
   // ── Listen for shell output / exit ────────────────────────────────────────
   useEffect(() => {
@@ -225,7 +232,11 @@ const TerminalPanel = ({ nodeId, config }) => {
       const dir = e.detail?.dir;
       if (dir) {
         setCwd(dir);
-        window.electronAPI.openTerminal(tabId, dir);
+        // Send cd command instead of restarting PTY
+        const cdCmd = process.platform === "win32"
+          ? `cd /d "${dir}"\r`
+          : `cd "${dir}"\r`;
+        window.electronAPI.writeToTerminal(tabId, cdCmd);
       }
     };
     window.addEventListener("open-terminal", handler);
@@ -233,24 +244,22 @@ const TerminalPanel = ({ nodeId, config }) => {
   }, [tabId]);
 
   // ── Menu events (Open/Close Project) ──────────────────────────────────────
+  // We only cd into the new directory — we do NOT kill/restart the PTY.
+  // This preserves running processes when switching tabs or opening a project.
   useEffect(() => {
-    const u1 = window.electronAPI.onMenuEvent("menu:openProject", (p) => {
-      if (p) {
-        setCwd(p);
-        window.electronAPI.openTerminal(tabId, p);
-      }
-    });
-    const u2 = window.electronAPI.onMenuEvent("menu:newProject", (p) => {
-      if (p) {
-        setCwd(p);
-        window.electronAPI.openTerminal(tabId, p);
-      }
-    });
-    const u3 = window.electronAPI.onMenuEvent("menu:closeProject", () => {
-      setCwd(null);
-      window.electronAPI.closeTerminal(tabId);
-      termRef.current?.clear();
-    });
+    const cdTo = (p) => {
+      if (!p) return;
+      setCwd(p);
+      // Send a cd command to the running shell instead of restarting it
+      const cdCmd = process.platform === "win32"
+        ? `cd /d "${p}"\r`
+        : `cd "${p}"\r`;
+      window.electronAPI.writeToTerminal(tabId, cdCmd);
+    };
+
+    const u1 = window.electronAPI.onMenuEvent("menu:openProject", (p) => { if (p) cdTo(p); });
+    const u2 = window.electronAPI.onMenuEvent("menu:newProject",  (p) => { if (p) cdTo(p); });
+    const u3 = window.electronAPI.onMenuEvent("menu:closeProject", () => { setCwd(null); });
 
     return () => { u1(); u2(); u3(); };
   }, [tabId]);

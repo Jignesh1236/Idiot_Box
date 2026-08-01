@@ -292,7 +292,17 @@ const EditorPanel = ({ config, nodeId }) => {
       editorRef.current = editor;
       activeEditorPath = filePath;
 
-      const layout = () => { try { editor.layout(); } catch { /* noop */ } };
+      const layout = () => {
+        try {
+          // Pass the host's real size explicitly — using no args keeps Monaco's
+          // own (stuck 5x5) size when the editor was created in a hidden tab.
+          const rect = host.getBoundingClientRect();
+          editor.layout({
+            width: Math.max(Math.round(rect.width), 1),
+            height: Math.max(Math.round(rect.height), 1),
+          });
+        } catch { /* noop */ }
+      };
       const rafId = requestAnimationFrame(layout);
       const t1 = setTimeout(layout, 120);
       const t2 = setTimeout(layout, 600);
@@ -302,6 +312,24 @@ const EditorPanel = ({ config, nodeId }) => {
         ro = new ResizeObserver(layout);
         ro.observe(host);
       } catch { /* ResizeObserver unavailable */ }
+
+      // Self-healing size check: ResizeObserver/rAF can be missed when the tab
+      // mounts while hidden (e.g. restored from session) or the page is
+      // backgrounded, which leaves monaco stuck at 5x5. Every 500ms compare the
+      // host's real size to the editor's and re-layout when they differ.
+      let lastW = 0, lastH = 0;
+      const sizeCheck = () => {
+        try {
+          const r = host.getBoundingClientRect();
+          const w = Math.max(Math.round(r.width), 1);
+          const h = Math.max(Math.round(r.height), 1);
+          if (w === lastW && h === lastH) return;
+          lastW = w; lastH = h;
+          const li = editor.getLayoutInfo();
+          if (li.width !== w || li.height !== h) editor.layout({ width: w, height: h });
+        } catch { /* noop */ }
+      };
+      const sizeIv = setInterval(sizeCheck, 500);
 
       contentSub = editor.onDidChangeModelContent(() => {
         const v = editor.getValue();
@@ -330,6 +358,7 @@ const EditorPanel = ({ config, nodeId }) => {
         cancelAnimationFrame(rafId);
         clearTimeout(t1);
         clearTimeout(t2);
+        clearInterval(sizeIv);
         fn?.();
       };
       const originalCleanup = cleanup;

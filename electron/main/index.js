@@ -6,6 +6,24 @@ const net     = require("net");
 const { spawn } = require("child_process");
 const chokidar = require("chokidar");
 const pty     = require("node-pty");
+const esbuild = require("esbuild");
+
+// ─── JSX Transpilation for Component Preview ─────────────────────────────────
+ipcMain.handle("jsx:transpile", async (_e, code) => {
+  try {
+    const result = esbuild.transformSync(code, {
+      loader: "tsx",
+      format: "cjs",
+      jsx: "transform",
+      jsxFactory: "React.createElement",
+      jsxFragment: "React.Fragment",
+      target: "es2020",
+    });
+    return { success: true, code: result.code };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
 // ─── Long path helper (Windows) ──────────────────────────────────────────────
 const toLongPath = (p) => {
@@ -1002,7 +1020,7 @@ ipcMain.handle("fs:unwatch", async (event, rootPath) => {
 });
 
 // ─── Browser webview context menu ────────────────────────────────────────────
-ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionText, linkURL, srcURL, isEditable, pageURL }) => {
+ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionText, linkURL, srcURL, isEditable, pageURL, x, y }) => {
   return new Promise((resolve) => {
     const act = (action, data) => resolve({ action, data });
     const sep = { type: "separator" };
@@ -1049,7 +1067,7 @@ ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionTe
     items.push({ label: "Print…",        click: () => act("print") });
     items.push(sep);
     items.push({ label: "View Page Source", click: () => act("viewSource", { url: pageURL }) });
-    items.push({ label: "Inspect Element",  click: () => act("inspect") });
+    items.push({ label: "Inspect Element",  click: () => act("inspect", { x, y }) });
 
     const menu = Menu.buildFromTemplate(items);
     const win  = BrowserWindow.fromWebContents(event.sender);
@@ -1466,6 +1484,12 @@ function createWindow() {
     show: false,
     webPreferences: { preload: path.join(__dirname, "../preload/index.js"), contextIsolation: true, nodeIntegration: false, webviewTag: true },
   });
+
+  // IMPORTANT: when this window is covered/minimized, Chromium marks the page
+  // hidden and throttles timers/rAF/ResizeObserver. Terminals (xterm's whole
+  // write→parse→render pipeline is timer-driven), monaco layout, flexlayout
+  // sizing and streaming output must keep working in the background.
+  win.webContents.setBackgroundThrottling(false);
 
   if (wasMaximized) win.maximize();
   win.show();

@@ -7,9 +7,15 @@ import "@xterm/xterm/css/xterm.css";
 let nextTerminalId = 1;
 
 // ─── Custom xterm CSS overrides (injected once) ────────────────────────────
+// IMPORTANT: the app's global `* { font-family: 'Fredoka' }` rule applies to
+// every element INCLUDING xterm's glyph spans (an explicit rule beats
+// inheritance), which breaks the monospace grid and produces negative
+// letter-spacing corrections in xterm's DOM renderer. Force the mono font on
+// .xterm and ALL descendants with !important.
 const XTERM_CUSTOM_CSS = `
-.xterm { height: 100%; padding: 0 !important; background: transparent !important; }
-.xterm-viewport { scrollbar-width: thin; background: transparent !important; }
+.xterm, .xterm * { font-family: "Courier New", Courier, monospace !important; font-kerning: none; }
+.xterm { height: 100%; padding: 0 !important; background: #1e1e1e !important; }
+.xterm-viewport { scrollbar-width: thin; background: #1e1e1e !important; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
@@ -19,11 +25,11 @@ const XTERM_CUSTOM_CSS = `
 .xterm-cursor-blink { animation: xterm-cursor-blink 1s step-end infinite; }
 @keyframes xterm-cursor-blink { 50% { opacity: 0; } }
 .xterm-selection div { background: var(--selection) !important; opacity: 0.5; }
-.xterm-rows { font-variant-ligatures: none; letter-spacing: 0.2px; }
-.term-xterm { padding: 4px 6px; box-sizing: border-box; background: #1e1e1e; height: 100%; width: 100%; }
+.xterm-rows { font-variant-ligatures: none; letter-spacing: normal; }
+.term-xterm { padding: 4px 6px; box-sizing: border-box; background: #1e1e1e; height: 100%; width: 100%; overflow: hidden; }
 .term-xterm .xterm { pointer-events: auto; }
 .term-xterm .xterm-viewport { pointer-events: auto; }
-.xterm-screen { background: transparent !important; }
+.xterm-screen { background: #1e1e1e !important; }
 `;
 
 const TERMINAL_PANEL_CSS = `
@@ -45,6 +51,7 @@ const TerminalPanel = ({ nodeId, config }) => {
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const tabIdRef = useRef(null);
+  const initTerminalRef = useRef(null); // startTerminal, usable after mount
   
   const [initError, setInitError] = useState(null);
   const [cwd, setCwd] = useState(null);
@@ -52,7 +59,8 @@ const TerminalPanel = ({ nodeId, config }) => {
   // Generate unique tabId per terminal instance
   if (!tabIdRef.current) {
     const safeNodeId = nodeId ? String(nodeId).replace(/[^a-zA-Z0-9_]/g, "_") : `term_${nextTerminalId++}`;
-    tabIdRef.current = `term_${safeNodeId}`;
+    const rand = Math.random().toString(36).slice(2, 7);
+    tabIdRef.current = `term_${safeNodeId}_${rand}`;
   }
   const tabId = tabIdRef.current;
 
@@ -98,29 +106,33 @@ const TerminalPanel = ({ nodeId, config }) => {
         term?.clear();
         window.electronAPI.writeToTerminal(tabId, "\x1bc");
         break;
-      case "restart":
-        window.electronAPI.openTerminal(tabId, cwdRef.current ?? cwd, true); // force restart
+      case "restart": {
+        const dir = cwdRef.current ?? cwd;
+        if (!dir) return;
+        window.electronAPI.openTerminal(tabId, dir, true); // force restart
         break;
+      }
       case "close":
         window.dispatchEvent(new CustomEvent("close-flex-tab", { detail: { nodeId } }));
         break;
     }
   }, [tabId, cwd, nodeId]);
 
+  const handleFocus = useCallback(() => {
+    if (termRef.current) {
+      try { termRef.current.focus(); } catch {}
+    }
+  }, []);
+
   // cwdRef keeps latest cwd accessible inside effects without re-triggering them
   const cwdRef = useRef(cwd);
   useEffect(() => { cwdRef.current = cwd; }, [cwd]);
 
-  // ── Initialize Project Working Directory ──────────────────────────────────
-  useEffect(() => {
-    window.electronAPI.getProjectPath().then((p) => {
-      if (p) setCwd(p);
-    });
-  }, []);
-
   // ── Initialize xterm + PTY ────────────────────────────────────────────────
   // Depends ONLY on tabId — cwd change should NOT kill/restart the terminal.
   // Project open/close events handle cd-ing via a separate effect below.
+  // If no project is open at mount time, the creation is deferred: cdTo()
+  // can call initTerminalRef.current(cwd) later to build the xterm UI.
   useEffect(() => {
     let term;
     let fit;
@@ -129,70 +141,116 @@ const TerminalPanel = ({ nodeId, config }) => {
     let rafId;
     let disposed = false;
 
+    const startTerminal = async (targetCwd) => {
+      if (disposed || termRef.current || !targetCwd) return;
+
+      setCwd(targetCwd);
+
+      term = new Terminal({
+        cursorBlink: true,
+        cursorStyle: "block",
+        fontFamily: "Courier New, Courier, monospace",
+        fontSize: 13,
+        lineHeight: 1.15,
+        letterSpacing: 0,
+        allowTransparency: false,
+        theme: {
+          background: "#1e1e1e",
+          foreground: "#cccccc",
+          cursor: "#c8c8c8",
+          cursorAccent: "#1e1e1e",
+          selectionBackground: "#2c4f6e",
+          selectionInactiveBackground: "#264f78",
+          black: "#333333", red: "#f44747", green: "#4ec9b0", yellow: "#dcdcaa",
+          blue: "#569cd6", magenta: "#c586c0", cyan: "#9cdcfe", white: "#d4d4d4",
+          brightBlack: "#767676", brightRed: "#f44747", brightGreen: "#4ec9b0",
+          brightYellow: "#dcdcaa", brightBlue: "#569cd6", brightMagenta: "#c586c0",
+          brightCyan: "#9cdcfe", brightWhite: "#ffffff",
+        },
+      });
+
+      fit = new FitAddon();
+      term.loadAddon(fit);
+
+      // elRef div is ALWAYS rendered (placeholder is an overlay), so it is
+      // available from the first commit — no waiting required.
+      el = elRef.current;
+      if (!el) {
+        // UI element never appeared (component unmounted or stuck) — abort
+        // before spawning a PTY that would have no visible output.
+        try { term.dispose(); } catch {}
+        return;
+      }
+      el.innerHTML = "";
+      term.open(el);
+      term.focus();
+
+      term.onData((data) => {
+        window.electronAPI.writeToTerminal(tabId, data);
+      });
+
+      termRef.current = term;
+      fitRef.current = fit;
+
+      const safeFit = () => {
+        if (!fit || !term || !el) return;
+        if (el.offsetWidth === 0 || el.offsetHeight === 0) return;
+        try {
+          fit.fit();
+          if (term.cols > 0 && term.rows > 0) {
+            window.electronAPI.resizeTerminal(tabId, term.cols, term.rows);
+          }
+        } catch {}
+      };
+
+      ro = new ResizeObserver(() => {
+        safeFit();
+      });
+      if (el) ro.observe(el);
+
+      rafId = requestAnimationFrame(() => {
+        if (!disposed) {
+          safeFit();
+          setTimeout(safeFit, 100);
+          setTimeout(safeFit, 300);
+        }
+      });
+
+      // Self-healing fit: when this window is covered or minimized, Chromium
+      // pauses rAF/ResizeObserver and throttles timers, so the initial fits
+      // can run against a stale container size. Poll the size and re-fit
+      // whenever it changes; interval throttling while hidden is fine (a
+      // single re-fit on the next visible tick is enough).
+      let lastFitW = 0, lastFitH = 0;
+      const fitIv = setInterval(() => {
+        if (disposed || !el) return;
+        const w = el.offsetWidth, h = el.offsetHeight;
+        if (w === lastFitW && h === lastFitH) return;
+        lastFitW = w; lastFitH = h;
+        safeFit();
+      }, 500);
+
+      await window.electronAPI.openTerminal(tabId, targetCwd || cwdRef.current);
+    };
+
+    initTerminalRef.current = startTerminal;
+
     (async () => {
       try {
-        term = new Terminal({
-          cursorBlink: true,
-          cursorStyle: "block",
-          fontSize: 13,
-          fontFamily: 'Consolas, "Courier New", monospace',
-          allowTransparency: true,
-          theme: {
-            background: "#1e1e1e",
-            foreground: "#c8c8c8",
-            cursor: "#c8c8c8",
-            cursorAccent: "#1e1e1e",
-            selectionBackground: "#2c4f6e",
-            selectionInactiveBackground: "#264f78",
-            black: "#000000", red: "#f44747", green: "#4ec9b0", yellow: "#dcdcaa",
-            blue: "#569cd6", magenta: "#c586c0", cyan: "#9cdcfe", white: "#d4d4d4",
-            brightBlack: "#444", brightRed: "#f44747", brightGreen: "#4ec9b0",
-            brightYellow: "#dcdcaa", brightBlue: "#569cd6", brightMagenta: "#c586c0",
-            brightCyan: "#9cdcfe", brightWhite: "#e0e0e0",
-          },
-        });
+        // Resolve project working directory
+        let targetCwd = config?.cwd || window.__currentProjectPath;
+        if (!targetCwd) {
+          try { targetCwd = await window.electronAPI.getProjectPath(); } catch {}
+        }
+        if (!targetCwd) targetCwd = window.__currentProjectPath || null;
 
-        fit = new FitAddon();
-        term.loadAddon(fit);
-
-        el = elRef.current;
-        if (el) {
-          el.innerHTML = "";
-          term.open(el);
+        // If no project is open, don't spawn a PTY — show placeholder instead
+        if (!targetCwd) {
+          if (!disposed) setCwd(null);
+          return;
         }
 
-        term.onData((data) => {
-          window.electronAPI.writeToTerminal(tabId, data);
-        });
-
-        termRef.current = term;
-        fitRef.current = fit;
-
-        ro = new ResizeObserver(() => {
-          if (fit && term) {
-            try {
-              fit.fit();
-              if (term.cols > 0 && term.rows > 0) {
-                window.electronAPI.resizeTerminal(tabId, term.cols, term.rows);
-              }
-            } catch {}
-          }
-        });
-        if (el) ro.observe(el);
-
-        rafId = requestAnimationFrame(() => {
-          if (!disposed && fit && term) {
-            try {
-              fit.fit();
-              if (term.cols > 0 && term.rows > 0) {
-                window.electronAPI.resizeTerminal(tabId, term.cols, term.rows);
-              }
-            } catch {}
-          }
-        });
-
-        // Use cwdRef so we read the latest value without adding cwd to deps
-        await window.electronAPI.openTerminal(tabId, cwdRef.current);
+        await startTerminal(targetCwd);
       } catch (err) {
         if (!disposed) setInitError(err?.message || String(err));
       }
@@ -200,7 +258,9 @@ const TerminalPanel = ({ nodeId, config }) => {
 
     return () => {
       disposed = true;
+      initTerminalRef.current = null;
       if (rafId !== undefined) cancelAnimationFrame(rafId);
+      if (fitIv !== undefined) clearInterval(fitIv);
       window.electronAPI.closeTerminal(tabId);
       if (term) { try { term.dispose(); } catch {} }
       termRef.current = null;
@@ -230,44 +290,65 @@ const TerminalPanel = ({ nodeId, config }) => {
   useEffect(() => {
     const handler = (e) => {
       const dir = e.detail?.dir;
-      if (dir) {
-        setCwd(dir);
+      if (!dir) return;
+      setCwd(dir);
+      if (termRef.current) {
         // Send cd command instead of restarting PTY
-        const cdCmd = process.platform === "win32"
-          ? `cd /d "${dir}"\r`
-          : `cd "${dir}"\r`;
+        const cdCmd = `cd "${dir}"\r`;
         window.electronAPI.writeToTerminal(tabId, cdCmd);
+      } else if (initTerminalRef.current) {
+        // No xterm yet (mounted with no project) — create it now
+        initTerminalRef.current(dir);
       }
     };
     window.addEventListener("open-terminal", handler);
     return () => window.removeEventListener("open-terminal", handler);
   }, [tabId]);
 
-  // ── Menu events (Open/Close Project) ──────────────────────────────────────
-  // We only cd into the new directory — we do NOT kill/restart the PTY.
-  // This preserves running processes when switching tabs or opening a project.
+  // ── Menu & Custom events (Open/Close Project) ──────────────────────────────
+  // When project opens and terminal has no PTY yet, spawn one.
   useEffect(() => {
     const cdTo = (p) => {
       if (!p) return;
       setCwd(p);
-      // Send a cd command to the running shell instead of restarting it
-      const cdCmd = process.platform === "win32"
-        ? `cd /d "${p}"\r`
-        : `cd "${p}"\r`;
-      window.electronAPI.writeToTerminal(tabId, cdCmd);
+      if (termRef.current) {
+        // PTY may have been killed by project close — openTerminal reuses the
+        // live one or spawns a fresh shell in the main process, then cd in.
+        window.electronAPI.openTerminal(tabId, p);
+        const cdCmd = `cd "${p}"\r`;
+        window.electronAPI.writeToTerminal(tabId, cdCmd);
+      } else if (initTerminalRef.current) {
+        // No PTY yet — spawn one now that we have a project path (creates
+        // the xterm UI too; before this fix only the PTY was spawned, leaving
+        // the panel blank)
+        initTerminalRef.current(p);
+      }
     };
 
+    const handleProjectOpen = (e) => {
+      const p = e.detail?.path;
+      if (p) cdTo(p);
+    };
+
+    window.addEventListener("project:opened", handleProjectOpen);
     const u1 = window.electronAPI.onMenuEvent("menu:openProject", (p) => { if (p) cdTo(p); });
     const u2 = window.electronAPI.onMenuEvent("menu:newProject",  (p) => { if (p) cdTo(p); });
-    const u3 = window.electronAPI.onMenuEvent("menu:closeProject", () => { setCwd(null); });
+    const u3 = window.electronAPI.onMenuEvent("menu:closeProject", () => {
+      setCwd(null);
+      // No project open → kill the shell so the terminal stops working
+      window.electronAPI.closeTerminal(tabId);
+    });
 
-    return () => { u1(); u2(); u3(); };
+    return () => {
+      window.removeEventListener("project:opened", handleProjectOpen);
+      u1(); u2(); u3();
+    };
   }, [tabId]);
 
   const dirName = cwd ? cwd.replace(/[\\/]$/, "").split(/[\\/]/).pop() || cwd : "Terminal";
 
   return (
-    <div className="term-panel">
+    <div className="term-panel" onClick={handleFocus}>
       <TerminalStyle />
 
       <div className="term-content" onContextMenu={handleContextMenu}>
@@ -279,6 +360,21 @@ const TerminalPanel = ({ nodeId, config }) => {
           <div ref={elRef} className="term-xterm" style={{ flex: 1, minHeight: 0, overflow: "hidden" }} />
         )}
       </div>
+
+      {!cwd && !initError && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 2,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          color: "#666", fontSize: 13, background: "#1e1e1e", gap: 12, userSelect: "none",
+        }}>
+          <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="3" width="12" height="10" rx="1" stroke="#444" strokeWidth="1.2" fill="none" />
+            <path d="M5 7L7 9L5 11" stroke="#444" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9 11H11" stroke="#444" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          <span>Open a project to use the terminal</span>
+        </div>
+      )}
 
       <div className="term-status">
         <svg className="term-status-icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -310,3 +406,4 @@ const TerminalPanel = ({ nodeId, config }) => {
 };
 
 export default TerminalPanel;
+

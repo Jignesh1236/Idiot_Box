@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeFileText:  (filePath, text) => ipcRenderer.invoke("fs:writeFile", { filePath, text }),
   saveFileAs:     (filePath, text) => ipcRenderer.invoke("fs:saveFileAs", { filePath, text }),
   readFileAsDataUrl: (filePath) => ipcRenderer.invoke("fs:readFileAsDataUrl", filePath),
+  transpileJsx:   (code) => ipcRenderer.invoke("jsx:transpile", code),
   copyImageToClipboard: (filePath) => ipcRenderer.invoke("media:copyImage", filePath),
   onOpenFileInEditor: (callback) => {
     const handler = (_e, payload) => callback(payload);

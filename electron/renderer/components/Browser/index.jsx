@@ -427,12 +427,17 @@ const BrowserPanel = (props) => {
     if (!fixed) return;
     if (/^https?:\/\//i.test(fixed)) {
       // already has scheme
-    } else if (/^[^\s]+\.[^\s]+/.test(fixed) || fixed.startsWith("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(fixed)) {
+    } else if (fixed.startsWith("localhost") || fixed.startsWith("127.0.0.1") || /^\d+\.\d+\.\d+\.\d+/.test(fixed)) {
+      fixed = "http://" + fixed;
+    } else if (/^[^\s]+\.[^\s]+/.test(fixed)) {
       fixed = "https://" + fixed;
     } else {
       fixed = "https://www.google.com/search?q=" + encodeURIComponent(fixed);
     }
     setNavUrl(fixed); setInputValue(fixed); setDisplayUrl(fixed); setLockOpen(false);
+    if (webviewRef.current) {
+      try { webviewRef.current.loadURL(fixed); } catch {}
+    }
   }, []);
 
   goToUrlRef.current = goToUrl;
@@ -449,6 +454,16 @@ const BrowserPanel = (props) => {
 
     wv.addEventListener("did-start-loading",    () => setIsLoading(true));
     wv.addEventListener("did-stop-loading",     () => setIsLoading(false));
+    wv.addEventListener("did-fail-load", (e) => {
+      setIsLoading(false);
+      if (e.isMainFrame && e.errorCode !== -3) {
+        const validatedUrl = wv.getURL() || navUrl;
+        if (validatedUrl.startsWith("https://localhost") || validatedUrl.startsWith("https://127.0.0.1")) {
+          const httpUrl = validatedUrl.replace("https://", "http://");
+          try { wv.loadURL(httpUrl); } catch {}
+        }
+      }
+    });
     wv.addEventListener("did-navigate",         () => {
       const cur = wv.getURL();
       setInputValue(cur); setDisplayUrl(cur);
@@ -496,6 +511,8 @@ const BrowserPanel = (props) => {
         srcURL:     e.params?.srcURL     || "",
         isEditable: !!e.params?.isEditable,
         pageURL:    wv.getURL(),
+        x:          Math.round(e.params?.x || 0),
+        y:          Math.round(e.params?.y || 0),
       };
       const result = await window.electronAPI.showBrowserWebviewContextMenu(params);
       if (!result) return;
@@ -508,7 +525,13 @@ const BrowserPanel = (props) => {
         case "paste":       wv.paste();      break;
         case "cut":         wv.cut();        break;
         case "selectAll":   wv.selectAll();  break;
-        case "inspect":     wv.openDevTools(); break;
+        case "inspect":
+          if (typeof result.data?.x === "number" && typeof result.data?.y === "number") {
+            try { wv.inspectElement(result.data.x, result.data.y); } catch { wv.openDevTools(); }
+          } else {
+            wv.openDevTools();
+          }
+          break;
         case "print":       wv.print?.();    break;
         case "saveAs":      wv.downloadURL?.(wv.getURL()); break;
         case "viewSource":  goToUrlRef.current("view-source:" + (result.data?.url || wv.getURL())); break;
@@ -623,6 +646,28 @@ const BrowserPanel = (props) => {
               onBlur={() => { setFocused(false); setLockOpen(false); }}
             />
           </div>
+
+          {/* Inspect Element button */}
+          <button
+            className="browser__btn"
+            onClick={() => {
+              if (webviewRef.current) {
+                try {
+                  if (webviewRef.current.isDevToolsOpened()) {
+                    webviewRef.current.closeDevTools();
+                  } else {
+                    webviewRef.current.openDevTools();
+                  }
+                } catch {}
+              }
+            }}
+            title="Inspect Element / DevTools"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M9.5 9.5L13.5 13.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </button>
 
           {/* Extensions button — only shown when at least one extension exists */}
           {hasAnyExtension && (

@@ -11,6 +11,7 @@ import ProjectPanel from "./components/Project/index.jsx";
 import EditorPanel from "./components/Panel5/index.jsx";
 import TerminalPanel from "./components/Terminal/index.jsx";
 import BlankPanel from "./components/Blank/index.jsx";
+import ComponentPreview from "./components/ComponentPreview/index.jsx";
 
 const DEFAULT_JSON = {
   global: {
@@ -57,13 +58,14 @@ const DEFAULT_JSON = {
 
 const factory = (node) => {
   switch (node.getComponent()) {
-    case "mediaViewer":   return <MediaViewer />;
-    case "panel3":        return <BrowserPanel config={node.getConfig()} nodeId={node.getId()} />;
-    case "projectPanel":  return <ProjectPanel />;
-    case "editor":        return <EditorPanel config={node.getConfig()} nodeId={node.getId()} />;
-    case "terminal":      return <TerminalPanel config={node.getConfig()} nodeId={node.getId()} />;
-    case "blank":         return <BlankPanel />;
-    default:              return null;
+    case "mediaViewer":       return <MediaViewer />;
+    case "panel3":            return <BrowserPanel config={node.getConfig()} nodeId={node.getId()} />;
+    case "projectPanel":      return <ProjectPanel />;
+    case "editor":            return <EditorPanel config={node.getConfig()} nodeId={node.getId()} />;
+    case "terminal":          return <TerminalPanel config={node.getConfig()} nodeId={node.getId()} />;
+    case "blank":             return <BlankPanel config={node.getConfig()} nodeId={node.getId()} />;
+    case "componentPreview":  return <ComponentPreview config={node.getConfig()} nodeId={node.getId()} />;
+    default:                  return null;
   }
 };
 
@@ -245,16 +247,19 @@ const App = () => {
       let targetNode = targetNodeId ? m.getNodeById(targetNodeId) : null;
       let parentId = null;
 
+      // Actions.addNode requires the target to be a TabSetNode (or Row/Border).
+      // If the target is a tab, use the tabset that contains it — flexlayout then
+      // splits that tabset in the requested direction for RIGHT/BOTTOM/LEFT/TOP.
       if (targetNode) {
-        parentId = location === DockLocation.CENTER ? targetNode.getParent()?.getId() : targetNode.getId();
+        if (targetNode.getType() === "tab") parentId = targetNode.getParent()?.getId();
+        else parentId = targetNode.getId();
       }
       if (!parentId) {
         const terminalNode = m.getNodeById("terminal-tab");
-        parentId = terminalNode ? m.getNodeById(terminalNode.getParent()?.getId()) : null;
+        parentId = terminalNode?.getParent()?.getId();
       }
       if (!parentId) {
-        const root = m.getRoot();
-        parentId = root?.getId();
+        parentId = m.getRoot()?.getId();
       }
 
       if (parentId) {
@@ -263,7 +268,7 @@ const App = () => {
           component: "terminal",
           name: "Terminal",
           enableClose: true,
-        }, parentId, location));
+        }, parentId, location, -1, true));
       }
     };
     window.addEventListener("add-terminal-panel", handler);
@@ -295,11 +300,6 @@ const App = () => {
   // Open settings window when browser panel requests it
   useEffect(() => {
     const handler = () => {
-      // Trigger the same Settings menu item as the app menu does
-      // The main process opens the settings window via the "Settings" menu click.
-      // We reuse the existing IPC by simulating a menu click programmatically
-      // via a dedicated channel exposed below (or just send an ipc message).
-      // Simplest: dispatch to main via a dedicated IPC if available, else noop.
       try {
         window.electronAPI.openSettingsWindow?.();
       } catch {}
@@ -527,32 +527,12 @@ const App = () => {
       onRenderTabSet={(node, renderValues) => {
         renderValues.buttons.push(
           <button key="add" className="flexlayout__tab_toolbar_button"
-            onClick={async () => {
-              const result = await window.electronAPI.showPanelAddMenu();
-              if (!result) return;
+            onClick={() => {
               const m = modelRef.current;
-              switch (result.action) {
-                case "browser":
-                  m.doAction(Actions.addNode({
-                    type: "tab", component: "panel3", name: "Browser", enableClose: true,
-                    config: { type: "browser", title: "Browser" },
-                  }, node.getId(), DockLocation.CENTER));
-                  break;
-                case "terminal":
-                  m.doAction(Actions.addNode({
-                    type: "tab", component: "terminal", name: "Terminal", enableClose: true,
-                  }, node.getId(), DockLocation.CENTER));
-                  window.dispatchEvent(new CustomEvent("focus-terminal-tab"));
-                  break;
-                default:
-                  if (result.action.startsWith("port:")) {
-                    const port = result.action.slice(5);
-                    m.doAction(Actions.addNode({
-                      type: "tab", component: "panel3", name: `localhost:${port}`, enableClose: true,
-                      config: { type: "browser", title: `localhost:${port}`, url: `http://localhost:${port}` },
-                    }, node.getId(), DockLocation.CENTER));
-                  }
-                  break;
+              if (m) {
+                m.doAction(Actions.addNode({
+                  type: "tab", component: "blank", name: "New Panel", enableClose: true,
+                }, node.getId(), DockLocation.CENTER, -1, true));
               }
             }}
             title="Add Panel"

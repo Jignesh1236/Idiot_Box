@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import ReactDOM from "react-dom/client";
 
 // Error Boundary to catch runtime errors inside previewed user components
 class PreviewErrorBoundary extends React.Component {
@@ -58,7 +59,7 @@ const SampleComponent = () => {
   const total = SAMPLE_TEMP_DATA.length;
   const active = SAMPLE_TEMP_DATA.filter((d) => d.status === "Active").length;
   return (
-    <div style={{ width: 420, background: "#252526", border: "1px solid #333", borderRadius: 8, padding: 20, color: "#d4d4d4", fontFamily: "'Segoe UI', Arial, sans-serif" }}>
+    <div style={{ width: "100%", boxSizing: "border-box", background: "#252526", border: "1px solid #333", borderRadius: 8, padding: 20, color: "#d4d4d4", fontFamily: "'Segoe UI', Arial, sans-serif" }}>
       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Team Overview</div>
       <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>Sample component rendered with temp data</div>
       <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
@@ -96,6 +97,66 @@ const ComponentPreview = ({ nodeId, config }) => {
   const [ComponentToRender, setComponentToRender] = useState(null);
   const [lastUpdateKey, setLastUpdateKey] = useState(0);
   const [sampleMode, setSampleMode] = useState(false);
+
+  // The previewed component renders inside a Shadow DOM so that CSS loaded from
+  // project files (`*`, `body`, `html`, ...) only affects the preview subtree
+  // and can never restyle the IDE itself.
+  const shadowHostRef = useRef(null);
+  const reactRootRef = useRef(null);
+
+  // Live-edit sync: latest in-memory sources pushed by the code editor
+  // (path -> code). Used by loadAndTranspile before falling back to disk so
+  // the preview reflects unsaved keystrokes.
+  const liveSourcesRef = useRef(new Map());
+  const liveReloadTimerRef = useRef(null);
+  const filePathRef = useRef(filePath);
+  filePathRef.current = filePath;
+
+  // ── Shadow DOM setup: mount point for the React tree + hidden host for the
+  //    injected <style> elements (Shadow DOM scopes them to the preview) ─────
+  const ensureShadow = useCallback(() => {
+    const host = shadowHostRef.current;
+    if (!host) return null;
+    if (!host.shadowRoot) {
+      const sr = host.attachShadow({ mode: "open" });
+      const mount = document.createElement("div");
+      mount.style.width = "100%";
+      mount.style.minHeight = "100%";
+      mount.style.boxSizing = "border-box";
+      sr.appendChild(mount);
+      const styles = document.createElement("div");
+      styles.style.display = "none";
+      sr.appendChild(styles);
+      host.__mount = mount;
+      host.__stylesHost = styles;
+    }
+    return host;
+  }, []);
+
+  // ── Helper to inject CSS into the preview's shadow root (NOT document.head,
+  //    so broad selectors can never affect the IDE layout) ───────────────────
+  const injectPreviewCss = useCallback((cssKey, cssContent) => {
+    if (!cssKey) return;
+    const host = ensureShadow();
+    if (!host) return;
+    const stylesHost = host.__stylesHost;
+    if (!stylesHost) return;
+    const styleId = `preview-css-${cssKey.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+    let el = stylesHost.querySelector(`#${styleId}`);
+    if (!el) {
+      el = document.createElement("style");
+      el.id = styleId;
+      el.setAttribute("data-preview-css", cssKey);
+      stylesHost.appendChild(el);
+    }
+    el.textContent = cssContent || "";
+  }, [ensureShadow]);
+
+  // Drop all styles injected for a previously previewed component.
+  const clearPreviewCss = useCallback(() => {
+    const host = shadowHostRef.current;
+    if (host && host.__stylesHost) host.__stylesHost.innerHTML = "";
+  }, []);
 
   // ── Find all .jsx / .tsx files in current project ─────────────────────────
   const scanProjectFiles = useCallback(async (dir) => {
@@ -174,20 +235,6 @@ const ComponentPreview = ({ nodeId, config }) => {
     return parts.join("/");
   };
 
-  // ── Helper to inject CSS into document.head ──────────────────────────────
-  const injectPreviewCss = (cssKey, cssContent) => {
-    if (!cssKey) return;
-    const styleId = `preview-css-${cssKey.replace(/[^a-zA-Z0-9_]/g, "_")}`;
-    let el = document.getElementById(styleId);
-    if (!el) {
-      el = document.createElement("style");
-      el.id = styleId;
-      el.setAttribute("data-preview-css", cssKey);
-      document.head.appendChild(el);
-    }
-    el.textContent = cssContent || "";
-  };
-
   // ── Scan and inject associated CSS files ──────────────────────────────────
   const loadAssociatedCss = useCallback(async (targetFilePath, sourceCode) => {
     if (!targetFilePath) return;
@@ -233,19 +280,30 @@ const ComponentPreview = ({ nodeId, config }) => {
         }
       } catch {}
     }
-  }, []);
+  }, [injectPreviewCss]);
 
   // ── Transpile & Load Component ────────────────────────────────────────────
-  const loadAndTranspile = useCallback(async (path) => {
+  // `sourceOverride` lets callers re-render from the editor's in-memory content
+  // (live typing). Without it, prefer a cached live source, then disk.
+  const loadAndTranspile = useCallback(async (path, sourceOverride) => {
     if (!path) return;
     setTranspileError(null);
 
-    const source = await window.electronAPI.readTextFile(path);
+    let source = sourceOverride;
+    if (source == null) {
+      source = liveSourcesRef.current.get(path);
+    }
+    if (source == null) {
+      source = await window.electronAPI.readTextFile(path);
+    }
     if (source === null) {
       setTranspileError(`Could not read file: ${path.split(/[\\/]/).pop()}`);
       setComponentToRender(null);
       return;
     }
+
+    // Drop CSS from the previously previewed component before loading this one.
+    clearPreviewCss();
 
     // Load all imported and associated CSS styles
     await loadAssociatedCss(path, source);
@@ -304,23 +362,125 @@ const ComponentPreview = ({ nodeId, config }) => {
       setTranspileError(err?.message || String(err));
       setComponentToRender(null);
     }
-  }, [loadAssociatedCss]);
+  }, [loadAssociatedCss, clearPreviewCss]);
 
   useEffect(() => {
+    // A pending live-reload from a previous file must not render here.
+    if (liveReloadTimerRef.current) {
+      clearTimeout(liveReloadTimerRef.current);
+      liveReloadTimerRef.current = null;
+    }
     if (filePath) {
       loadAndTranspile(filePath);
     }
   }, [filePath, loadAndTranspile]);
 
-  // Watch for filesystem changes to auto-update live preview
+  // ── Live sync from the code editor ────────────────────────────────────────
+  // Re-renders while typing (no save needed): the editor pushes in-memory
+  // sources via `component:sourceChanged` and announces the active file via
+  // `editor:fileActivated` (also fired when opening/switching a jsx/tsx file).
+  const scheduleLiveReload = useCallback((path, code) => {
+    if (liveReloadTimerRef.current) clearTimeout(liveReloadTimerRef.current);
+    liveReloadTimerRef.current = setTimeout(() => {
+      liveReloadTimerRef.current = null;
+      if (path !== filePathRef.current) return;
+      loadAndTranspile(path, code);
+    }, 250);
+  }, [loadAndTranspile]);
+
+  useEffect(() => {
+    const onSourceChanged = (e) => {
+      const { path, code } = e.detail || {};
+      if (!path || typeof code !== "string") return;
+      liveSourcesRef.current.set(path, code);
+      if (path === filePathRef.current) {
+        scheduleLiveReload(path, code);
+      }
+    };
+    const onFileActivated = (e) => {
+      const p = e.detail?.path;
+      if (p && /\.(jsx|tsx)$/i.test(p)) {
+        setSampleMode(false);
+        setFilePath(p);
+      }
+    };
+    window.addEventListener("component:sourceChanged", onSourceChanged);
+    window.addEventListener("editor:fileActivated", onFileActivated);
+    return () => {
+      window.removeEventListener("component:sourceChanged", onSourceChanged);
+      window.removeEventListener("editor:fileActivated", onFileActivated);
+      if (liveReloadTimerRef.current) {
+        clearTimeout(liveReloadTimerRef.current);
+        liveReloadTimerRef.current = null;
+      }
+    };
+  }, [scheduleLiveReload]);
+
+  // Watch for filesystem changes to auto-update live preview (authoritative
+  // disk content after a save — drop any stale in-memory live source).
   useEffect(() => {
     const root = window.__currentProjectPath;
     if (!root) return;
     const unsub = window.electronAPI.onFsChange(() => {
-      if (filePath) loadAndTranspile(filePath);
+      if (filePath) {
+        liveSourcesRef.current.delete(filePath);
+        loadAndTranspile(filePath);
+      }
     });
     return () => unsub();
   }, [filePath, loadAndTranspile]);
+
+  // ── Render the preview into the Shadow DOM ────────────────────────────────
+  const renderPreview = useCallback(() => {
+    const host = ensureShadow();
+    const root = reactRootRef.current;
+    if (!host || !root) return;
+    const content = sampleMode ? (
+      <PreviewErrorBoundary resetKey={lastUpdateKey}>
+        <div style={{ width: "100%", minHeight: "100%", transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.1s ease" }}>
+          <SampleComponent />
+        </div>
+      </PreviewErrorBoundary>
+    ) : transpileError ? (
+      <div style={{ padding: 16, background: "#2a1717", border: "1px solid #732222", borderRadius: 6, color: "#f44747", fontSize: 12, fontFamily: "Consolas, monospace", maxWidth: 600, lineHeight: 1.5 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>JSX Transpilation Error</div>
+        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{transpileError}</div>
+      </div>
+    ) : !filePath ? (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, color: "#666", fontSize: 13 }}>
+        <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
+          <path d="M4 2.5L1.5 8L4 13.5M12 2.5L14.5 8L12 13.5M9.5 2L6.5 14" stroke="#3c3c3c" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+        <span>Select a .jsx or .tsx file to render live preview</span>
+      </div>
+    ) : ComponentToRender ? (
+      <PreviewErrorBoundary resetKey={lastUpdateKey}>
+        <div style={{ width: "100%", minHeight: "100%", transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.1s ease" }}>
+          {React.isValidElement(ComponentToRender) ? ComponentToRender : <ComponentToRender />}
+        </div>
+      </PreviewErrorBoundary>
+    ) : (
+      <div style={{ color: "#777", fontSize: 12 }}>Loading preview…</div>
+    );
+    root.render(content);
+  }, [sampleMode, transpileError, filePath, ComponentToRender, zoom, lastUpdateKey, ensureShadow]);
+
+  // Create the React root inside the shadow host once; unmount on cleanup.
+  useEffect(() => {
+    const host = ensureShadow();
+    if (host && host.__mount && !reactRootRef.current) {
+      reactRootRef.current = ReactDOM.createRoot(host.__mount);
+    }
+    return () => {
+      try { reactRootRef.current?.unmount(); } catch {}
+      reactRootRef.current = null;
+    };
+  }, [ensureShadow]);
+
+  // Re-render the preview whenever its inputs change.
+  useEffect(() => {
+    renderPreview();
+  }, [renderPreview]);
 
   const fileName = filePath ? filePath.split(/[\\/]/).pop() : "No file selected";
 
@@ -345,7 +505,17 @@ const ComponentPreview = ({ nodeId, config }) => {
           {/* File selector dropdown */}
           <select
             value={filePath || ""}
-            onChange={(e) => { setSampleMode(false); setFilePath(e.target.value || null); }}
+            onChange={(e) => {
+              const p = e.target.value || null;
+              setSampleMode(false);
+              setFilePath(p);
+              // Link back to the code editor: open the selected component there.
+              if (p) {
+                try {
+                  window.dispatchEvent(new CustomEvent("open-file-in-editor", { detail: { filePath: p } }));
+                } catch { /* ignore */ }
+              }
+            }}
             style={{
               background: "#1e1e1e",
               color: "#d0d0d0",
@@ -420,45 +590,21 @@ const ComponentPreview = ({ nodeId, config }) => {
       </div>
 
       {/* ── Main Preview Canvas ────────────────────────────────────────────── */}
+      {/* The previewed component mounts inside a Shadow DOM (shadowHostRef) so
+          project CSS only applies to the preview, never to the IDE layout. */}
       <div
         style={{
           flex: 1,
           overflow: "auto",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          alignItems: "flex-start",
+          justifyContent: "flex-start",
           background: getCanvasBg(),
-          padding: 20,
+          padding: 0,
           position: "relative",
         }}
       >
-        {sampleMode ? (
-          <PreviewErrorBoundary resetKey={lastUpdateKey}>
-            <div style={{ transform: `scale(${zoom})`, transformOrigin: "center center", transition: "transform 0.1s ease" }}>
-              <SampleComponent />
-            </div>
-          </PreviewErrorBoundary>
-        ) : transpileError ? (
-          <div style={{ padding: 16, background: "#2a1717", border: "1px solid #732222", borderRadius: 6, color: "#f44747", fontSize: 12, fontFamily: "Consolas, monospace", maxWidth: 600, lineHeight: 1.5 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>JSX Transpilation Error</div>
-            <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{transpileError}</div>
-          </div>
-        ) : !filePath ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, color: "#666", fontSize: 13 }}>
-            <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
-              <path d="M4 2.5L1.5 8L4 13.5M12 2.5L14.5 8L12 13.5M9.5 2L6.5 14" stroke="#3c3c3c" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-            <span>Select a .jsx or .tsx file to render live preview</span>
-          </div>
-        ) : ComponentToRender ? (
-          <PreviewErrorBoundary resetKey={lastUpdateKey}>
-            <div style={{ transform: `scale(${zoom})`, transformOrigin: "center center", transition: "transform 0.1s ease" }}>
-              {React.isValidElement(ComponentToRender) ? ComponentToRender : <ComponentToRender />}
-            </div>
-          </PreviewErrorBoundary>
-        ) : (
-          <div style={{ color: "#777", fontSize: 12 }}>Loading preview…</div>
-        )}
+        <div ref={shadowHostRef} style={{ width: "100%", minHeight: "100%", boxSizing: "border-box" }} />
       </div>
     </div>
   );

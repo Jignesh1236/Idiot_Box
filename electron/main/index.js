@@ -1,12 +1,25 @@
 // Main process entry point
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage, protocol, net: electrNet, utilityProcess, MessageChannelMain } = require("electron");
 const path    = require("path");
 const fs      = require("fs");
-const net     = require("net");
+const { pathToFileURL } = require("url");
 const { spawn } = require("child_process");
 const chokidar = require("chokidar");
 const pty     = require("node-pty");
 const esbuild = require("esbuild");
+const { detectLspLaunch, registerLspIpc } = require("./lsp");
+const { registerExtHost } = require("./extension-host");
+let lspManager = null;
+let extHostManager = null;
+
+// Webview resource scheme: extweb://<extensionId>/<relative-path>. Serves files
+// from the installed extension's folder only (read-only, no directory escape).
+protocol.registerSchemesAsPrivileged([
+  { scheme: "extweb", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+  // VS Code compatible file protocol (vscode-file://vscode-app/<abs path>) used
+  // by the real Extension Host to read extension sources/workspace files.
+  { scheme: "vscode-file", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+]);
 
 // ─── JSX Transpilation for Component Preview ─────────────────────────────────
 ipcMain.handle("jsx:transpile", async (_e, code) => {
@@ -24,6 +37,9 @@ ipcMain.handle("jsx:transpile", async (_e, code) => {
     return { success: false, error: err.message };
   }
 });
+
+// Absolute path of the extension-webview guest preload (for <webview preload>).
+ipcMain.handle("app:webviewPreloadPath", () => path.join(__dirname, "../preload/webview-preload.js"));
 
 // ─── Long path helper (Windows) ──────────────────────────────────────────────
 const toLongPath = (p) => {
@@ -574,6 +590,796 @@ ipcMain.handle("extensions:pickFile", async (event) => {
   return filePaths[0];
 });
 
+// ─── VS Code extension marketplace (Open VSX) ────────────────────────────────
+// Editor extensions are a SEPARATE system from the Chrome-style browser
+// extensions above: they are VSIX packages (a ZIP containing extension/
+// package.json) served by the Open VSX registry. All network access happens
+// in the main process (Electron net module); the renderer only talks IPC.
+const { net: electronNet } = require("electron");
+
+const VSX_API = "https://open-vsx.org/api";
+// Baseline of the VS Code services embedded via @codingame/monaco-vscode-api.
+// Extensions declaring a newer engines.vscode may use APIs we do not have.
+const VSCODE_COMPAT_VERSION = [1, 94, 0];
+const VSCODE_EXTENSIONS_BASE = path.join(app.getPath("userData"), "vscode-extensions");
+const VSCODE_EXTENSIONS_FILE = path.join(app.getPath("userData"), "vscode-extensions.json");
+
+const readVsxMeta  = () => { try { return JSON.parse(fs.readFileSync(VSCODE_EXTENSIONS_FILE, "utf8")); } catch { return []; } };
+const writeVsxMeta = (d) => { try { fs.writeFileSync(VSCODE_EXTENSIONS_FILE, JSON.stringify(d, null, 2)); return true; } catch { return false; } };
+
+try { fs.mkdirSync(VSCODE_EXTENSIONS_BASE, { recursive: true }); } catch {}
+try { fs.mkdirSync(path.join(VSCODE_EXTENSIONS_BASE, "downloads"), { recursive: true }); } catch {}
+
+// ── Open VSX API helpers ──────────────────────────────────────────────────────
+const VSX_TIMEOUT_MS = 20000;
+const VSX_DOWNLOAD_STALL_MS = 60000;
+
+function vsxFetchJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = electronNet.request({
+      url,
+      method: "GET",
+      headers: { "User-Agent": "ppoo-editor/0.1", Accept: "application/json" },
+    });
+    const reqTimer = setTimeout(() => {
+      try { req.abort(); } catch {}
+      reject(Object.assign(new Error("Request timed out"), { code: "ETIMEDOUT" }));
+    }, VSX_TIMEOUT_MS);
+    req.on("response", (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        clearTimeout(reqTimer);
+        const buf = Buffer.concat(chunks);
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(Object.assign(new Error(`Registry returned HTTP ${res.statusCode}`), { code: "HTTP", status: res.statusCode }));
+          return;
+        }
+        try { resolve(JSON.parse(buf.toString("utf8"))); }
+        catch { reject(Object.assign(new Error("Invalid JSON from registry"), { code: "BAD_JSON" })); }
+      });
+      res.on("error", (err) => {
+        clearTimeout(reqTimer);
+        reject(Object.assign(new Error(`Response error: ${err.message}`), { code: "NETWORK" }));
+      });
+    });
+    req.on("error", (err) => {
+      clearTimeout(reqTimer);
+      reject(Object.assign(new Error(`Network error: ${err.message}`), { code: err.code || "NETWORK" }));
+    });
+    req.end();
+  });
+}
+
+function vsxDownload(url, destFile) {
+  return new Promise((resolve, reject) => {
+    const req = electronNet.request({
+      url,
+      method: "GET",
+      headers: { "User-Agent": "ppoo-editor/0.1" },
+    });
+    // Activity-based timeout: reset whenever data arrives so large VSIX files
+    // on slow connections are not killed mid-transfer; fires only on a stall.
+    let reqTimer = null;
+    const armTimer = () => {
+      clearTimeout(reqTimer);
+      reqTimer = setTimeout(() => {
+        try { req.abort(); } catch {}
+        reject(Object.assign(new Error("Download timed out"), { code: "ETIMEDOUT" }));
+      }, VSX_DOWNLOAD_STALL_MS);
+    };
+    armTimer();
+    req.on("response", (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        clearTimeout(reqTimer);
+        res.resume();
+        reject(Object.assign(new Error(`Download returned HTTP ${res.statusCode}`), { code: "HTTP", status: res.statusCode }));
+        return;
+      }
+      const ws = fs.createWriteStream(destFile);
+      res.on("data", (c) => { ws.write(c); armTimer(); });
+      res.on("end", () => {
+        clearTimeout(reqTimer);
+        ws.end(() => resolve(destFile));
+      });
+      ws.on("error", (err) => {
+        clearTimeout(reqTimer);
+        reject(Object.assign(new Error(`Failed to write download: ${err.message}`), { code: "EWRITE" }));
+      });
+    });
+    req.on("error", (err) => {
+      clearTimeout(reqTimer);
+      reject(Object.assign(new Error(`Download error: ${err.message}`), { code: err.code || "NETWORK" }));
+    });
+    req.end();
+  });
+}
+
+// ── Small semver helpers (no dependency) ──────────────────────────────────────
+function parseVersion(v) {
+  if (typeof v !== "string") return null;
+  const m = v.trim().match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+].*)?$/);
+  if (!m) return null;
+  return [parseInt(m[1], 10), m[2] !== undefined ? parseInt(m[2], 10) : 0, m[3] !== undefined ? parseInt(m[3], 10) : 0];
+}
+function compareVersions(a, b) {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1;
+  }
+  return 0;
+}
+// Returns true when `version` satisfies a simple range (supports *, x, >, >=, ^, ~, exact)
+function satisfiesRange(range, version) {
+  if (!range || !version) return null;
+  const r = String(range).trim();
+  if (!r || r === "*" || /^x$/i.test(r)) return true;
+  if (r.includes("||")) return r.split("||").some((part) => satisfiesRange(part.trim(), version) === true);
+  const m = r.match(/^(>=|>|<=|<|~|\^)?\s*v?(\d+)\.?(\d+)?(?:\.(\d+))?/);
+  if (!m) return null;
+  const op = m[1] || "";
+  const base = [parseInt(m[2], 10), m[3] !== undefined ? parseInt(m[3], 10) : (op ? 0 : 0), m[4] !== undefined ? parseInt(m[4], 10) : (op ? 0 : 0)];
+  const cmp = compareVersions(version, base);
+  switch (op) {
+    case ">":  return cmp > 0;
+    case ">=": return cmp >= 0;
+    case "<":  return cmp < 0;
+    case "<=": return cmp <= 0;
+    case "~":  return version[0] === base[0] && version[1] === base[1] && cmp >= 0;
+    case "^":  return version[0] === base[0] && cmp >= 0;
+    default:   return cmp === 0;
+  }
+}
+
+// ── Compatibility checks ──────────────────────────────────────────────────────
+// Known VS Code API surfaces that the embedded Monaco services do not provide.
+const UNSUPPORTED_API_PATTERNS = [
+  ["debug adapters",    /createDebugAdapterDescriptor|registerDebugAdapterDescriptorFactory|registerDebugConfigurationProvider/i],
+  ["tasks",             /registerTaskProvider|tasks\.executeTask|tasks\.fetchTasks/i],
+  ["testing",           /createTestController|registerTestController/i],
+  ["webviews",          /createWebviewPanel|registerWebviewViewProvider|createWebviewView/i],
+  ["custom editors",    /registerCustomEditorProvider|CustomTextEditorProvider|registerCustomEditor/i],
+  ["remote",            /registerRemoteAuthorityResolver/i],
+  ["notebooks",         /registerNotebookSerializer|NotebookSerializer/i],
+  ["comments",          /registerCommentController/i],
+  ["timeline",          /registerTimelineProvider/i],
+];
+
+function checkEngines(engines) {
+  if (!engines?.vscode) return { status: "unknown", note: "No engines.vscode declared." };
+  const parsed = satisfiesRange(engines.vscode, VSCODE_COMPAT_VERSION);
+  if (parsed === true) return { status: "ok", note: `engines.vscode ${engines.vscode} is satisfied.` };
+  if (parsed === false) {
+    return { status: "may-be-incompatible", note: `Declares engines.vscode ${engines.vscode}; this editor provides ~${VSCODE_COMPAT_VERSION.join(".")}. Some features may not work.` };
+  }
+  return { status: "unknown", note: `Unparsable engines.vscode: ${engines.vscode}` };
+}
+
+function resolveMainEntry(extDir, main) {
+  // VS Code resolves a main entry without extension to "<main>.js"
+  const p = path.join(extDir, String(main || ""));
+  if (fs.existsSync(p)) return p;
+  const withJs = p + ".js";
+  return fs.existsSync(withJs) ? withJs : p;
+}
+
+function scanUnsupportedApis(mainJsPath) {
+  try {
+    const text = fs.readFileSync(mainJsPath, "utf8");
+    const found = [];
+    for (const [label, re] of UNSUPPORTED_API_PATTERNS) {
+      if (re.test(text) && !found.includes(label)) found.push(label);
+    }
+    return found;
+  } catch { return []; }
+}
+
+// ── Contribution file map (for Monaco runtime registration) ───────────────────
+const VSX_MIME = {
+  ".json": "application/json", ".tmLanguage": "text/plain", ".tmTheme": "text/plain",
+  ".plist": "text/plain", ".xml": "text/plain", ".md": "text/markdown",
+  ".txt": "text/plain", ".svg": "image/svg+xml", ".png": "image/png",
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+  ".js": "text/javascript", ".cjs": "text/javascript", ".html": "text/html",
+  ".css": "text/css", ".ico": "image/x-icon", ".wasm": "application/wasm",
+};
+
+function collectContributionFiles(extDir, manifest) {
+  const files = [];
+  const seen = new Set();
+  const addFile = (rel) => {
+    if (!rel || typeof rel !== "string") return;
+    const clean = rel.replace(/^\.\/+/, "");
+    const abs = path.resolve(extDir, clean);
+    if (!abs.startsWith(extDir + path.sep) && abs !== extDir) return; // stay inside the extension
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return;
+    if (seen.has(clean)) return;
+    seen.add(clean);
+    const ext = path.extname(clean).toLowerCase();
+    files.push({ relPath: clean, absPath: abs, mime: VSX_MIME[ext] || "text/plain", size: fs.statSync(abs).size });
+  };
+  const c = manifest.contributes || {};
+  for (const lang of c.languages || []) {
+    if (lang.configuration) addFile(lang.configuration);
+    if (lang.icon) addFile(lang.icon);
+  }
+  for (const g of c.grammars || []) if (g.path) addFile(g.path);
+  for (const s of c.snippets || []) if (s.path) addFile(s.path);
+  for (const t of c.themes || []) if (t.path) addFile(t.path);
+  if (manifest.icon) addFile(manifest.icon);
+  addFile("package.json");
+  addFile("package.nls.json");
+  addFile("README.md");
+  addFile("CHANGELOG.md");
+  return files;
+}
+
+// ── VSIX install pipeline (shared by marketplace + local install) ────────────
+function sanitizeExtPart(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9._-]/g, "_").replace(/^_+|_+$/g, "") || "ext";
+}
+
+function validateManifest(m, sourceFile) {
+  if (!m || typeof m !== "object" || Array.isArray(m)) {
+    throw Object.assign(new Error("VSIX does not contain a valid extension/package.json"), { code: "INVALID_VSIX" });
+  }
+  if (!m.publisher || !m.name || !m.version) {
+    throw Object.assign(new Error("extension/package.json is missing publisher, name or version"), { code: "INVALID_VSIX" });
+  }
+  const id = `${m.publisher.toLowerCase()}.${m.name.toLowerCase()}`;
+  return id;
+}
+
+function installVsixFile(vsixPath, { source }) {
+  try {
+    const zipBuf = fs.readFileSync(vsixPath);
+    if (!zipBuf.length || zipBuf.length > 300 * 1024 * 1024) {
+      throw Object.assign(new Error("VSIX file is empty or too large"), { code: "CORRUPT" });
+    }
+    const tmpDir = path.join(VSCODE_EXTENSIONS_BASE, `.tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+    fs.mkdirSync(tmpDir, { recursive: true });
+    try {
+      // extractZipBuffer throws on non-ZIP data / missing EOCD
+      extractZipBuffer(zipBuf, tmpDir);
+
+      // Locate the extension folder: standard VSIX layout has extension/package.json
+      let extDir = null;
+      const direct = path.join(tmpDir, "extension", "package.json");
+      if (fs.existsSync(direct)) {
+        extDir = path.join(tmpDir, "extension");
+      } else {
+        // Fallback: dig one level for a nested extension folder
+        for (const entry of fs.readdirSync(tmpDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const candidate = path.join(tmpDir, entry.name, "package.json");
+          if (fs.existsSync(candidate)) { extDir = path.dirname(candidate); break; }
+        }
+        if (!extDir) {
+          throw Object.assign(new Error("VSIX has no extension/package.json"), { code: "INVALID_VSIX" });
+        }
+      }
+
+      let manifest;
+      try { manifest = JSON.parse(fs.readFileSync(path.join(extDir, "package.json"), "utf8")); }
+      catch {
+        throw Object.assign(new Error("extension/package.json is corrupted (unreadable JSON)"), { code: "CORRUPT" });
+      }
+      const extId = validateManifest(manifest, vsixPath);
+
+      // Reject extensions that require a full VS Code host to function
+      const hasMain = !!manifest.main;
+      if (hasMain) {
+        const mainPath = resolveMainEntry(extDir, manifest.main);
+        try { fs.accessSync(mainPath); } catch {
+          throw Object.assign(new Error(`Declared main entry "${manifest.main}" is missing from the package`), { code: "CORRUPT" });
+        }
+      }
+
+      const destDir = path.join(VSCODE_EXTENSIONS_BASE, `${sanitizeExtPart(manifest.publisher)}.${sanitizeExtPart(manifest.name)}-${sanitizeExtPart(manifest.version)}`);
+      if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
+      fs.cpSync(extDir, destDir, { recursive: true });
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+
+      // Re-read manifest from its final location and compute metadata
+      const finalManifest = JSON.parse(fs.readFileSync(path.join(destDir, "package.json"), "utf8"));
+      const engines = checkEngines(finalManifest.engines);
+      const unsupportedApis = hasMain ? scanUnsupportedApis(resolveMainEntry(destDir, finalManifest.main)) : [];
+      const lsp = detectLspLaunch(destDir, finalManifest);
+      const warnings = [];
+      if (engines.status === "may-be-incompatible") warnings.push(engines.note);
+      if (unsupportedApis.length) warnings.push(`Uses unsupported VS Code API surfaces: ${unsupportedApis.join(", ")}`);
+      if (hasMain) {
+        warnings.push(lsp.status === "available"
+          ? "Activation code (main entry) is not executed in this editor; the bundled language server is started directly instead."
+          : "Activation code (main entry) is not executed in this editor; language grammars, configuration and snippets are loaded, but LSP-based features will not start.");
+      }
+
+      const iconDataUrl = finalManifest.icon
+        ? readFileAsDataUrlSafe(path.join(destDir, finalManifest.icon))
+        : null;
+
+      const entry = {
+        id: `vsx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        publisher: finalManifest.publisher,
+        name: finalManifest.name,
+        version: finalManifest.version,
+        displayName: finalManifest.displayName || finalManifest.name,
+        description: finalManifest.description || "",
+        iconDataUrl,
+        dir: destDir,
+        enabled: true,
+        loadError: null,
+        source, // "openvsx" | "local"
+        languages: (finalManifest.contributes?.languages || []).map((l) => l.id).filter(Boolean),
+        lsp,
+        categories: finalManifest.categories || [],
+        engines: finalManifest.engines ? { vscode: finalManifest.engines.vscode } : null,
+        engineStatus: engines.status,
+        dependencies: finalManifest.extensionDependencies || [],
+        unsupportedApis,
+        warnings,
+        hasMain,
+        addedAt: Date.now(),
+        installDate: new Date().toISOString(),
+        manifest: finalManifest,
+        filesMap: collectContributionFiles(destDir, finalManifest),
+      };
+      return entry;
+    } finally {
+      try { if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    }
+  } catch (err) {
+    if (err.code === "INVALID_VSIX" || err.code === "CORRUPT") throw err;
+    // Wrap raw zip/extract failures as invalid VSIX
+    if (err instanceof Error && /EOCD|Invalid ZIP/i.test(err.message)) {
+      throw Object.assign(new Error("The file is not a valid VSIX package (invalid ZIP structure)"), { code: "INVALID_VSIX" });
+    }
+    throw err;
+  }
+}
+
+function readFileAsDataUrlSafe(filePath) {
+  try {
+    if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = VSX_MIME[ext];
+    if (!mime || filePath.endsWith(".wasm")) return null;
+    const data = fs.readFileSync(filePath);
+    if (data.length > 512 * 1024) return null;
+    return `data:${mime};base64,${data.toString("base64")}`;
+  } catch { return null; }
+}
+
+function vsxEntryToSearchItem(raw) {
+  const p = raw.publisher || {};
+  const files = raw.files || {};
+  return {
+    publisher: p.name || raw.namespace || "",
+    name: raw.name || "",
+    displayName: raw.displayName || raw.name || "",
+    description: raw.description || "",
+    version: raw.version || "",
+    downloadCount: raw.downloadCount ?? 0,
+    installCount: raw.installCount ?? 0,
+    averageRating: raw.averageRating ?? null,
+    timestamp: raw.timestamp || null,
+    categories: raw.categories || [],
+    tags: raw.tags || [],
+    iconUrl: files.icon || null,
+  };
+}
+
+async function vsxDetailManifest(raw) {
+  // Fetch the extension's package.json from the registry to learn
+  // languages/dependencies before install (files.manifest is the canonical URL).
+  const manifestUrl = raw?.files?.manifest;
+  if (!manifestUrl || typeof manifestUrl !== "string") return null;
+  try {
+    const json = await vsxFetchJson(manifestUrl);
+    return json && typeof json === "object" && !Array.isArray(json) ? json : null;
+  } catch { return null; }
+}
+
+function vsxDownloadUrl(raw, version) {
+  if (raw?.files?.download && typeof raw.files.download === "string") return raw.files.download;
+  return `${VSX_API}/${encodeURIComponent(raw.namespace || raw.publisher?.name)}/${encodeURIComponent(raw.name)}/${encodeURIComponent(version)}/file/${encodeURIComponent(raw.namespace || raw.publisher?.name)}.${encodeURIComponent(raw.name)}-${encodeURIComponent(version)}.vsix`;
+}
+
+function vsxDetailFromRaw(raw, manifest) {
+  const files = raw.files || {};
+  const base = vsxEntryToSearchItem(raw);
+  const languages = manifest?.contributes?.languages
+    ? manifest.contributes.languages.map((l) => l.id).filter(Boolean)
+    : [];
+  return {
+    ...base,
+    publisherName: base.publisher,
+    repository: raw.repository || null,
+    homepage: raw.homepage || null,
+    license: raw.license || (files.license ? true : null),
+    readmeUrl: files.readme || null,
+    hasManifest: !!manifest,
+    languages,
+    engines: manifest?.engines?.vscode ? { vscode: manifest.engines.vscode } : null,
+    dependencies: manifest?.extensionDependencies || [],
+    hasMain: !!manifest?.main,
+  };
+}
+
+// ── IPC handlers ──────────────────────────────────────────────────────────────
+
+// ── Phase B: REAL Node/Desktop Extension Host (utilityProcess) ───────────────
+// Spawns the real VS Code extension host in a Node utility process, hands it
+// one end of a MessageChannel (MessagePort) and the renderer the other end so
+// the extension host protocol flows renderer <-> node host directly.
+ipcMain.on("nodeExtHost:spawn", (event, payload) => {
+  try {
+    const extMap = (payload && payload.extMap) || {};
+    const hostEntry = path.join(__dirname, "../host/node-extension-host.bundle.mjs");
+    const child = utilityProcess.fork(hostEntry, [], {
+      serviceName: "node-extension-host",
+      stdio: "inherit",
+      env: { ...process.env, NODE_EXT_HOST_EXTMAP: JSON.stringify(extMap) },
+    });
+    const { port1, port2 } = new MessageChannelMain();
+    child.postMessage({ type: "vscode.init" }, [port2]);
+    child.on("exit", (code) => {
+      try {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("nodeExtHost:exited", { code });
+        }
+      } catch { /* webContents already gone */ }
+    });
+    event.sender.postMessage("nodeExtHost:spawned", { pid: child.pid }, [port1]);
+  } catch (err) {
+    try {
+      event.sender.send("nodeExtHost:spawned", { error: String((err && err.message) || err) });
+    } catch { /* webContents already gone */ }
+  }
+});
+
+ipcMain.handle("vsx:search", async (_e, { query = "", size = 20, offset = 0 }) => {
+  try {
+    const q = String(query || "").trim();
+    if (!q) return { success: true, totalSize: 0, extensions: [] };
+    const url = `${VSX_API}/-/search?query=${encodeURIComponent(q)}&size=${Math.min(Math.max(1, size), 50)}&offset=${Math.max(0, offset)}`;
+    const json = await vsxFetchJson(url);
+    return {
+      success: true,
+      totalSize: json.totalSize ?? 0,
+      extensions: (json.extensions || []).map(vsxEntryToSearchItem),
+    };
+  } catch (err) {
+    return { success: false, error: err.message, code: err.code || "SEARCH" };
+  }
+});
+
+ipcMain.handle("vsx:details", async (_e, { publisher, name }) => {
+  try {
+    const raw = await vsxFetchJson(`${VSX_API}/${encodeURIComponent(publisher)}/${encodeURIComponent(name)}`);
+    const manifest = await vsxDetailManifest(raw);
+    return { success: true, ext: vsxDetailFromRaw(raw, manifest) };
+  } catch (err) {
+    return { success: false, error: err.message, code: err.code || "DETAILS" };
+  }
+});
+
+// Icon proxy: registry icons are fetched in main and returned as data URLs so
+// the renderer never performs network requests directly.
+const vsxIconCache = new Map();
+ipcMain.handle("vsx:icon", async (_e, { url }) => {
+  try {
+    if (!url || typeof url !== "string") return { success: false };
+    if (vsxIconCache.has(url)) return { success: true, dataUrl: vsxIconCache.get(url) };
+    const buf = await new Promise((resolve, reject) => {
+      const req = electronNet.request({ url, method: "GET", headers: { "User-Agent": "ppoo-editor/0.1" } });
+      const reqTimer = setTimeout(() => {
+        try { req.abort(); } catch {}
+        reject(new Error("timeout"));
+      }, 10000);
+      req.on("response", (res) => {
+        if (res.statusCode < 200 || res.statusCode >= 300 || !/^image\//i.test(res.headers["content-type"] || "")) {
+          clearTimeout(reqTimer);
+          res.resume();
+          reject(new Error("not an image"));
+          return;
+        }
+        const chunks = [];
+        let total = 0;
+        res.on("data", (c) => { total += c.length; if (total > 512 * 1024) { try { req.abort(); } catch {} reject(new Error("too large")); return; } chunks.push(c); });
+        res.on("end", () => { clearTimeout(reqTimer); resolve(Buffer.concat(chunks)); });
+      });
+      req.on("error", (err) => { clearTimeout(reqTimer); reject(err); });
+      req.end();
+    });
+    const mime = "image/png"; // icons served by open-vsx are png
+    const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+    if (vsxIconCache.size > 200) vsxIconCache.clear();
+    vsxIconCache.set(url, dataUrl);
+    return { success: true, dataUrl };
+  } catch {
+    return { success: false };
+  }
+});
+
+ipcMain.handle("vsx:install", async (_e, { publisher, name, version }) => {
+  try {
+    // 1. Resolve the extension (version fallback: latest)
+    const raw = await vsxFetchJson(`${VSX_API}/${encodeURIComponent(publisher)}/${encodeURIComponent(name)}`);
+    const targetVersion = version || raw.version;
+    if (!targetVersion) return { success: false, error: "Could not resolve an installable version from the registry", code: "RESOLVE" };
+    // 2. Download the VSIX into the managed downloads folder
+    const dlDir = path.join(VSCODE_EXTENSIONS_BASE, "downloads");
+    const vsixPath = path.join(dlDir, `${sanitizeExtPart(publisher)}.${sanitizeExtPart(name)}-${sanitizeExtPart(targetVersion)}.vsix`);
+    await vsxDownload(vsxDownloadUrl(raw, targetVersion), vsixPath);
+    // 3. Validate + extract + persist
+    const entry = installVsixFile(vsixPath, { source: "openvsx" });
+    const meta = readVsxMeta();
+    // Replace any existing entry with the same publisher.name
+    const withoutOld = meta.filter((m) => !(m.publisher && m.name && m.publisher.toLowerCase() === entry.publisher.toLowerCase() && m.name.toLowerCase() === entry.name.toLowerCase()));
+    withoutOld.push(entry);
+    writeVsxMeta(withoutOld);
+    if (extHostManager) extHostManager.toggle(entry);
+    return { success: true, entry };
+  } catch (err) {
+    return { success: false, error: err.message, code: err.code || "INSTALL" };
+  }
+});
+
+ipcMain.handle("vsx:installLocal", async (_e, { sourcePath }) => {
+  try {
+    if (!sourcePath || typeof sourcePath !== "string" || !fs.existsSync(sourcePath)) {
+      return { success: false, error: "Selected VSIX file does not exist", code: "NOT_FOUND" };
+    }
+    if (!String(sourcePath).toLowerCase().endsWith(".vsix")) {
+      return { success: false, error: "Only .vsix files can be installed", code: "BAD_EXT" };
+    }
+    const dlDir = path.join(VSCODE_EXTENSIONS_BASE, "downloads");
+    const copyPath = path.join(dlDir, `local-${Date.now()}.vsix`);
+    fs.copyFileSync(sourcePath, copyPath);
+    const entry = installVsixFile(copyPath, { source: "local" });
+    const meta = readVsxMeta();
+    const withoutOld = meta.filter((m) => !(m.publisher && m.name && m.publisher.toLowerCase() === entry.publisher.toLowerCase() && m.name.toLowerCase() === entry.name.toLowerCase()));
+    withoutOld.push(entry);
+    writeVsxMeta(withoutOld);
+    if (extHostManager) extHostManager.toggle(entry);
+    return { success: true, entry };
+  } catch (err) {
+    return { success: false, error: err.message, code: err.code || "INSTALL_LOCAL" };
+  }
+});
+
+ipcMain.handle("vsx:pickVsix", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: "Install from VSIX",
+    filters: [
+      { name: "VSIX Packages", extensions: ["vsix"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+    properties: ["openFile"],
+  });
+  if (canceled || !filePaths.length) return null;
+  return filePaths[0];
+});
+
+ipcMain.handle("vsx:list", async () => {
+  const meta = readVsxMeta();
+  const list = meta.map((m) => ({
+    ...m,
+    loadError: fs.existsSync(m.dir) ? m.loadError : "Extension folder is missing on disk",
+  }));
+  return extHostManager ? extHostManager.overlayEntries(list) : list;
+});
+
+// ── Extension webview / treeview bridge (renderer -> host) ───────────────────
+ipcMain.handle("extHost:webview", async (_e, payload) => {
+  if (!extHostManager) return { success: false, error: "Extension host is not running" };
+  try {
+    await extHostManager.handleHostRequest("webview", payload && payload.action, payload || {});
+    return { success: true };
+  } catch (err) {
+    const message = (err && err.message) || String(err);
+    const extKey = (payload && payload.extKey) || "";
+    const action = (payload && payload.action) || "webview";
+    for (const w of BrowserWindow.getAllWindows()) {
+      try { if (!w.webContents.isDestroyed()) w.webContents.send("extHost:event", { type: "error", extKey, error: `Extension: ${extKey} API: ${action} Error: ${message}` }); } catch {}
+    }
+    return { success: false, error: message };
+  }
+});
+
+ipcMain.handle("extHost:treeview", async (_e, payload) => {
+  if (!extHostManager) return { success: false, error: "Extension host is not running" };
+  try {
+    const result = await extHostManager.handleHostRequest("treeview", payload && payload.action, payload || {});
+    return { success: true, result };
+  } catch (err) {
+    const message = (err && err.message) || String(err);
+    return { success: false, error: message };
+  }
+});
+
+// ── extweb: extension-local webview resources (read-only, no traversal) ──────
+const extwebHandler = async (request) => {
+  try {
+    const url = new URL(request.url);
+    const extKey = String(url.hostname || "").toLowerCase();
+    if (!extKey) return new Response("Bad request", { status: 400 });
+    const meta = readVsxMeta();
+    const entry = meta.find((m) => {
+      const id = String(m.id || "").toLowerCase();
+      const pub = `${String(m.publisher || "")}.${String(m.name || "")}`.toLowerCase();
+      return id === extKey || pub === extKey;
+    });
+    if (!entry || !entry.dir) return new Response("Extension not found", { status: 404 });
+    const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "").replace(/\\/g, "/");
+    if (!rel || rel.startsWith("..") || rel.split("/").includes("..")) return new Response("Forbidden", { status: 403 });
+    const abs = path.resolve(entry.dir, ...rel.split("/"));
+    if (abs !== entry.dir && !abs.startsWith(entry.dir + path.sep)) return new Response("Forbidden", { status: 403 });
+    if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) return new Response("Not found", { status: 404 });
+    return electrNet.fetch(pathToFileURL(abs).toString());
+  } catch {
+    return new Response("Bad request", { status: 400 });
+  }
+};
+
+// ─── VS Code file protocol (vscode-file://vscode-app/<abs path>) ────────────
+// Serves the real Extension Host's file: URIs (rewritten to vscode-file) from
+// disk. Restricted to the extensions folder + the current project folder.
+const vsCodeFileAllowedRoots = () => {
+  const roots = [VSCODE_EXTENSIONS_BASE];
+  if (lastProjectPath) roots.push(lastProjectPath);
+  return roots;
+};
+const isUnderVsCodeFileRoots = (p) => {
+  const r = path.resolve(p);
+  return vsCodeFileAllowedRoots().some((root) => {
+    const rp = path.resolve(root);
+    return r === rp || r.startsWith(rp + path.sep);
+  });
+};
+const vscodeFileHandler = async (request) => {
+  try {
+    const url = new URL(request.url);
+    if (String(url.hostname || "") !== "vscode-app") return new Response("Bad request", { status: 400 });
+    const p = decodeURIComponent(url.pathname).replace(/^\/+/, "").replace(/\//g, path.sep);
+    const abs = path.resolve(p);
+    if (!isUnderVsCodeFileRoots(abs)) return new Response("Forbidden", { status: 403 });
+    const lp = toLongPath(abs);
+    if (!fs.existsSync(lp) || fs.statSync(lp).isDirectory()) return new Response("Not found", { status: 404 });
+    const resp = await electrNet.fetch(pathToFileURL(lp).toString());
+    const body = await resp.arrayBuffer();
+    return new Response(body, {
+      status: resp.status,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": resp.headers.get("content-type") || "application/octet-stream",
+      },
+    });
+  } catch {
+    return new Response("Bad request", { status: 400 });
+  }
+};
+
+// Read a file as base64 for the renderer-side FileSystemProvider (workspace.fs /
+// extension host reads). Bounded to 50 MB.
+ipcMain.handle("vscodefs:readFile", async (_e, filePath) => {
+  try {
+    const buf = fs.readFileSync(toLongPath(filePath));
+    if (buf.length > 50 * 1024 * 1024) return { success: false, error: "TOO_LARGE" };
+    return { success: true, base64: buf.toString("base64") };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("vscodefs:writeFile", async (_e, { filePath, base64 }) => {
+  try {
+    fs.mkdirSync(path.dirname(toLongPath(filePath)), { recursive: true });
+    fs.writeFileSync(toLongPath(filePath), Buffer.from(base64, "base64"));
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("vscodefs:mkdir", async (_e, dirPath) => {
+  try {
+    fs.mkdirSync(toLongPath(dirPath), { recursive: true });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("vscodefs:rename", async (_e, { oldPath, newPath }) => {
+  try {
+    fs.renameSync(toLongPath(oldPath), toLongPath(newPath));
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Read one contribution file (base64) so the renderer can build blob URLs
+// for Monaco's registerFileUrl. Bounded to 8 MB.
+ipcMain.handle("vsx:readExtFile", async (_e, { id, relPath }) => {
+  const meta = readVsxMeta();
+  const entry = meta.find((m) => m.id === id);
+  if (!entry || !entry.dir) return { success: false, code: "NOT_FOUND" };
+  const abs = path.resolve(entry.dir, String(relPath || ""));
+  if (!abs.startsWith(entry.dir + path.sep)) return { success: false, code: "FORBIDDEN" };
+  try {
+    const buf = fs.readFileSync(abs);
+    if (buf.length > 8 * 1024 * 1024) return { success: false, code: "TOO_LARGE" };
+    return { success: true, base64: buf.toString("base64"), size: buf.length };
+  } catch {
+    return { success: false, code: "READ_FAILED" };
+  }
+});
+
+ipcMain.handle("vsx:toggle", async (_e, { id }) => {
+  const meta = readVsxMeta();
+  const entry = meta.find((m) => m.id === id);
+  if (!entry) return { success: false, error: "Extension not found", code: "NOT_FOUND" };
+  entry.enabled = !entry.enabled;
+  writeVsxMeta(meta);
+  if (!entry.enabled && lspManager) lspManager.stopExtension(entry);
+  if (extHostManager) extHostManager.toggle(entry);
+  // Re-serve documents that are still open in the editor and match the
+  // extension's languages, so its features come back without reopening files.
+  if (entry.enabled && lspManager && extHostManager) {
+    const langs = entry.languages || [];
+    for (const d of extHostManager.getOpenDocs()) {
+      if (langs.includes(d.languageId)) lspManager.openDoc(d).catch(() => {});
+    }
+  }
+  return { success: true, entry: extHostManager ? extHostManager.overlayEntries([entry])[0] : entry };
+});
+
+ipcMain.handle("vsx:uninstall", async (_e, { id }) => {
+  const meta = readVsxMeta();
+  const entry = meta.find((m) => m.id === id);
+  if (!entry) return { success: false, error: "Extension not found", code: "NOT_FOUND" };
+  if (lspManager) lspManager.stopExtension(entry);
+  if (extHostManager) extHostManager.unload(entry);
+  try { if (entry.dir && fs.existsSync(entry.dir)) fs.rmSync(entry.dir, { recursive: true, force: true }); } catch {}
+  writeVsxMeta(meta.filter((m) => m.id !== id));
+  return { success: true };
+});
+
+ipcMain.handle("vsx:update", async (_e, { id }) => {
+  try {
+    const meta = readVsxMeta();
+    const entry = meta.find((m) => m.id === id);
+    if (!entry) return { success: false, error: "Extension not found", code: "NOT_FOUND" };
+    const raw = await vsxFetchJson(`${VSX_API}/${encodeURIComponent(entry.publisher)}/${encodeURIComponent(entry.name)}`);
+    const latest = raw.version;
+    if (!latest) return { success: false, error: "Could not resolve latest version", code: "RESOLVE" };
+    const cur = parseVersion(entry.version);
+    const lat = parseVersion(latest);
+    if (cur && lat && compareVersions(lat, cur) <= 0) {
+      return { success: true, upToDate: true, entry };
+    }
+    const dlDir = path.join(VSCODE_EXTENSIONS_BASE, "downloads");
+    const vsixPath = path.join(dlDir, `${sanitizeExtPart(entry.publisher)}.${sanitizeExtPart(entry.name)}-${sanitizeExtPart(latest)}.vsix`);
+    await vsxDownload(vsxDownloadUrl(raw, latest), vsixPath);
+    if (lspManager) lspManager.stopExtension(entry);
+    if (extHostManager) extHostManager.unload(entry);
+    const newEntry = installVsixFile(vsixPath, { source: entry.source });
+    newEntry.id = entry.id; // keep the stable id so enablement survives the update
+    newEntry.enabled = entry.enabled;
+    newEntry.addedAt = entry.addedAt;
+    const next = meta.map((m) => (m.id === entry.id ? newEntry : m));
+    writeVsxMeta(next);
+    if (extHostManager) extHostManager.toggle(newEntry);
+    return { success: true, entry: newEntry };
+  } catch (err) {
+    return { success: false, error: err.message, code: err.code || "UPDATE" };
+  }
+});
+
+
 // ─── Editors ─────────────────────────────────────────────────────────────────
 const KNOWN_EDITORS = [
   { id: "vscode",   label: "Visual Studio Code", commands: ["code"]               },
@@ -626,6 +1432,16 @@ ipcMain.handle("fs:writeFile", async (_e, { filePath, text }) => {
   }
 });
 
+ipcMain.handle("ext:docSaved", (_e, { filePath }) => {
+  try {
+    if (extHostManager) extHostManager.notifyDocSaved(filePath);
+    if (lspManager) lspManager.saveDoc({ path: filePath });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle("fs:saveFileAs", async (event, { filePath, text }) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const defaultName = filePath ? filePath.replace(/.*[\\/]/, "") : "untitled.txt";
@@ -670,6 +1486,7 @@ ipcMain.handle("dialog:openFolder", async (event) => {
   if (r.canceled || !r.filePaths.length) return null;
   const folderPath = r.filePaths[0];
   lastProjectPath = folderPath;
+  if (extHostManager) extHostManager.updateWorkspaceFolder(folderPath);
   event.sender.send("menu:openProject", folderPath);
   return folderPath;
 });
@@ -1441,8 +2258,8 @@ function buildMenu() {
   return Menu.buildFromTemplate([
     {
       label: "File", submenu: [
-        { label: "Open Project", accelerator: "CmdOrCtrl+O",       click: async () => { const r = await dialog.showOpenDialog({ title: "Open Project", properties: ["openDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:openProject", r.filePaths[0]); } } },
-        { label: "New Project",  accelerator: "CmdOrCtrl+Shift+N", click: async () => { const r = await dialog.showOpenDialog({ title: "Select folder for new project", properties: ["openDirectory","createDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:newProject", r.filePaths[0]); } } },
+        { label: "Open Project", accelerator: "CmdOrCtrl+O",       click: async () => { const r = await dialog.showOpenDialog({ title: "Open Project", properties: ["openDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; if (extHostManager) extHostManager.updateWorkspaceFolder(lastProjectPath); sendToRenderer("menu:openProject", r.filePaths[0]); } } },
+        { label: "New Project",  accelerator: "CmdOrCtrl+Shift+N", click: async () => { const r = await dialog.showOpenDialog({ title: "Select folder for new project", properties: ["openDirectory","createDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; if (extHostManager) extHostManager.updateWorkspaceFolder(lastProjectPath); sendToRenderer("menu:newProject", r.filePaths[0]); } } },
         { type: "separator" },
         { label: "Save",            accelerator: "CmdOrCtrl+S",          click: () => sendToRenderer("menu:saveFile", null) },
         { label: "Save As",         accelerator: "CmdOrCtrl+Shift+S",    click: () => sendToRenderer("menu:saveFileAs", null) },
@@ -1450,7 +2267,7 @@ function buildMenu() {
         { type: "separator" },
         { label: "Save Project", click: () => sendToRenderer("menu:saveProject", null) },
         { type: "separator" },
-        { label: "Close Project", accelerator: "CmdOrCtrl+W", click: () => { lastProjectPath = null; sendToRenderer("menu:closeProject", null); } },
+        { label: "Close Project", accelerator: "CmdOrCtrl+W", click: () => { lastProjectPath = null; if (extHostManager) extHostManager.updateWorkspaceFolder(null); sendToRenderer("menu:closeProject", null); } },
         { type: "separator" },
         { label: "Open New Window", accelerator: "CmdOrCtrl+Shift+W", click: () => createWindow() },
         { label: "Close App",        accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
@@ -1460,6 +2277,11 @@ function buildMenu() {
     {
       label: "Window", submenu: [
         { label: "Reset Window", accelerator: "CmdOrCtrl+R", click: () => sendToRenderer("menu:resetLayout", null) },
+      ],
+    },
+    {
+      label: "View", submenu: [
+        { label: "Command Palette…", accelerator: "CmdOrCtrl+Shift+P", click: () => sendToRenderer("menu:commandPalette", null) },
       ],
     },
   ]);
@@ -1515,8 +2337,44 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   getShell();
+  protocol.handle("extweb", extwebHandler);
+  protocol.handle("vscode-file", vscodeFileHandler);
   Menu.setApplicationMenu(buildMenu());
   createWindow();
+  // Language server manager: owns spawned server processes and the LSP
+  // conversation; renderer reaches it through the lsp:* channels.
+  lspManager = registerLspIpc({
+    ipcMain,
+    readVsxMeta,
+    broadcast: (payload) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        try { if (!w.webContents.isDestroyed()) w.webContents.send("lsp:event", payload); } catch {}
+      }
+    },
+  });
+  // Extension host: runs installed extensions' activate()/deactivate() code in
+  // a Node utilityProcess and bridges the vscode API shim to the app.
+  extHostManager = registerExtHost({
+    ipcMain,
+    readVsxMeta,
+    getActiveFolder: () => lastProjectPath,
+    getSettings: readSettings,
+    compatVersion: VSCODE_COMPAT_VERSION,
+    onDocSaved: (p) => { if (lspManager) lspManager.saveDoc({ path: p }); },
+    broadcast: (payload) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        try { if (!w.webContents.isDestroyed()) w.webContents.send("extHost:event", payload); } catch {}
+      }
+    },
+  });
+  // Mirror every editor document open/change/close into the extension host.
+  if (lspManager && extHostManager) {
+    lspManager.setHooks({
+      onDocOpen: (d) => extHostManager.onDocOpen(d),
+      onDocChange: (d) => extHostManager.onDocChange(d),
+      onDocClose: (d) => extHostManager.onDocClose(d),
+    });
+  }
   // Load all previously-installed extensions into the default session on startup.
   // We do this AFTER createWindow so the session is fully initialised.
   try {
@@ -1559,4 +2417,8 @@ app.whenReady().then(async () => {
   }
 });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("before-quit", () => {
+  if (extHostManager) extHostManager.dispose();
+  if (lspManager) lspManager.disposeAll();
+});
 app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });

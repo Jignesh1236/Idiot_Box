@@ -81,6 +81,20 @@ const PANEL_TYPES = [
     ),
     config: {},
   },
+  {
+    id: "extensions",
+    name: "Extensions",
+    component: "extensions",
+    description: "Open VSX marketplace, install and manage editor extensions",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="#4ec9b0" strokeWidth="1.2" fill="none" />
+        <path d="M4.5 5.5H11.5M4.5 8H9" stroke="#4ec9b0" strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M4.5 11L6.5 12.5L4.5 14L3 12.5L4.5 11Z" fill="#4ec9b0" opacity="0.85" />
+      </svg>
+    ),
+    config: {},
+  },
 ];
 
 const BlankPanel = ({ nodeId, config }) => {

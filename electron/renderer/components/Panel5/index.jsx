@@ -31,11 +31,16 @@ import "@codingame/monaco-vscode-shellscript-default-extension";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Actions } from "flexlayout-react";
-import { initialize, getService, IThemeService } from "@codingame/monaco-vscode-api";
+import { initialize, getService, IThemeService, ILanguageService } from "@codingame/monaco-vscode-api";
 import { createConfiguredEditor } from "@codingame/monaco-vscode-api/monaco";
 import getTextMateServiceOverride from "@codingame/monaco-vscode-textmate-service-override";
 import getThemeServiceOverride from "@codingame/monaco-vscode-theme-service-override";
 import getLanguagesServiceOverride from "@codingame/monaco-vscode-languages-service-override";
+import { activateVsx } from "../Extensions/vsx-monaco.js";
+import { initLspProviders, registerModelPath, unregisterModelPath, clearDiagnostics } from "../Editor/lsp-providers.js";
+import { initExtProviders } from "../Editor/ext-providers.js";
+import { initRouter, attachModel, notifyModelChanged } from "../Editor/embedded/router.js";
+import { prepareRealExtensionHost, installExtensionFileComposite } from "../../ext-host/bootstrap.js";
 
 // ── Worker setup (bundled separately by esbuild) ───────────────────────────
 window.MonacoEnvironment = {
@@ -49,11 +54,27 @@ window.MonacoEnvironment = {
 let initPromise;
 const ensureEditorReady = () => {
   if (!initPromise) {
-    initPromise = initialize({
-      ...getTextMateServiceOverride(),
-      ...getThemeServiceOverride(),
-      ...getLanguagesServiceOverride(),
-    }).then(async () => {
+    initPromise = prepareRealExtensionHost()
+      .then(({ overrides, configuration }) =>
+        initialize(
+          {
+            ...getTextMateServiceOverride(),
+            ...getThemeServiceOverride(),
+            ...getLanguagesServiceOverride(),
+            ...overrides,
+          },
+          document.body,
+          configuration
+        )
+      )
+      .then(async () => {
+      try {
+        // Composite the custom extension-file provider into the live file
+        // service (built-in themes/grammars + Node/Desktop extension files).
+        await installExtensionFileComposite();
+      } catch (e) {
+        console.warn("[Panel5] installExtensionFileComposite failed", e);
+      }
       try {
         const themeService = await getService(IThemeService);
         for (let attempt = 0; attempt < 60; attempt++) {
@@ -73,14 +94,38 @@ const ensureEditorReady = () => {
 const ext = (p) => { try { return p.slice(p.lastIndexOf(".")).toLowerCase(); } catch { return ""; } };
 const fileName = (p) => { try { return p.split(/[\\/]/).pop(); } catch { return p; } };
 
-const getMonacoLanguage = (filePath) => {
+// Resolve the Monaco language for a file. The extension host (builtin default
+// extensions + marketplace-installed extensions) is the source of truth: its
+// contributions surface in the VS Code language service. When no extension
+// claims the file, fall back to the built-in mapping below.
+let _languageService = null;
+const getLanguageService = async () => {
+  if (!_languageService) {
+    try { _languageService = await getService(ILanguageService); } catch { _languageService = null; }
+  }
+  return _languageService;
+};
+
+const getMonacoLanguage = async (filePath) => {
   const e = ext(filePath);
+  const base = fileName(filePath);
+  try {
+    const ls = await getLanguageService();
+    if (ls) {
+      const ids = ls.getRegisteredLanguageIds();
+      for (const id of ids) {
+        if (ls.getExtensions(id).some((x) => x && x.toLowerCase() === e)) return id;
+        if (ls.getFilenames(id).some((f) => f && f.toLowerCase() === base)) return id;
+      }
+    }
+  } catch { /* service unavailable — fall back */ }
   switch (e) {
     case ".js": case ".mjs": case ".cjs": return "javascript";
     case ".jsx": return "javascriptreact";
     case ".ts": return "typescript";
     case ".tsx": return "typescriptreact";
     case ".html": case ".htm": return "html";
+    case ".vue": case ".svelte": return "html";
     case ".css": return "css";
     case ".scss": return "scss";
     case ".less": return "less";
@@ -192,8 +237,9 @@ const EditorPanel = ({ config, nodeId }) => {
   const hostRef     = useRef(null);
   const pathRef     = useRef(filePath);
   const originalRef = useRef("");
-  const loadedRef   = useRef(false);
-  const saveTimer   = useRef(null);
+const loadedRef   = useRef(false);
+const saveTimer   = useRef(null);
+const lspTimer    = useRef(null);
 
   pathRef.current = filePath;
 
@@ -221,7 +267,17 @@ const EditorPanel = ({ config, nodeId }) => {
   // ── Bootstrap VS Code services once ──────────────────────────────────────
   useEffect(() => {
     ensureEditorReady()
-      .then(() => setReady(true))
+      .then(() => {
+        setReady(true);
+        // Activate marketplace-installed extensions (grammars, config, snippets)
+        activateVsx();
+        // Bridge Monaco providers to the language server manager
+        try { initLspProviders(); } catch { /* LSP unavailable */ }
+        // Bridge Monaco providers to the extension host (VS Code extensions)
+        try { initExtProviders(); } catch { /* extension host unavailable */ }
+        // Route embedded-language regions (html/vue/svelte) to their providers
+        try { initRouter(); } catch { /* embedded router unavailable */ }
+      })
       .catch((err) => setInitError(err?.message || String(err)));
   }, []);
 
@@ -235,6 +291,12 @@ const EditorPanel = ({ config, nodeId }) => {
       if (disposed) return;
       disposed = true;
       clearTimeout(saveTimer.current);
+      if (lspTimer.current) { clearTimeout(lspTimer.current); lspTimer.current = null; }
+      if (lspActive) {
+        window.electronAPI.lspClose(filePath).catch(() => {});
+        if (lspModelUri) { unregisterModelPath(lspModelUri, filePath); clearDiagnostics(lspModelUri); }
+        lspActive = false;
+      }
       window.removeEventListener("resize", onWinResize);
       ro?.disconnect();
       contentSub?.dispose();
@@ -244,6 +306,7 @@ const EditorPanel = ({ config, nodeId }) => {
       if (editorRef.current === editor) editorRef.current = null;
     };
     let editor = null, ro = null, contentSub = null, cursorSub = null, focusSub = null, onWinResize = null;
+    let lspActive = false, lspModelUri = null;
 
     (async () => {
       const text = await window.electronAPI.readTextFile(filePath);
@@ -258,7 +321,7 @@ const EditorPanel = ({ config, nodeId }) => {
       dirtyFlags.set(filePath, false);
       updateTabName(nodeId, filePath);
 
-      const lang = getMonacoLanguage(filePath);
+      const lang = await getMonacoLanguage(filePath);
       setContent(text);
       setOriginalContent(text);
       originalRef.current = text;
@@ -291,6 +354,31 @@ const EditorPanel = ({ config, nodeId }) => {
 
       editorRef.current = editor;
       activeEditorPath = filePath;
+
+      // Live sync with component/preview panels: announce the active editor
+      // file and push its current source so previews update without a save.
+      try {
+        window.dispatchEvent(new CustomEvent("editor:fileActivated", { detail: { path: filePath } }));
+        window.dispatchEvent(new CustomEvent("component:sourceChanged", { detail: { path: filePath, code: text } }));
+      } catch { /* ignore */ }
+
+      // Bridge to the language server: map this model to the file path and
+      // open the document in the server that claims the file's language.
+      const model = editor.getModel();
+      const modelUriStr = model?.uri?.toString?.();
+      if (modelUriStr && lang && lang !== "plaintext") {
+        lspModelUri = modelUriStr;
+        registerModelPath(modelUriStr, filePath);
+        lspActive = true;
+        // TEMP: yaml is served by the real VS Code extension host; skip the
+        // legacy main-process LSP for it (Phase C removes the legacy layer).
+        if (lang !== "yaml") {
+          window.electronAPI.lspOpen(filePath, lang, text).catch(() => {});
+        }
+      }
+      // Register the model with the embedded language router (mixed-language
+      // files: html/vue/svelte). No-op for non-host languages.
+      try { attachModel(model, filePath); } catch { /* router unavailable */ }
 
       const layout = () => {
         try {
@@ -341,6 +429,16 @@ const EditorPanel = ({ config, nodeId }) => {
             clearTimeout(saveTimer.current);
             saveTimer.current = setTimeout(() => { doSave(); }, 800);
           }
+          if (lspActive) {
+            clearTimeout(lspTimer.current);
+            lspTimer.current = setTimeout(() => { window.electronAPI.lspChange(p, editor.getValue()).catch(() => {}); }, 300);
+          }
+          // Re-sync embedded virtual documents with the edited text.
+          try { notifyModelChanged(editor.getModel()); } catch { /* router unavailable */ }
+          // Live sync: push the in-memory source to component preview panels.
+          try {
+            window.dispatchEvent(new CustomEvent("component:sourceChanged", { detail: { path: p, code: v } }));
+          } catch { /* ignore */ }
         }
       });
       cursorSub = editor.onDidChangeCursorPosition((e) => {
@@ -352,6 +450,9 @@ const EditorPanel = ({ config, nodeId }) => {
       });
       focusSub = editor.onDidFocusEditorText(() => {
         activeEditorPath = pathRef.current;
+        try {
+          window.dispatchEvent(new CustomEvent("editor:fileActivated", { detail: { path: pathRef.current } }));
+        } catch { /* ignore */ }
       });
 
       const done = (fn) => () => {
@@ -366,7 +467,7 @@ const EditorPanel = ({ config, nodeId }) => {
     })();
 
     return () => { cancelled = true; cleanup(); };
-  }, [ready, filePath, minimap, wordWrap, nodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, filePath, minimap, wordWrap, nodeId, hasProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Save / Save As ───────────────────────────────────────────────────────
   const doSave = useCallback(async () => {
@@ -376,6 +477,7 @@ const EditorPanel = ({ config, nodeId }) => {
     const text = editorRef.current?.getValue() ?? content;
     const result = await window.electronAPI.writeFileText(p, text);
     if (result?.success) {
+      window.electronAPI.extDocSaved(p).catch(() => {});
       originalRef.current = text;
       setOriginalContent(text);
       setDirty(nodeId, p, false);
@@ -394,6 +496,7 @@ const EditorPanel = ({ config, nodeId }) => {
     if (result?.canceled) return;
     if (result?.error) { await window.electronAPI.showAlert(`Save As failed:\n${result.error}`); return; }
     const newPath = result.path;
+    window.electronAPI.extDocSaved(newPath).catch(() => {});
     baseNames.delete(p);
     dirtyFlags.delete(p);
     baseNames.set(newPath, fileName(newPath));
@@ -427,6 +530,35 @@ const EditorPanel = ({ config, nodeId }) => {
     const onAuto = (e) => { autoSaveEnabled = e.detail?.enabled === true; };
     window.addEventListener("editor:autosave", onAuto);
     return () => window.removeEventListener("editor:autosave", onAuto);
+  }, []);
+
+  // ── Extension-host workspace edits (vscode.WorkspaceEdit) ───────────────
+  useEffect(() => {
+    const onApplyEdits = (e) => {
+      const { path: target, edits } = e.detail || {};
+      if (!target || !Array.isArray(edits) || !edits.length) return;
+      if (pathRef.current !== target) return;
+      const editor = editorRef.current;
+      const model = editor?.getModel();
+      if (!model) return;
+      const ops = edits
+        .map((ed) => ({
+          range: ed.range && ed.range.start && ed.range.end
+            ? {
+                startLineNumber: ed.range.start.line + 1,
+                startColumn: ed.range.start.character + 1,
+                endLineNumber: ed.range.end.line + 1,
+                endColumn: ed.range.end.character + 1,
+              }
+            : null,
+          text: ed.text || "",
+        }))
+        .filter((op) => op.range);
+      if (!ops.length) return;
+      try { editor.executeEdits("extension", ops); } catch {}
+    };
+    window.addEventListener("editor:applyEdits", onApplyEdits);
+    return () => window.removeEventListener("editor:applyEdits", onApplyEdits);
   }, []);
 
   useEffect(() => () => { clearTimeout(saveTimer.current); }, []);

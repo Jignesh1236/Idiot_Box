@@ -12,7 +12,7 @@ module.exports = {
       }
       const dir = path.dirname(args.path);
       const out = contents.replace(
-        /new URL\(\s*(['"])((?:\.\/|\.\.\/)[^'"#?]+)\1\s*,\s*import\.meta\.url\s*\)/g,
+        /new URL\(\s*(['"`])((?:\.\/|\.\.\/)[^'"`$#?]+)\1\s*,\s*import\.meta\.url\s*\)/g,
         (_match, _quote, rel) => {
           const abs = path.resolve(dir, rel);
           if (!fs.existsSync(abs)) {

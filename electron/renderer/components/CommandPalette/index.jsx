@@ -1,17 +1,25 @@
-// Command Palette — Ctrl+Shift+P / F1 overlay. Lists:
-//   - commands registered by running extensions (extHostCommands)
-//   - commands contributed via package.json "contributes.commands"
-//   - registered webview/tree views (from ext-panels viewRegistry)
-//   - extension output channels
-// Executing a command routes through the extension host (with onCommand
-// activation fallback); views open as dockable FlexLayout panels.
+// Command Palette — Ctrl+Shift+P / F1 overlay with built-in IDE commands.
 import React, { useState, useEffect, useRef } from "react";
-import { openView, viewRegistry } from "../../ext-panels.js";
+
+const COMMANDS = [
+  { id: "open-project",   title: "Open Project…",          run: () => window.electronAPI.openFolder() },
+  { id: "new-project",    title: "New Project…",           run: () => window.dispatchEvent(new CustomEvent("menu:action", { detail: { cmd: "newProject" } })) },
+  { id: "save-project",   title: "Save Project",           run: () => window.dispatchEvent(new CustomEvent("menu:action", { detail: { cmd: "saveProject" } })) },
+  { id: "close-project",  title: "Close Project",          run: () => window.dispatchEvent(new CustomEvent("menu:action", { detail: { cmd: "closeProject" } })) },
+  { id: "save-file",      title: "Save File",              run: () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "save" } })) },
+  { id: "save-file-as",   title: "Save File As…",          run: () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "saveAs" } })) },
+  { id: "toggle-terminal",title: "Focus Terminal",         run: () => window.dispatchEvent(new CustomEvent("focus-terminal-tab")) },
+  { id: "add-terminal",   title: "Add Terminal Panel",     run: () => window.dispatchEvent(new CustomEvent("add-terminal-panel")) },
+  { id: "add-browser",    title: "Add Browser Panel",      run: () => window.dispatchEvent(new CustomEvent("add-browser-panel")) },
+  { id: "add-preview",    title: "Add Component Preview",  run: () => window.dispatchEvent(new CustomEvent("add-component-preview-panel")) },
+  { id: "reset-layout",   title: "Reset Window Layout",    run: () => window.dispatchEvent(new CustomEvent("menu:action", { detail: { cmd: "resetLayout" } })) },
+  { id: "settings",       title: "Settings",               run: () => window.electronAPI.openSettingsWindow() },
+  { id: "toggle-fullscreen", title: "Toggle Full Screen",  run: () => window.dispatchEvent(new CustomEvent("app:fullscreen")) },
+];
 
 const CommandPalette = () => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [items, setItems] = useState([]);
   const [idx, setIdx] = useState(0);
   const inputRef = useRef(null);
 
@@ -40,46 +48,6 @@ const CommandPalette = () => {
     };
   }, []);
 
-  const refresh = async () => {
-    const list = [];
-    try {
-      const cmds = await window.electronAPI.extHostCommands();
-      for (const id of cmds || []) list.push({ kind: "command", id, title: id, extKey: "" });
-    } catch {}
-    try {
-      const inst = await window.electronAPI.vsxListInstalled();
-      for (const e of inst || []) {
-        const contributes = e.manifest && e.manifest.contributes;
-        if (!contributes) continue;
-        for (const cmd of Array.isArray(contributes.commands) ? contributes.commands : []) {
-          if (cmd && cmd.command) {
-            list.push({ kind: "command", id: cmd.command, title: cmd.title || cmd.command, extKey: e.id });
-          }
-        }
-      }
-    } catch {}
-    for (const [key, v] of viewRegistry) {
-      list.push({
-        kind: "view", key,
-        title: `${v.kind === "tree" ? "Tree View" : "Webview View"}: ${v.title}`,
-        extKey: v.extKey,
-      });
-    }
-    try {
-      const s = await window.electronAPI.extHostState();
-      for (const ch of (s && s.channels) || []) {
-        list.push({ kind: "output", key: ch.key, title: `Output: ${ch.name}`, extKey: ch.extKey });
-      }
-    } catch {}
-    list.sort((a, b) => String(a.title).localeCompare(String(b.title)));
-    setItems(list);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    refresh();
-  }, [open]);
-
   useEffect(() => {
     if (open && inputRef.current) inputRef.current.focus();
   }, [open]);
@@ -87,21 +55,15 @@ const CommandPalette = () => {
   const run = (item) => {
     setOpen(false);
     if (!item) return;
-    if (item.kind === "command") {
-      window.electronAPI.extHostRunCommand(item.id, []).catch(() => {});
-    } else if (item.kind === "view") {
-      openView(item.key);
-    } else if (item.kind === "output") {
-      window.dispatchEvent(new CustomEvent("ext-output:show", { detail: { key: item.key } }));
-    }
+    try { item.run(); } catch {}
   };
 
   if (!open) return null;
 
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? items.filter((i) => String(i.title).toLowerCase().includes(q) || String(i.id || "").toLowerCase().includes(q))
-    : items;
+    ? COMMANDS.filter((i) => i.title.toLowerCase().includes(q))
+    : COMMANDS;
 
   return (
     <>
@@ -126,7 +88,7 @@ const CommandPalette = () => {
             else if (e.key === "Enter") { e.preventDefault(); run(filtered[idx]); }
             else if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
           }}
-          placeholder="Type a command, view or channel…"
+          placeholder="Type a command…"
           style={{
             width: "100%", boxSizing: "border-box", padding: "10px 12px",
             background: "#1e1e1e", border: "none", borderBottom: "1px solid #3a3a3a",
@@ -135,11 +97,11 @@ const CommandPalette = () => {
         />
         <div style={{ maxHeight: 340, overflowY: "auto" }}>
           {filtered.length === 0 && (
-            <div style={{ padding: 16, fontSize: 12, color: "#666", textAlign: "center" }}>No matching entries.</div>
+            <div style={{ padding: 16, fontSize: 12, color: "#666", textAlign: "center" }}>No matching commands.</div>
           )}
           {filtered.map((item, i) => (
             <div
-              key={`${item.kind}:${item.id || item.key}`}
+              key={item.id}
               onClick={() => run(item)}
               onMouseEnter={() => setIdx(i)}
               style={{
@@ -148,19 +110,9 @@ const CommandPalette = () => {
                 background: i === idx ? "#094771" : "transparent", color: i === idx ? "#ffffff" : "#cccccc",
               }}
             >
-              <span style={{
-                fontSize: 9.5, padding: "1px 6px", borderRadius: 8, flexShrink: 0,
-                background: i === idx ? "rgba(255,255,255,0.18)" : "#3a3a3a",
-                color: i === idx ? "#ffffff" : "#999999", textTransform: "uppercase", letterSpacing: 0.4,
-              }}>
-                {item.kind}
-              </span>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
                 {item.title}
               </span>
-              {item.extKey ? (
-                <span style={{ fontSize: 10.5, color: i === idx ? "rgba(255,255,255,0.7)" : "#6a6a6a", flexShrink: 0 }}>{item.extKey}</span>
-              ) : null}
             </div>
           ))}
         </div>

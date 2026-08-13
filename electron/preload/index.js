@@ -19,7 +19,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readTextFile:   (filePath) => ipcRenderer.invoke("fs:readTextFile", filePath),
   writeFileText:  (filePath, text) => ipcRenderer.invoke("fs:writeFile", { filePath, text }),
   saveFileAs:     (filePath, text) => ipcRenderer.invoke("fs:saveFileAs", { filePath, text }),
-  extDocSaved:    (filePath) => ipcRenderer.invoke("ext:docSaved", { filePath }),
   readFileAsDataUrl: (filePath) => ipcRenderer.invoke("fs:readFileAsDataUrl", filePath),
   transpileJsx:   (code) => ipcRenderer.invoke("jsx:transpile", code),
   copyImageToClipboard: (filePath) => ipcRenderer.invoke("media:copyImage", filePath),
@@ -67,14 +66,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listEditors:   ()     => ipcRenderer.invoke("editors:list"),
   openSettingsWindow: () => ipcRenderer.invoke("settings:openWindow"),
 
-  // ── Browser extensions ─────────────────────────────────────────────────────
-  readExtensions:    ()                => ipcRenderer.invoke("extensions:read"),
-  uploadExtension:   (name, src)       => ipcRenderer.invoke("extensions:upload",      { name, sourcePath: src }),
-  loadUnpackedExtension: ()            => ipcRenderer.invoke("extensions:loadUnpacked"),
-  deleteExtension:   (id)              => ipcRenderer.invoke("extensions:delete",      { id }),
-  toggleExtension:   (id)              => ipcRenderer.invoke("extensions:toggle",      { id }),
-  openExtensionPopup:(extId, tabUrl)   => ipcRenderer.invoke("extensions:openPopup",   { extensionId: extId, currentTabUrl: tabUrl }),
-  pickExtensionFile: ()                => ipcRenderer.invoke("extensions:pickFile"),
+  // ── Browser context menus ──────────────────────────────────────────────────
   showBrowserTabContextMenu: ()            => ipcRenderer.invoke("browser:tabContextMenu"),
   showBrowserWebviewContextMenu: (params) => ipcRenderer.invoke("browser:webviewContextMenu", params),
 
@@ -123,78 +115,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readProjectTabs:  (rootPath)        => ipcRenderer.invoke("projectConfig:readTabs",  rootPath),
   writeProjectTabs: (rootPath, data)  => ipcRenderer.invoke("projectConfig:writeTabs", rootPath, data),
 
+  // ── Canvas (Visual Project Map) ────────────────────────────────────────────
+  scanCanvas:        (rootPath) => ipcRenderer.invoke("canvas:scan",        rootPath),
+  saveCanvasLayout:  (rootPath, data) => ipcRenderer.invoke("canvas:saveLayout", rootPath, data),
+  loadCanvasLayout:  (rootPath) => ipcRenderer.invoke("canvas:loadLayout",  rootPath),
+
   // ── Session ─────────────────────────────────────────────────────────────────
   saveSession:   (data) => ipcRenderer.invoke("session:save", data),
   loadSession:   ()     => ipcRenderer.invoke("session:load"),
-
-  // ── VS Code extension marketplace (Open VSX) ───────────────────────────────
-  vsxSearch:        (query, size, offset) => ipcRenderer.invoke("vsx:search",  { query, size, offset }),
-  vsxDetails:       (publisher, name)     => ipcRenderer.invoke("vsx:details", { publisher, name }),
-  vsxIcon:          (url)                 => ipcRenderer.invoke("vsx:icon",    { url }),
-  vsxInstall:       (publisher, name, version) => ipcRenderer.invoke("vsx:install", { publisher, name, version }),
-  vsxInstallLocal:  (sourcePath)          => ipcRenderer.invoke("vsx:installLocal", { sourcePath }),
-  vsxPickVsix:      ()                    => ipcRenderer.invoke("vsx:pickVsix"),
-  vsxListInstalled: ()                    => ipcRenderer.invoke("vsx:list"),
-  vsxReadExtFile:   (id, relPath)         => ipcRenderer.invoke("vsx:readExtFile", { id, relPath }),
-  vsxToggle:        (id)                  => ipcRenderer.invoke("vsx:toggle",   { id }),
-  vsxUninstall:     (id)                  => ipcRenderer.invoke("vsx:uninstall", { id }),
-  vsxUpdate:        (id)                  => ipcRenderer.invoke("vsx:update",   { id }),
-
-  // ── VS Code compatible file access (real Extension Host disk provider) ──────
-  vscodeFsReadFile: (filePath) => ipcRenderer.invoke("vscodefs:readFile", filePath),
-  vscodeFsWriteFile: (filePath, base64) => ipcRenderer.invoke("vscodefs:writeFile", { filePath, base64 }),
-  vscodeFsMkdir: (dirPath) => ipcRenderer.invoke("vscodefs:mkdir", dirPath),
-  vscodeFsRename: (oldPath, newPath) => ipcRenderer.invoke("vscodefs:rename", { oldPath, newPath }),
-
-  // ── Language server (LSP) ───────────────────────────────────────────────────
-  lspOpen:    (path, languageId, text) => ipcRenderer.invoke("lsp:open",    { path, languageId, text }),
-  lspChange:  (path, text)             => ipcRenderer.invoke("lsp:change",  { path, text }),
-  lspClose:   (path)                   => ipcRenderer.invoke("lsp:close",   { path }),
-  lspRequest: (path, method, params)   => ipcRenderer.invoke("lsp:request", { path, method, params }),
-  onLspEvent: (cb) => {
-    const h = (_e, p) => cb(p);
-    ipcRenderer.on("lsp:event", h);
-    return () => ipcRenderer.removeListener("lsp:event", h);
-  },
-
-  // ── Extension host (VS Code extensions) ─────────────────────────────────────
-  extHostState:  () => ipcRenderer.invoke("extHost:state"),
-  extHostCommands: () => ipcRenderer.invoke("extHost:commands"),
-  extHostRunCommand: (id, args) => ipcRenderer.invoke("extHost:runCommand", { id, args }),
-  extHostOutput: (key) => ipcRenderer.invoke("extHost:output", { key }),
-  extProviderRequest: (providerId, method, args) =>
-    ipcRenderer.invoke("extHost:providerRequest", { providerId, method, args }),
-  onExtEvent: (cb) => {
-    const h = (_e, p) => cb(p);
-    ipcRenderer.on("extHost:event", h);
-    return () => ipcRenderer.removeListener("extHost:event", h);
-  },
-
-  // ── Phase B: REAL Node/Desktop Extension Host (utilityProcess) ──────────────
-  nodeExtHostSpawn: (extMap) => new Promise((resolve, reject) => {
-    const channel = "nodeExtHost:spawned";
-    const onSpawned = (e) => {
-      ipcRenderer.removeListener(channel, onSpawned);
-      if (e.error) {
-        reject(new Error(e.error));
-      } else {
-        resolve({ pid: e.pid, port: e.ports && e.ports[0] });
-      }
-    };
-    ipcRenderer.on(channel, onSpawned);
-    ipcRenderer.postMessage("nodeExtHost:spawn", { extMap });
-  }),
-  onNodeExtHostExit: (callback) => {
-    const h = (_e, p) => callback(p);
-    ipcRenderer.on("nodeExtHost:exited", h);
-    return () => ipcRenderer.removeListener("nodeExtHost:exited", h);
-  },
-  extWebviewPost:     (panelId, message)   => ipcRenderer.invoke("extHost:webview", { action: "postToView", panelId, message }),
-  extWebviewClosed:   (panelId)            => ipcRenderer.invoke("extHost:webview", { action: "closed", panelId }),
-  extWebviewVisibility: (panelId, visible) => ipcRenderer.invoke("extHost:webview", { action: "visibility", panelId, visible }),
-  extWebviewResolve:  (viewType, panelId)  => ipcRenderer.invoke("extHost:webview", { action: "resolve", viewType, panelId }),
-  extTreeChildren:    (viewId, element)    => ipcRenderer.invoke("extHost:treeview", { action: "children", viewId, element: element === undefined ? null : element }),
-  extTreeReveal:      (viewId, element, options) => ipcRenderer.invoke("extHost:treeview", { action: "reveal", viewId, element: element === undefined ? null : element, options }),
-  extTreeviewEvent:   (kind, viewId, element) => ipcRenderer.invoke("extHost:treeview", { action: "event", kind, viewId, element: element === undefined ? null : element }),
-getWebviewPreloadPath: () => ipcRenderer.invoke("app:webviewPreloadPath"),
 });

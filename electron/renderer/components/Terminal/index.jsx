@@ -139,6 +139,7 @@ const TerminalPanel = ({ nodeId, config }) => {
     let ro;
     let el;
     let rafId;
+    let fitIv;
     let disposed = false;
 
     const startTerminal = async (targetCwd) => {
@@ -222,7 +223,7 @@ const TerminalPanel = ({ nodeId, config }) => {
       // whenever it changes; interval throttling while hidden is fine (a
       // single re-fit on the next visible tick is enough).
       let lastFitW = 0, lastFitH = 0;
-      const fitIv = setInterval(() => {
+      fitIv = setInterval(() => {
         if (disposed || !el) return;
         const w = el.offsetWidth, h = el.offsetHeight;
         if (w === lastFitW && h === lastFitH) return;

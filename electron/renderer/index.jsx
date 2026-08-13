@@ -8,14 +8,12 @@ import "./layout.css";
 import MediaViewer from "./components/MediaViewer/index.jsx";
 import BrowserPanel from "./components/Browser/index.jsx";
 import ProjectPanel from "./components/Project/index.jsx";
-import EditorPanel from "./components/Panel5/index.jsx";
+import EditorPanel from "./components/Editor/index.jsx";
 import TerminalPanel from "./components/Terminal/index.jsx";
 import BlankPanel from "./components/Blank/index.jsx";
 import ComponentPreview from "./components/ComponentPreview/index.jsx";
-import ExtensionsPanel from "./components/Extensions/index.jsx";
-import ExtPanel from "./components/ExtPanel/index.jsx";
+import CanvasPanel from "./components/Canvas/index.jsx";
 import CommandPalette from "./components/CommandPalette/index.jsx";
-import { handleExtEvent } from "./ext-panels.js";
 
 const DEFAULT_JSON = {
   global: {
@@ -69,8 +67,7 @@ const factory = (node) => {
     case "terminal":          return <TerminalPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "blank":             return <BlankPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "componentPreview":  return <ComponentPreview config={node.getConfig()} nodeId={node.getId()} />;
-    case "extensions":        return <ExtensionsPanel />;
-    case "extPanel":          return <ExtPanel config={node.getConfig()} nodeId={node.getId()} />;
+    case "canvas":            return <CanvasPanel config={node.getConfig()} nodeId={node.getId()} />;
     default:                  return null;
   }
 };
@@ -117,60 +114,12 @@ const forceLayoutRedraw = (m) => {
   } catch { /* ignore */ }
 };
 
-const stripCodicons = (text) => String(text || "").replace(/\$\([^)]*\)/g, "").trim();
-const resolveStatusCommand = (cmd) => {
-  if (!cmd) return null;
-  if (typeof cmd === "string") return { id: cmd, args: [] };
-  return { id: cmd.id, args: cmd.arguments || [] };
-};
-
 const App = () => {
   const modelRef          = useRef(null);
   const readyRef          = useRef(false);
   const currentProjectRef = useRef(null);  // currently open project root path
   const saveTabsTimer     = useRef(null);
   const [, setTick] = useState(0);
-
-  // ── Extension-host status bar (IDE-level) ────────────────────────────────
-  const [extItems, setExtItems] = useState([]);
-  const [extMsg, setExtMsg] = useState(null);
-  const [hostBarCount, setHostBarCount] = useState(0);
-  useEffect(() => {
-    const unsub = window.electronAPI.onExtEvent((ev) => {
-      if (!ev || !ev.type) return;
-      handleExtEvent(ev);
-      if (ev.type === "statusbar") {
-        const item = ev.item;
-        if (!item || !item.id) return;
-        if (item.disposed) {
-          setExtItems((prev) => prev.filter((i) => i.id !== item.id));
-        } else {
-          setExtItems((prev) => {
-            const idx = prev.findIndex((i) => i.id === item.id);
-            if (idx >= 0) { const next = [...prev]; next[idx] = { ...next[idx], ...item }; return next; }
-            return [...prev, item];
-          });
-        }
-      }
-    });
-    window.electronAPI.extHostState().then((s) => {
-      const items = Array.isArray(s && s.statusItems) ? s.statusItems : [];
-      if (items.length) setExtItems((prev) => (prev.length ? prev : items));
-    }).catch(() => {});
-    return unsub;
-  }, []);
-
-  // Real-host status bar items (ext-host/status-bar.js) drive footer visibility
-  useEffect(() => {
-    const onHostBar = (e) => setHostBarCount((e.detail && e.detail.count) || 0);
-    window.addEventListener("pw:hostbar-changed", onHostBar);
-    return () => window.removeEventListener("pw:hostbar-changed", onHostBar);
-  }, []);
-
-  useEffect(() => {
-    const msgItems = extItems.filter((i) => i.id && i.id.startsWith("msg-") && i.visible !== false);
-    setExtMsg(msgItems.length ? msgItems[msgItems.length - 1].text : null);
-  }, [extItems]);
 
   // Expose layout JSON for main process to grab on close, and model for BrowserPanel to update tabs
   useEffect(() => {
@@ -279,6 +228,27 @@ const App = () => {
     return () => { u1(); u2(); u3(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Command palette → app actions ───────────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      const cmd = e.detail?.cmd;
+      if (!cmd) return;
+      if (cmd === "newProject") window.electronAPI.openFolder();
+      else if (cmd === "saveProject") doSaveProjectTabs();
+      else if (cmd === "closeProject") {
+        doSaveProjectTabs();
+        currentProjectRef.current = null;
+        window.__currentProjectPath = null;
+        window.dispatchEvent(new CustomEvent("project:closed"));
+      } else if (cmd === "resetLayout") {
+        modelRef.current = Model.fromJson(DEFAULT_JSON);
+        setTick((t) => t + 1);
+      }
+    };
+    window.addEventListener("menu:action", handler);
+    return () => window.removeEventListener("menu:action", handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const handler = () => { if (modelRef.current) modelRef.current.doAction(Actions.selectTab("terminal-tab")); };
     window.addEventListener("focus-terminal-tab", handler);
@@ -327,6 +297,40 @@ const App = () => {
     };
     window.addEventListener("add-terminal-panel", handler);
     return () => window.removeEventListener("add-terminal-panel", handler);
+  }, []);
+
+  // Add Browser / Component Preview panel in flexlayout
+  useEffect(() => {
+    const addPanel = (component, name, config) => {
+      const m = modelRef.current;
+      if (!m) return;
+      const activeTabset = m.getActiveTabset?.();
+      const parentId = activeTabset ? activeTabset.getId() : m.getRoot().getId();
+      m.doAction(Actions.addNode({
+        type: "tab", component, name, enableClose: true, config,
+      }, parentId, DockLocation.CENTER, -1, true));
+    };
+    const onBrowser = (e) => addPanel("panel3", "Browser", e.detail?.config || { type: "browser", title: "Browser", url: e.detail?.url || "https://www.google.com" });
+    const onPreview = () => addPanel("componentPreview", "Component Preview", {});
+    const onCanvas = () => addPanel("canvas", "Canvas", {});
+    window.addEventListener("add-browser-panel", onBrowser);
+    window.addEventListener("add-component-preview-panel", onPreview);
+    window.addEventListener("add-canvas-panel", onCanvas);
+    return () => {
+      window.removeEventListener("add-browser-panel", onBrowser);
+      window.removeEventListener("add-component-preview-panel", onPreview);
+      window.removeEventListener("add-canvas-panel", onCanvas);
+    };
+  }, []);
+
+  // ── Toggle full screen ───────────────────────────────────────────────────
+  useEffect(() => {
+    const onFs = () => {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else document.documentElement.requestFullscreen().catch(() => {});
+    };
+    window.addEventListener("app:fullscreen", onFs);
+    return () => window.removeEventListener("app:fullscreen", onFs);
   }, []);
 
   // Close flex tab by ID
@@ -505,13 +509,6 @@ const App = () => {
 
   if (!readyRef.current) return null;
 
-  const leftItems = extItems
-    .filter((i) => i.visible !== false && (i.alignment === undefined || i.alignment === 1) && !(i.id && i.id.startsWith("msg-")))
-    .sort((a, b) => (b.priority || 0) - (a.priority || 0));
-  const rightItems = extItems
-    .filter((i) => i.visible !== false && i.alignment === 2 && !(i.id && i.id.startsWith("msg-")))
-    .sort((a, b) => (a.priority || 0) - (b.priority || 0));
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100vw", background: "#0d0d0d" }}>
       <div style={{ flex: 1, minHeight: 0 }}>
@@ -610,67 +607,43 @@ const App = () => {
         />
       </div>
 
-      {/* ── IDE status bar (extension items at app level, outside Monaco) ── */}
-      {(leftItems.length > 0 || rightItems.length > 0 || extMsg || hostBarCount > 0) && (
-        <div
-          style={{
-            display: "flex", alignItems: "center", gap: 14,
-            padding: "1px 10px", background: "#007acc", color: "#ffffff",
-            fontSize: 11, height: 22, flexShrink: 0, userSelect: "none",
-            overflow: "hidden", whiteSpace: "nowrap",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0, overflow: "hidden" }}>
-            {leftItems.map((i) => (
-              <span
-                key={i.id}
-                title={i.tooltip || stripCodicons(i.text) || undefined}
-                style={{
-                  color: i.color || "#ffffff",
-                  cursor: i.command ? "pointer" : "default",
-                  overflow: "hidden", textOverflow: "ellipsis",
-                }}
-                onClick={() => {
-                  const c = resolveStatusCommand(i.command);
-                  if (!c || !window.electronAPI.extHostRunCommand) return;
-                  window.electronAPI.extHostRunCommand(c.id, c.args);
-                }}
-              >
-                {stripCodicons(i.text)}
-              </span>
-            ))}
-            <div id="pw-hostbar-left" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" }} />
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {extMsg && <span style={{ color: "#ffffff", opacity: 0.95 }}>{stripCodicons(extMsg)}</span>}
-            {rightItems.map((i) => (
-              <span
-                key={i.id}
-                title={i.tooltip || stripCodicons(i.text) || undefined}
-                style={{ color: i.color || "#ffffff", cursor: i.command ? "pointer" : "default" }}
-                onClick={() => {
-                  const c = resolveStatusCommand(i.command);
-                  if (!c || !window.electronAPI.extHostRunCommand) return;
-                  window.electronAPI.extHostRunCommand(c.id, c.args);
-                }}
-              >
-                {stripCodicons(i.text)}
-              </span>
-            ))}
-            <div id="pw-hostbar-right" style={{ display: "flex", alignItems: "center", gap: 10 }} />
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent("command-palette:open"))}
-              title="Command Palette (Ctrl+Shift+P)"
-              style={{
-                background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 3,
-                color: "#ffffff", fontSize: 10.5, padding: "2px 8px", cursor: "pointer",
-              }}
-            >
-              Palette
-            </button>
-          </div>
+      {/* ── IDE status bar ─────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 14,
+          padding: "1px 10px", background: "#007acc", color: "#ffffff",
+          fontSize: 11, height: 22, flexShrink: 0, userSelect: "none",
+          overflow: "hidden", whiteSpace: "nowrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0, overflow: "hidden" }}>
+          <span style={{ opacity: 0.9 }}>ppoo</span>
+          <span id="pw-hostbar-left" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" }} />
         </div>
-      )}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div id="pw-hostbar-right" style={{ display: "flex", alignItems: "center", gap: 10 }} />
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("add-canvas-panel"))}
+            title="Open Canvas — visual project map of every page & component"
+            style={{
+              background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 3,
+              color: "#ffffff", fontSize: 10.5, padding: "2px 8px", cursor: "pointer",
+            }}
+          >
+            Canvas
+          </button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("command-palette:open"))}
+            title="Command Palette (Ctrl+Shift+P)"
+            style={{
+              background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 3,
+              color: "#ffffff", fontSize: 10.5, padding: "2px 8px", cursor: "pointer",
+            }}
+          >
+            Palette
+          </button>
+        </div>
+      </div>
 
       <CommandPalette />
     </div>

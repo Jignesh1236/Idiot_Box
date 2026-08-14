@@ -487,6 +487,23 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
   );
 });
 
+// ── Context menu items ───────────────────────────────────────────────────────
+const CtxItem = ({ label, onClick, onClose, danger }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onClick(); onClose(); }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ padding: "4px 10px", fontSize: 12, color: danger ? "#f48771" : "#d4d4d4", cursor: "pointer", borderRadius: 2, background: hov ? "#2a2d2e" : "transparent", whiteSpace: "nowrap" }}
+    >
+      {label}
+    </div>
+  );
+};
+const CtxSep = () => <div style={{ height: 1, background: "#3c3c3c", margin: "4px 8px" }} />;
+
 // ── Main Canvas panel ────────────────────────────────────────────────────────
 const CanvasPanel = ({ nodeId, config }) => {
   const [scan, setScan] = useState(null);
@@ -500,6 +517,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   const [livePaths, setLivePaths] = useState(new Set());
   const [selectedRel, setSelectedRel] = useState(null);
   const [naturalSizes, setNaturalSizes] = useState({});
+  const [menu, setMenu] = useState(null);
 
   const viewportRef = useRef(null);
   const viewRef = useRef(view);
@@ -627,6 +645,54 @@ const CanvasPanel = ({ nodeId, config }) => {
     return next;
   }, []);
 
+  const openMenu = useCallback((e, kind, rel) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (rel) setSelectedRel(rel);
+    const vp = viewportRef.current;
+    const r = vp ? vp.getBoundingClientRect() : null;
+    const w = 190;
+    const h = kind === "card" ? 220 : kind === "group" ? 100 : 210;
+    const x = Math.max(r?.left || 0, Math.min(e.clientX, (r?.right || e.clientX) - w));
+    const y = Math.max(r?.top || 0, Math.min(e.clientY, (r?.bottom || e.clientY) - h));
+    setMenu({ x, y, kind, rel: rel || null });
+  }, []);
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  const resetCardSize = useCallback((rel) => {
+    const next = commitManual((m) => {
+      const c = m.cards[rel];
+      if (!c) return m;
+      const { w, h, ...rest } = c;
+      return { ...m, cards: { ...m.cards, [rel]: rest } };
+    });
+    persistLayout(next);
+  }, [commitManual, persistLayout]);
+
+  const resetGroupPos = useCallback((rel) => {
+    const next = commitManual((m) => {
+      const g = { ...m.groups };
+      delete g[rel];
+      return { ...m, groups: g };
+    });
+    persistLayout(next);
+  }, [commitManual, persistLayout]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e) => {
+      if (e.target && e.target.closest && e.target.closest(".cv-ctx")) return;
+      setMenu(null);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setMenu(null); };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
   const effCards = useMemo(() => {
     const d = drag;
     if (!d) return layout.cards;
@@ -746,7 +812,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   }, []);
 
   const startPan = useCallback((e) => {
-    const panAllowed = e.button === 1 || e.button === 2 || (e.button === 0 && (spaceRef.current || e.shiftKey));
+    const panAllowed = e.button === 1 || (e.button === 0 && (spaceRef.current || e.shiftKey));
     if (!panAllowed) return;
     e.preventDefault();
     panRef.current = { startX: e.clientX, startY: e.clientY, x: viewRef.current.x, y: viewRef.current.y };
@@ -767,6 +833,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   }, []);
 
   const startGroupMove = useCallback((e, rel) => {
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const g = layout.groups.get(rel);
@@ -825,6 +892,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   const startCardMove = useCallback((e, rel) => {
     const card = layout.cards.get(rel);
     if (!card) return;
+    if (e.button !== 0) return;
     // Shift+drag: move the card together with its parent group
     if (e.shiftKey && card.owner) {
       startGroupMove(e, card.owner);
@@ -878,6 +946,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   const startCardResize = useCallback((e, rel) => {
     const card = layout.cards.get(rel);
     if (!card) return;
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX, startY = e.clientY;
@@ -920,6 +989,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   }, [layout, persistLayout, commitManual]);
 
   const startGroupResize = useCallback((e, rel, edge) => {
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const g = layout.groups.get(rel);
@@ -971,9 +1041,11 @@ const CanvasPanel = ({ nodeId, config }) => {
 
   const q = query.trim().toLowerCase();
   const rootName = scan?.root ? scan.root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : null;
+  const menuFile = menu?.kind === "card" ? (effCards.get(menu.rel) || layout.cards.get(menu.rel))?.file : null;
+  const menuNode = menu?.kind === "group" ? scanRootsByRel.get(menu.rel) : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#181818", position: "relative", overflow: "hidden" }}>
+    <div onContextMenu={(e) => e.preventDefault()} style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#181818", position: "relative", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 10px", background: "#252526", borderBottom: "1px solid #2d2d2d", fontSize: 12, color: "#ccc", flexShrink: 0 }}>
         <span style={{ fontWeight: 600, color: "#4ec9b0", display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -1016,7 +1088,7 @@ const CanvasPanel = ({ nodeId, config }) => {
       <div
         ref={viewportRef}
         onPointerDown={startPan}
-        onContextMenu={(e) => e.preventDefault()}
+        onContextMenu={(e) => openMenu(e, "canvas")}
         style={{
           flex: 1, overflow: "hidden", position: "relative", cursor: "default", userSelect: "none", touchAction: "none",
           background: "#181818",
@@ -1039,7 +1111,7 @@ const CanvasPanel = ({ nodeId, config }) => {
             const k = kindMeta(rel);
             const selected = selectedRel === rel;
             return (
-              <div key={rel} style={{ position: "absolute", left: g.x, top: g.y, width: g.w, height: g.h, border: `1px dashed ${selected ? "#4ec9b0" : "#333"}`, borderRadius: 4, background: "rgba(255,255,255,0.02)", pointerEvents: "none" }}>
+              <div key={rel} onContextMenu={(e) => openMenu(e, "group", rel)} style={{ position: "absolute", left: g.x, top: g.y, width: g.w, height: g.h, border: `1px dashed ${selected ? "#4ec9b0" : "#333"}`, borderRadius: 4, background: "rgba(255,255,255,0.02)", pointerEvents: "auto" }}>
                 <div
                   onPointerDown={(e) => { setSelectedRel(rel); startGroupMove(e, rel); }}
                   title={`${node.name} — drag to move`}
@@ -1080,6 +1152,7 @@ const CanvasPanel = ({ nodeId, config }) => {
               <div
                 key={rel}
                 onPointerDown={(e) => { setSelectedRel(rel); startCardMove(e, rel); }}
+                onContextMenu={(e) => openMenu(e, "card", rel)}
                 title={rel}
                 style={{
                   position: "absolute", left: c.x, top: c.y, width: c.w, height: c.h,
@@ -1141,8 +1214,44 @@ const CanvasPanel = ({ nodeId, config }) => {
         )}
       </div>
 
+      {menu && (
+        <div className="cv-ctx" style={{ position: "fixed", left: menu.x, top: menu.y, zIndex: 1000, minWidth: 180, background: "#252526", border: "1px solid #454545", borderRadius: 3, padding: 4, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
+          {menu.kind === "card" && menuFile && (
+            <>
+              <CtxItem label="Open in Editor" onClose={closeMenu} onClick={() => window.dispatchEvent(new CustomEvent("open-file-in-editor", { detail: { filePath: menuFile.absPath } }))} />
+              <CtxItem label="Open in New Editor Tab" onClose={closeMenu} onClick={() => window.dispatchEvent(new CustomEvent("open-file-in-new-editor-tab", { detail: { path: menuFile.absPath } }))} />
+              <CtxItem label="Open in System App" onClose={closeMenu} onClick={() => window.electronAPI.openFile(menuFile.absPath, "system")} />
+              <CtxItem label="Open Terminal Here" onClose={closeMenu} onClick={() => window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: menuFile.absPath.replace(/[\\/][^\\/]*$/, "") } }))} />
+              <CtxSep />
+              <CtxItem label="Reset Card Size" onClose={closeMenu} onClick={() => resetCardSize(menu.rel)} />
+              <CtxSep />
+              <CtxItem label="Refresh Scan" onClose={closeMenu} onClick={() => refreshScan()} />
+            </>
+          )}
+          {menu.kind === "group" && menuNode && (
+            <>
+              <CtxItem label="Open in Terminal" onClose={closeMenu} onClick={() => window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir: menuNode.absPath } }))} />
+              <CtxSep />
+              <CtxItem label="Reset Position" onClose={closeMenu} onClick={() => resetGroupPos(menu.rel)} />
+            </>
+          )}
+          {menu.kind === "canvas" && (
+            <>
+              <CtxItem label="Rescan Project" onClose={closeMenu} onClick={() => refreshScan()} />
+              <CtxItem label="Fit All" onClose={closeMenu} onClick={() => fitView()} />
+              <CtxSep />
+              <CtxItem label="Zoom In" onClose={closeMenu} onClick={() => zoomAt(vw / 2, vh / 2, 1.25)} />
+              <CtxItem label="Zoom Out" onClose={closeMenu} onClick={() => zoomAt(vw / 2, vh / 2, 0.8)} />
+              <CtxItem label="Reset Zoom (100%)" onClose={closeMenu} onClick={() => setView({ x: 60, y: 40, z: 1 })} />
+              <CtxSep />
+              <CtxItem label="Reset Layout" danger onClose={closeMenu} onClick={() => resetLayout()} />
+            </>
+          )}
+        </div>
+      )}
+
       <div style={{ padding: "2px 10px", background: "#1c1c1c", borderTop: "1px solid #2a2a2a", color: "#666", fontSize: 10.5, flexShrink: 0 }}>
-        Scroll: pan · Ctrl+Scroll: zoom · Middle-drag/Shift+drag: pan · Drag card: move (push parent edge to expand) · Shift+drag card: move card+group · Drag group header: move · Drag group edge/corner: resize · Click card: open in editor
+        Scroll: pan · Ctrl+Scroll: zoom · Middle-drag/Shift+drag: pan · Drag card: move (push parent edge to expand) · Shift+drag card: move card+group · Drag group header: move · Drag group edge/corner: resize · Click card: open in editor · Right-click: context menu
       </div>
     </div>
   );

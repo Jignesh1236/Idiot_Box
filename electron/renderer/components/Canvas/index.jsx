@@ -70,28 +70,41 @@ function expandForChild(g, cx, cy, cw, ch, pad) {
   return { x, y, w, h };
 }
 
-function layoutGroup(node, originX, originY, out, parentRel) {
+// Card chrome around the preview: 6px padding each side + 30px header.
+const CARD_PAD_X = 12;
+const CARD_PAD_Y = 42;
+
+function layoutGroup(node, originX, originY, out, parentRel, naturalSizes) {
   out.parent.set(node.relPath, parentRel);
   let y = originY + GROUP_HEADER + GROUP_PAD;
   const count = node.children.length;
   const cols = count ? Math.min(MAX_COLS, Math.max(1, Math.ceil(Math.sqrt(count)))) : 1;
-  const rows = count ? Math.ceil(count / cols) : 0;
   let contentW = 240;
   const gridW = count ? cols * CARD_W + (cols - 1) * CARD_GAP : 0;
   contentW = Math.max(contentW, gridW);
+  const cardSize = (c) => {
+    const nat = naturalSizes?.[c.relPath];
+    return nat ? { w: nat.w + CARD_PAD_X, h: nat.h + CARD_PAD_Y } : { w: CARD_W, h: CARD_H };
+  };
+  // Flow cards row by row; each row advances by its tallest card so cards
+  // never overlap when previews have different natural heights.
+  let rowY = y, rowH = 0;
   node.children.forEach((c, i) => {
+    if (i > 0 && i % cols === 0) { rowY += rowH + CARD_GAP; rowH = 0; }
+    const s = cardSize(c);
+    rowH = Math.max(rowH, s.h);
     out.cards.set(c.relPath, {
       x: originX + GROUP_PAD + (i % cols) * (CARD_W + CARD_GAP),
-      y: y + Math.floor(i / cols) * (CARD_H + CARD_GAP),
-      w: CARD_W, h: CARD_H,
+      y: rowY,
+      w: s.w, h: s.h,
       file: c, owner: node.relPath,
     });
   });
-  if (rows) y += rows * (CARD_H + CARD_GAP) - CARD_GAP;
+  if (count) y = rowY + rowH;
   for (const g of node.groups) {
     if (!g.children.length && !g.groups.length) continue;
     y += NESTED_GAP;
-    const child = layoutGroup(g, originX + GROUP_PAD, y, out, node.relPath);
+    const child = layoutGroup(g, originX + GROUP_PAD, y, out, node.relPath, naturalSizes);
     y += child.h;
     contentW = Math.max(contentW, child.w);
   }
@@ -101,11 +114,11 @@ function layoutGroup(node, originX, originY, out, parentRel) {
   return { w, h };
 }
 
-function computeLayout(roots, manual) {
+function computeLayout(roots, manual, naturalSizes) {
   const out = { cards: new Map(), groups: new Map(), parent: new Map(), total: { w: 0, h: 0 } };
   let y = 0;
   for (const root of roots || []) {
-    const { w, h } = layoutGroup(root, 0, y, out, null);
+    const { w, h } = layoutGroup(root, 0, y, out, null, naturalSizes);
     y += h + GROUP_GAP;
     out.total.w = Math.max(out.total.w, w);
   }
@@ -122,12 +135,16 @@ function computeLayout(roots, manual) {
     deltas.set(rel, { dx: m.x - g.x, dy: m.y - g.y });
   }
   for (const [rel, c] of out.cards) {
+    const nat = naturalSizes?.[rel];
+    const natW = nat ? nat.w + CARD_PAD_X : CARD_W;
+    const natH = nat ? nat.h + CARD_PAD_Y : CARD_H;
     const m = manual.cards?.[rel];
     if (m) {
       c.x = m.x ?? c.x; c.y = m.y ?? c.y;
-      c.w = m.w ?? CARD_W; c.h = m.h ?? CARD_H;
+      c.w = m.w ?? natW; c.h = m.h ?? natH;
       continue;
     }
+    c.w = natW; c.h = natH;
     let node = c.owner, dx = 0, dy = 0;
     while (node) {
       const d = deltas.get(node);
@@ -195,7 +212,7 @@ const resolvePath = (baseFile, relativePath) => {
   return parts.join("/");
 };
 
-const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef, onLive }) {
+const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef, onLive, onNatural, canvasZoom }) {
   const hostRef = useRef(null);
   const timerRef = useRef(null);
   const rootRef = useRef(null);
@@ -244,16 +261,23 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
     }
   }, [injectCss]);
 
-  // Fit the component into the card area. The natural size is captured once
-  // per load and then the wrapper is re-scaled on resize (imperative DOM, no
-  // re-render, no remount) so the preview always fills the card exactly —
-  // its size always matches the child's size. The preview re-flows only when
-  // the card grows past its natural size so text stays crisp.
+  // Fit the component into the card area with a "cover" fit: the preview is
+  // scaled uniformly (aspect ratio always preserved — no stretching when the
+  // card is resized) and centered, filling the card completely. Overflow is
+  // cropped evenly. The wrapper is re-scaled imperatively (no re-render, no
+  // remount); the preview re-flows only when the card grows past its natural
+  // size so text stays crisp.
+  //
+  // Canvas zoom: the whole canvas is scaled by view.z, so to keep the preview
+  // sharp the content is laid out z× bigger and counter-scaled by 1/z — the
+  // browser rasterizes it at the zoomed resolution (crisp) instead of
+  // upscaling a 1:1 render (blurry).
   const measureAndFit = useCallback(() => {
     const host = hostRef.current;
     if (!host || !host.shadowRoot || isHtml) return;
     const rootEl = rootRef.current, scaled = scaledRef.current, inner = innerRef.current;
     if (!rootEl || !scaled || !inner) return;
+    const z = canvasZoom || 1;
     const fw = Math.max(1, rootEl.clientWidth);
     const fh = Math.max(1, rootEl.clientHeight);
     let nat = host.__nat;
@@ -263,27 +287,39 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
       inner.style.minHeight = "100%";
       inner.style.width = "";
       inner.style.height = "";
-      inner.style.transform = "none";
+      inner.style.transform = `scale(${1 / z})`;
       scaled.style.width = "100%";
       scaled.style.height = "100%";
+      scaled.style.marginLeft = "0";
+      scaled.style.marginTop = "0";
       const r = inner.getBoundingClientRect();
-      nat = { w: Math.max(1, Math.ceil(r.width)), h: Math.max(1, Math.ceil(r.height)) };
+      nat = { w: Math.max(1, Math.ceil(r.width * z)), h: Math.max(1, Math.ceil(r.height * z)) };
       host.__nat = nat;
+      const reported = host.__reportedNat;
+      if (!reported || reported.w !== nat.w || reported.h !== nat.h) {
+        host.__reportedNat = nat;
+        onNatural(rel, nat);
+      }
     }
-    scaled.style.width = `${fw}px`;
-    scaled.style.height = `${fh}px`;
+    const fit = Math.max(fw / nat.w, fh / nat.h);
+    const layout = fit * z;
+    scaled.style.width = `${nat.w * fit}px`;
+    scaled.style.height = `${nat.h * fit}px`;
+    scaled.style.marginLeft = `${(fw - nat.w * fit) / 2}px`;
+    scaled.style.marginTop = `${(fh - nat.h * fit) / 2}px`;
     inner.style.display = "";
     inner.style.minWidth = "";
     inner.style.minHeight = "";
-    inner.style.width = `${nat.w}px`;
-    inner.style.height = `${nat.h}px`;
-    inner.style.transform = `scale(${fw / nat.w}, ${fh / nat.h})`;
-  }, [isHtml]);
+    inner.style.width = `${nat.w * layout}px`;
+    inner.style.height = `${nat.h * layout}px`;
+    inner.style.transform = `scale(${1 / z})`;
+  }, [isHtml, onNatural, rel, canvasZoom]);
 
   const load = useCallback(async (sourceOverride) => {
     const host = hostRef.current;
     if (!host || !host.shadowRoot) return;
     host.__nat = null;
+    host.__reportedNat = null;
     setError(null);
     setStatus("loading");
     setComp(null);
@@ -463,6 +499,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   const [query, setQuery] = useState("");
   const [livePaths, setLivePaths] = useState(new Set());
   const [selectedRel, setSelectedRel] = useState(null);
+  const [naturalSizes, setNaturalSizes] = useState({});
 
   const viewportRef = useRef(null);
   const viewRef = useRef(view);
@@ -492,6 +529,13 @@ const CanvasPanel = ({ nodeId, config }) => {
     });
   }, []);
   const onCardLive = useCallback((relPath, on) => setLiveState(relPath, on), [setLiveState]);
+  const onCardNatural = useCallback((relPath, size) => {
+    setNaturalSizes((prev) => {
+      const cur = prev[relPath];
+      if (cur && cur.w === size.w && cur.h === size.h) return prev;
+      return { ...prev, [relPath]: { w: size.w, h: size.h } };
+    });
+  }, []);
 
   const refreshScan = useCallback(async () => {
     const root = window.__currentProjectPath;
@@ -571,7 +615,7 @@ const CanvasPanel = ({ nodeId, config }) => {
     return m;
   }, [scan]);
 
-  const layout = useMemo(() => computeLayout(flatGroups, manual), [flatGroups, manual]);
+  const layout = useMemo(() => computeLayout(flatGroups, manual, naturalSizes), [flatGroups, manual, naturalSizes]);
 
   // Manual drags never run the auto-layout engine: while a pointer is down we
   // overlay a transient position/size on top of the computed layout, and only
@@ -1050,7 +1094,7 @@ const CanvasPanel = ({ nodeId, config }) => {
                   <span style={{ marginLeft: "auto", fontSize: 9.5, color: k.color, background: `${k.color}1a`, border: `1px solid ${k.color}33`, borderRadius: 3, padding: "0 6px", flexShrink: 0 }}>{k.label}</span>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, padding: 6 }}>
-                  <CardPreview file={c.file} rel={rel} liveSourcesRef={liveSourcesRef} onLive={onCardLive} />
+                  <CardPreview file={c.file} rel={rel} liveSourcesRef={liveSourcesRef} onLive={onCardLive} onNatural={onCardNatural} canvasZoom={view.z} />
                 </div>
                 <div
                   onPointerDown={(e) => startCardResize(e, rel)}

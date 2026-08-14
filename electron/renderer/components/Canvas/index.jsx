@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ReactDOM from "react-dom/client";
+import VscodeIcon from "../shared/VscodeIcon.jsx";
+import { PreviewIcon } from "../Project/window/ContentArea.jsx";
 
 const CARD_W = 280;
 const CARD_H = 200;
@@ -12,50 +14,77 @@ const MAX_COLS = 4;
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 3;
 const DOT_SIZE = 24;
+const MIN_CARD_W = 180, MAX_CARD_W = 1200;
+const MIN_CARD_H = 140, MAX_CARD_H = 900;
+const MIN_GROUP_W = 80, MIN_GROUP_H = GROUP_HEADER + 10, MAX_GROUP = 4000;
+const DRAG_MOVE_THRESHOLD = 4;
+const DRAG_RESIZE_THRESHOLD = 2;
+
+const FW_LABEL = { next: "Next.js", react: "React", vue: "Vue", svelte: "Svelte", solid: "SolidJS", preact: "Preact", angular: "Angular", unknown: "" };
 
 const KIND_META = {
-  page:      { label: "Page",      color: "#4ec9b0" },
-  component: { label: "Component", color: "#569cd6" },
-  view:      { label: "View",      color: "#dcdcaa" },
-  widget:    { label: "Widget",    color: "#c586c0" },
-  feature:   { label: "Feature",   color: "#ce9178" },
-  module:    { label: "Module",    color: "#9cdcfe" },
+  pages: { color: "#4ec9b0", label: "Page" },
+  components: { color: "#569cd6", label: "Component" },
+  views: { color: "#c586c0", label: "View" },
+  widgets: { color: "#dcdcaa", label: "Widget" },
+  features: { color: "#ce9178", label: "Feature" },
+  ui: { color: "#9cdcfe", label: "UI" },
+};
+const DEFAULT_KIND = { color: "#888", label: "Module" };
+
+const GROUP_HANDLES = [
+  { edge: "n", pos: { left: 10, right: 10, top: -4 }, w: 0, h: 8, cursor: "ns-resize" },
+  { edge: "s", pos: { left: 10, right: 10, bottom: -4 }, w: 0, h: 8, cursor: "ns-resize" },
+  { edge: "e", pos: { top: 10, bottom: 10, right: -4 }, w: 8, h: 0, cursor: "ew-resize" },
+  { edge: "w", pos: { top: 10, bottom: 10, left: -4 }, w: 8, h: 0, cursor: "ew-resize" },
+  { edge: "ne", pos: { top: -4, right: -4 }, w: 12, h: 12, cursor: "nesw-resize" },
+  { edge: "nw", pos: { top: -4, left: -4 }, w: 12, h: 12, cursor: "nwse-resize" },
+  { edge: "se", pos: { bottom: -4, right: -4 }, w: 12, h: 12, cursor: "nwse-resize" },
+  { edge: "sw", pos: { bottom: -4, left: -4 }, w: 12, h: 12, cursor: "nesw-resize" },
+];
+
+const kindMeta = (relPath) => {
+  const parts = (relPath || "").split("/");
+  const folder = parts[0] || "";
+  const base = folder.replace(/s$/, "");
+  return KIND_META[base] || KIND_META[parts[parts.length - 2]] || DEFAULT_KIND;
 };
 
-const kindOf = (relPath) => {
-  const p = relPath.toLowerCase();
-  if (p.includes("pages")) return "page";
-  if (p.includes("components")) return "component";
-  if (p.includes("views")) return "view";
-  if (p.includes("widgets")) return "widget";
-  if (p.includes("features")) return "feature";
-  return "module";
+const countNested = (node) => {
+  let n = 0;
+  const walk = (g) => { n += g.children.length; g.groups.forEach(walk); };
+  node.groups.forEach(walk);
+  return n;
 };
 
-const kindMeta = (relPath) => KIND_META[kindOf(relPath)];
+// ── Layout engine: folder tree → world-space rects ────────────────────────────
+// Expand a group frame around a child rect, keeping the group's other edges
+// fixed: only edges the child pushes past move, and only in that direction.
+function expandForChild(g, cx, cy, cw, ch, pad) {
+  let { x, y, w, h } = g;
+  const left = cx - pad, top = cy - pad, right = cx + cw + pad, bottom = cy + ch + pad;
+  if (left < x) { w += x - left; x = left; }
+  if (top < y) { h += y - top; y = top; }
+  if (right > x + w) w = right - x;
+  if (bottom > y + h) h = bottom - y;
+  return { x, y, w, h };
+}
 
-const FW_LABEL = { react: "React", next: "Next.js", vue: "Vue", svelte: "Svelte", solid: "Solid", preact: "Preact", angular: "Angular", unknown: "Unknown" };
-
-const countNested = (node) => node.groups.reduce((acc, g) => acc + g.children.length + countNested(g), 0);
-
-// ── Auto layout engine: folder tree → world-space rects ──────────────────────
 function layoutGroup(node, originX, originY, out, parentRel) {
   out.parent.set(node.relPath, parentRel);
   let y = originY + GROUP_HEADER + GROUP_PAD;
+  const count = node.children.length;
+  const cols = count ? Math.min(MAX_COLS, Math.max(1, Math.ceil(Math.sqrt(count)))) : 1;
+  const rows = count ? Math.ceil(count / cols) : 0;
   let contentW = 240;
-  const cardCount = node.children.length;
-  const cols = cardCount ? Math.min(MAX_COLS, Math.max(1, Math.ceil(Math.sqrt(cardCount)))) : 1;
-  const rows = cardCount ? Math.ceil(cardCount / cols) : 0;
-  const gridW = cols ? cols * CARD_W + (cols - 1) * CARD_GAP : 0;
+  const gridW = count ? cols * CARD_W + (cols - 1) * CARD_GAP : 0;
   contentW = Math.max(contentW, gridW);
   node.children.forEach((c, i) => {
     out.cards.set(c.relPath, {
       x: originX + GROUP_PAD + (i % cols) * (CARD_W + CARD_GAP),
       y: y + Math.floor(i / cols) * (CARD_H + CARD_GAP),
-      w: CARD_W,
-      h: CARD_H,
-      file: c,
-      owner: node.relPath,
+      w: CARD_W, h: CARD_H,
+      file: c, owner: node.relPath,
     });
   });
   if (rows) y += rows * (CARD_H + CARD_GAP) - CARD_GAP;
@@ -82,11 +111,15 @@ function computeLayout(roots, manual) {
   }
   out.total.h = Math.max(0, y - GROUP_GAP);
 
-  // Shift auto-placed cards by the combined delta of all manual (dragged) ancestor groups
+  // Auto-placed cards shift by the combined move delta of manually moved
+  // ancestor groups (groups store the pure translation as dx/dy; legacy
+  // entries without it fall back to their position delta vs the auto layout).
   const deltas = new Map();
   for (const [rel, g] of out.groups) {
     const m = manual.groups?.[rel];
-    deltas.set(rel, m ? { dx: m.x - g.x, dy: m.y - g.y } : { dx: 0, dy: 0 });
+    if (!m) { deltas.set(rel, { dx: 0, dy: 0 }); continue; }
+    if (m.dx != null && m.dy != null) { deltas.set(rel, { dx: m.dx, dy: m.dy }); continue; }
+    deltas.set(rel, { dx: m.x - g.x, dy: m.y - g.y });
   }
   for (const [rel, c] of out.cards) {
     const m = manual.cards?.[rel];
@@ -103,7 +136,7 @@ function computeLayout(roots, manual) {
     }
     c.x += dx; c.y += dy;
   }
-  // Manual group rects (dragged / resized) win over auto
+
   for (const [rel, g] of out.groups) {
     const m = manual.groups?.[rel];
     if (m) {
@@ -112,9 +145,9 @@ function computeLayout(roots, manual) {
       if (m.h) g.h = m.h;
     }
   }
-  // Groups hug their cards: resize to contain them, but never move the frame
-  // (dragging a child must not drag the parent). Manually placed/resized
-  // groups keep full control.
+
+  // Groups keep their position; they only expand on the side(s) a child
+  // pushes past the border. Manual group rects stay as committed.
   const bounds = new Map();
   for (const [rel, c] of out.cards) {
     const b = bounds.get(c.owner) || { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
@@ -123,12 +156,12 @@ function computeLayout(roots, manual) {
     bounds.set(c.owner, b);
   }
   for (const [rel, g] of out.groups) {
-    const m = manual.groups?.[rel];
-    if (m) continue;
     const b = bounds.get(rel);
     if (!b || !isFinite(b.minX)) continue;
-    g.w = Math.max(g.w, b.maxX - g.x + GROUP_PAD);
-    g.h = Math.max(g.h, b.maxY - g.y + GROUP_PAD);
+    const r = expandForChild(g, b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY, GROUP_PAD);
+    g.x = r.x; g.y = r.y;
+    g.w = Math.max(r.w, MIN_GROUP_W);
+    g.h = Math.max(r.h, GROUP_HEADER + GROUP_PAD * 2);
   }
   return out;
 }
@@ -141,7 +174,7 @@ class CardErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 10, background: "#2a1717", border: "1px solid #732222", borderRadius: 4, color: "#f44747", fontSize: 11, fontFamily: "Consolas, monospace", lineHeight: 1.4, wordBreak: "break-all" }}>
+        <div style={{ padding: 10, background: "#2a1717", border: "1px solid #732222", borderRadius: 2, color: "#f44747", fontSize: 11, fontFamily: "Consolas, monospace", lineHeight: 1.4, wordBreak: "break-all" }}>
           {this.state.error?.message || String(this.state.error)}
         </div>
       );
@@ -154,8 +187,7 @@ const resolvePath = (baseFile, relativePath) => {
   if (!baseFile || !relativePath) return null;
   const parts = baseFile.replace(/\\/g, "/").split("/");
   parts.pop();
-  const relParts = relativePath.replace(/\\/g, "/").split("/");
-  for (const p of relParts) {
+  for (const p of relativePath.replace(/\\/g, "/").split("/")) {
     if (p === "." || p === "") continue;
     if (p === "..") parts.pop();
     else parts.push(p);
@@ -163,17 +195,16 @@ const resolvePath = (baseFile, relativePath) => {
   return parts.join("/");
 };
 
-function CardPreview({ file, liveSourcesRef, onLive }) {
+const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef, onLive }) {
   const hostRef = useRef(null);
   const timerRef = useRef(null);
   const rootRef = useRef(null);
-  const measureRef = useRef(null);
+  const scaledRef = useRef(null);
+  const innerRef = useRef(null);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
   const [comp, setComp] = useState(null);
   const [html, setHtml] = useState(null);
-  const [nat, setNat] = useState(null);
-  const [fit, setFit] = useState(null);
 
   const isHtml = /\.html$/i.test(file.name);
 
@@ -213,14 +244,50 @@ function CardPreview({ file, liveSourcesRef, onLive }) {
     }
   }, [injectCss]);
 
+  // Fit the component into the card area. The natural size is captured once
+  // per load and then the wrapper is re-scaled on resize (imperative DOM, no
+  // re-render, no remount) so the preview always fills the card exactly —
+  // its size always matches the child's size. The preview re-flows only when
+  // the card grows past its natural size so text stays crisp.
+  const measureAndFit = useCallback(() => {
+    const host = hostRef.current;
+    if (!host || !host.shadowRoot || isHtml) return;
+    const rootEl = rootRef.current, scaled = scaledRef.current, inner = innerRef.current;
+    if (!rootEl || !scaled || !inner) return;
+    const fw = Math.max(1, rootEl.clientWidth);
+    const fh = Math.max(1, rootEl.clientHeight);
+    let nat = host.__nat;
+    if (!nat || fw > nat.w || fh > nat.h) {
+      inner.style.display = "inline-block";
+      inner.style.minWidth = "100%";
+      inner.style.minHeight = "100%";
+      inner.style.width = "";
+      inner.style.height = "";
+      inner.style.transform = "none";
+      scaled.style.width = "100%";
+      scaled.style.height = "100%";
+      const r = inner.getBoundingClientRect();
+      nat = { w: Math.max(1, Math.ceil(r.width)), h: Math.max(1, Math.ceil(r.height)) };
+      host.__nat = nat;
+    }
+    scaled.style.width = `${fw}px`;
+    scaled.style.height = `${fh}px`;
+    inner.style.display = "";
+    inner.style.minWidth = "";
+    inner.style.minHeight = "";
+    inner.style.width = `${nat.w}px`;
+    inner.style.height = `${nat.h}px`;
+    inner.style.transform = `scale(${fw / nat.w}, ${fh / nat.h})`;
+  }, [isHtml]);
+
   const load = useCallback(async (sourceOverride) => {
     const host = hostRef.current;
     if (!host || !host.shadowRoot) return;
+    host.__nat = null;
     setError(null);
     setStatus("loading");
     setComp(null);
     setHtml(null);
-    setNat(null);
     let source = sourceOverride;
     if (source == null) source = liveSourcesRef.current.get(file.absPath);
     if (source == null) source = await window.electronAPI.readTextFile(file.absPath);
@@ -271,12 +338,13 @@ function CardPreview({ file, liveSourcesRef, onLive }) {
     }
   }, [file.absPath, file.name, liveSourcesRef, loadAssociatedCss, isHtml]);
 
-  // Render into the shadow DOM: fit-to-card scaling for components, iframe for HTML
+  // Single, stable tree: the component always lives in the same divs, only
+  // their styles change (via measureAndFit). No branch switching, ever.
   const renderShadow = useCallback(() => {
     const host = hostRef.current;
     if (!host || !host.shadowRoot) return;
     if (!host.__root) host.__root = ReactDOM.createRoot(host.__mount);
-    const scale = nat && fit ? Math.min(1, fit.w / nat.w, fit.h / nat.h) : 1;
+    const compEl = comp ? (React.isValidElement(comp) ? comp : React.createElement(comp)) : null;
     host.__root.render(
       <CardErrorBoundary>
         <div ref={rootRef} style={{ width: "100%", height: "100%", overflow: "hidden", position: "relative" }}>
@@ -286,49 +354,37 @@ function CardPreview({ file, liveSourcesRef, onLive }) {
               sandbox="allow-scripts allow-same-origin"
               style={{ width: "100%", height: "100%", border: 0, background: "#fff", display: "block" }}
             />
-          ) : comp ? (
-            nat ? (
-              <div style={{ width: nat.w * scale, height: nat.h * scale, overflow: "hidden" }}>
-                <div style={{ width: nat.w, height: nat.h, transform: `scale(${scale})`, transformOrigin: "0 0" }}>
-                  {React.isValidElement(comp) ? comp : React.createElement(comp)}
-                </div>
+          ) : compEl ? (
+            <div ref={scaledRef} style={{ width: "100%", height: "100%", overflow: "hidden" }}>
+              <div ref={innerRef} style={{ width: "100%", height: "100%", transformOrigin: "0 0" }}>
+                {compEl}
               </div>
-            ) : (
-              <div ref={measureRef} style={{ display: "inline-block", minWidth: "100%", minHeight: "100%" }}>
-                {React.isValidElement(comp) ? comp : React.createElement(comp)}
-              </div>
-            )
+            </div>
           ) : (
             <div style={{ color: "#666", fontSize: 11 }}>…</div>
           )}
         </div>
       </CardErrorBoundary>
     );
-  }, [comp, html, nat, fit, isHtml]);
+  }, [comp, html, isHtml]);
 
   useEffect(() => { renderShadow(); }, [renderShadow]);
 
-  // Measure natural size of the rendered component (once, at scale 1)
+  // Measure + fit after the component is first rendered.
   useEffect(() => {
-    if (!comp || isHtml || nat) return;
-    const raf = requestAnimationFrame(() => {
-      const el = measureRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setNat({ w: Math.max(1, Math.ceil(r.width)), h: Math.max(1, Math.ceil(r.height)) });
-    });
+    if (!comp || isHtml) return;
+    const raf = requestAnimationFrame(() => measureAndFit());
     return () => cancelAnimationFrame(raf);
-  }, [comp, isHtml, nat, renderShadow]);
+  }, [comp, isHtml, measureAndFit]);
 
-  // Track container size so the fit scale follows card resizes
+  // Re-fit when the card area changes size (resize) — without any re-render.
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setFit({ w: el.clientWidth, h: el.clientHeight }));
-    ro.observe(el);
-    setFit({ w: el.clientWidth, h: el.clientHeight });
+    const host = hostRef.current;
+    if (!host || isHtml) return;
+    const ro = new ResizeObserver(() => measureAndFit());
+    ro.observe(host);
     return () => ro.disconnect();
-  }, [renderShadow, isHtml]);
+  }, [isHtml, measureAndFit]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -360,13 +416,13 @@ function CardPreview({ file, liveSourcesRef, onLive }) {
       const { path, code } = e.detail || {};
       if (path !== file.absPath || typeof code !== "string") return;
       liveSourcesRef.current.set(path, code);
-      onLive(true);
+      onLive(rel, true);
       schedule(() => load(code));
     };
     window.addEventListener("component:sourceChanged", onSourceChanged);
     const unsub = window.electronAPI.onFsChange(() => {
       if (!liveSourcesRef.current.has(file.absPath)) {
-        onLive(true);
+        onLive(rel, true);
         schedule(() => load());
       }
     });
@@ -375,11 +431,11 @@ function CardPreview({ file, liveSourcesRef, onLive }) {
       unsub();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [file.absPath, load, liveSourcesRef, onLive]);
+  }, [file.absPath, load, liveSourcesRef, onLive, rel]);
 
   const isError = status === "error" || !!error;
   return (
-    <div style={{ width: "100%", height: "100%", background: "#141414", borderRadius: 5, overflow: "hidden", position: "relative" }}>
+    <div style={{ width: "100%", height: "100%", background: "#141414", borderRadius: 2, overflow: "hidden", position: "relative" }}>
       <div ref={hostRef} style={{ width: "100%", height: "100%", overflow: "hidden" }} />
       {status === "loading" && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#666", fontSize: 11, pointerEvents: "none" }}>
@@ -393,18 +449,20 @@ function CardPreview({ file, liveSourcesRef, onLive }) {
       )}
     </div>
   );
-}
+});
 
 // ── Main Canvas panel ────────────────────────────────────────────────────────
 const CanvasPanel = ({ nodeId, config }) => {
   const [scan, setScan] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [manual, setManual] = useState({ cards: {}, groups: {} });
+  const [drag, setDrag] = useState(null);
   const [view, setView] = useState({ x: 60, y: 40, z: 1 });
   const [vw, setVw] = useState(0);
   const [vh, setVh] = useState(0);
   const [query, setQuery] = useState("");
   const [livePaths, setLivePaths] = useState(new Set());
+  const [selectedRel, setSelectedRel] = useState(null);
 
   const viewportRef = useRef(null);
   const viewRef = useRef(view);
@@ -413,7 +471,6 @@ const CanvasPanel = ({ nodeId, config }) => {
   manualRef.current = manual;
   const liveSourcesRef = useRef(new Map());
   const saveTimerRef = useRef(null);
-  const dragRef = useRef(null);
   const panRef = useRef(null);
   const spaceRef = useRef(false);
   const fittedRef = useRef(false);
@@ -425,12 +482,16 @@ const CanvasPanel = ({ nodeId, config }) => {
   const setLiveState = useCallback((relPath, on) => {
     setLivePaths((prev) => {
       const next = new Set(prev);
-      if (on) next.add(relPath);
-      else next.delete(relPath);
+      if (on) {
+        next.clear();
+        next.add(relPath);
+      } else {
+        next.delete(relPath);
+      }
       return next;
     });
   }, []);
-  const onCardLive = useCallback((relPath) => (on) => setLiveState(relPath, on), [setLiveState]);
+  const onCardLive = useCallback((relPath, on) => setLiveState(relPath, on), [setLiveState]);
 
   const refreshScan = useCallback(async () => {
     const root = window.__currentProjectPath;
@@ -461,7 +522,7 @@ const CanvasPanel = ({ nodeId, config }) => {
 
   useEffect(() => {
     const onOpen = () => refreshScan();
-    const onClose = () => { setScan(null); setManual({ cards: {} }); };
+    const onClose = () => { setScan(null); setManual({ cards: {}, groups: {} }); };
     window.addEventListener("project:opened", onOpen);
     window.addEventListener("project:closed", onClose);
     return () => {
@@ -492,8 +553,7 @@ const CanvasPanel = ({ nodeId, config }) => {
     return () => ro.disconnect();
   }, []);
 
-  // Flatten the folder tree: only the direct parent folder of previewable files
-  // becomes a group (no nested sub-folder frames).
+  // Folders with previewable files become groups (flat tree, no nested frames)
   const flatGroups = useMemo(() => {
     const out = [];
     const walk = (node) => {
@@ -504,8 +564,6 @@ const CanvasPanel = ({ nodeId, config }) => {
     return out;
   }, [scan]);
 
-  const layout = useMemo(() => computeLayout(flatGroups, manual), [flatGroups, manual]);
-
   const scanRootsByRel = useMemo(() => {
     const m = new Map();
     const walk = (n) => { m.set(n.relPath, n); n.groups.forEach(walk); };
@@ -513,8 +571,54 @@ const CanvasPanel = ({ nodeId, config }) => {
     return m;
   }, [scan]);
 
-  // All card/group relPaths inside a folder subtree (used so moving a parent
-  // group moves every child — manually placed ones included).
+  const layout = useMemo(() => computeLayout(flatGroups, manual), [flatGroups, manual]);
+
+  // Manual drags never run the auto-layout engine: while a pointer is down we
+  // overlay a transient position/size on top of the computed layout, and only
+  // commit to `manual` (one layout recompute) on release.
+  const commitManual = useCallback((updater) => {
+    const next = updater(manualRef.current);
+    manualRef.current = next;
+    setManual(next);
+    return next;
+  }, []);
+
+  const effCards = useMemo(() => {
+    const d = drag;
+    if (!d) return layout.cards;
+    if (d.type === "cardMove" || d.type === "cardResize") {
+      const m = new Map(layout.cards);
+      const cur = layout.cards.get(d.rel);
+      if (cur) m.set(d.rel, { ...cur, x: d.x, y: d.y, w: d.w, h: d.h });
+      return m;
+    }
+    if (d.type === "groupMove") {
+      const m = new Map(layout.cards);
+      for (const [crel, s] of d.subCards) {
+        m.set(crel, { ...s, x: s.x + d.dx, y: s.y + d.dy });
+      }
+      return m;
+    }
+    return layout.cards;
+  }, [layout, drag]);
+
+  const effGroups = useMemo(() => {
+    const d = drag;
+    if (!d) return layout.groups;
+    const m = new Map(layout.groups);
+    if ((d.type === "cardMove" || d.type === "cardResize") && d.group) {
+      m.set(d.owner, expandForChild(d.group, d.x, d.y, d.w, d.h, GROUP_PAD));
+    } else if (d.type === "groupMove") {
+      m.set(d.rel, { ...d.group, x: d.group.x + d.dx, y: d.group.y + d.dy });
+      for (const [grel, s] of d.subGroups) {
+        m.set(grel, { ...s, x: s.x + d.dx, y: s.y + d.dy });
+      }
+    } else if (d.type === "groupResize") {
+      m.set(d.rel, d.rect);
+    }
+    return m;
+  }, [layout, drag]);
+
   const collectSubtree = useCallback((rel) => {
     const cards = [], groups = [];
     const walk = (node) => {
@@ -529,50 +633,38 @@ const CanvasPanel = ({ nodeId, config }) => {
   const visibleCards = useMemo(() => {
     const set = new Set();
     const { x, y, z } = view;
-    const wx0 = -x / z - 400;
-    const wy0 = -y / z - 400;
-    const ww = vw / z + 800;
-    const wh = vh / z + 800;
-    for (const [rel, c] of layout.cards) {
+    const wx0 = -x / z - 400, wy0 = -y / z - 400;
+    const ww = vw / z + 800, wh = vh / z + 800;
+    for (const [rel, c] of effCards) {
       if (c.x + c.w >= wx0 && c.x <= wx0 + ww && c.y + c.h >= wy0 && c.y <= wy0 + wh) set.add(rel);
     }
     return set;
-  }, [view, vw, vh, layout]);
+  }, [view, vw, vh, effCards]);
 
   const visibleGroups = useMemo(() => {
     const set = new Set();
     const { x, y, z } = view;
-    const wx0 = -x / z - 200;
-    const wy0 = -y / z - 200;
-    const ww = vw / z + 400;
-    const wh = vh / z + 400;
-    for (const [rel, g] of layout.groups) {
+    const wx0 = -x / z - 200, wy0 = -y / z - 200;
+    const ww = vw / z + 400, wh = vh / z + 400;
+    for (const [rel, g] of effGroups) {
       if (g.x + g.w >= wx0 && g.x <= wx0 + ww && g.y + g.h >= wy0 && g.y <= wy0 + wh) set.add(rel);
     }
     return set;
-  }, [view, vw, vh, layout]);
+  }, [view, vw, vh, effGroups]);
 
   const zoomAt = useCallback((cx, cy, factor) => {
     setView((v) => {
-      const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.z * factor));
-      const wx = (cx - v.x) / v.z;
-      const wy = (cy - v.y) / v.z;
-      return { x: cx - wx * nz, y: cy - wy * nz, z: nz };
+      const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.z * factor));
+      const k = z / v.z;
+      return { x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k, z };
     });
   }, []);
 
   const fitView = useCallback(() => {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const c of layout.cards.values()) {
-      minX = Math.min(minX, c.x); minY = Math.min(minY, c.y);
-      maxX = Math.max(maxX, c.x + c.w); maxY = Math.max(maxY, c.y + c.h);
-    }
-    if (!isFinite(minX)) { setView({ x: 60, y: 40, z: 1 }); return; }
-    const pad = 60;
-    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
-    const bw = maxX - minX, bh = maxY - minY;
-    const z = Math.min(1.2, Math.max(MIN_ZOOM, Math.min(vw / bw, vh / bh)));
-    setView({ x: -minX * z, y: -minY * z, z });
+    const { total } = layout;
+    if (!vw || !vh || !total.w || !total.h) return;
+    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(vw / total.w, vh / total.h) * 0.92));
+    setView({ x: (vw - total.w * z) / 2, y: (vh - total.h * z) / 2, z });
   }, [layout, vw, vh]);
 
   useEffect(() => {
@@ -583,7 +675,6 @@ const CanvasPanel = ({ nodeId, config }) => {
     }
   }, [scan, vw, vh, fitView]);
 
-  // Native wheel (non-passive so preventDefault works) for pan/zoom
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -599,7 +690,6 @@ const CanvasPanel = ({ nodeId, config }) => {
     return () => el.removeEventListener("wheel", onNativeWheel);
   }, [zoomAt]);
 
-  // Space key toggles pan mode
   useEffect(() => {
     const down = (e) => { if (e.code === "Space" && !e.repeat && e.target === document.body) { spaceRef.current = true; e.preventDefault(); } };
     const up = (e) => { if (e.code === "Space") spaceRef.current = false; };
@@ -632,27 +722,105 @@ const CanvasPanel = ({ nodeId, config }) => {
     window.addEventListener("pointercancel", up);
   }, []);
 
-  const onCardPointerDown = useCallback((e, rel) => {
-    const card = layout.cards.get(rel);
-    if (!card) return;
+  const startGroupMove = useCallback((e, rel) => {
     e.preventDefault();
     e.stopPropagation();
+    const g = layout.groups.get(rel);
+    if (!g) return;
     const startX = e.clientX, startY = e.clientY;
-    const origX = card.x, origY = card.y;
+    const groupSnap = { x: g.x, y: g.y, w: g.w, h: g.h };
+    const subCards = new Map();
+    const subGroups = new Map();
+    const { cards: subCardRels, groups: subGroupRels } = collectSubtree(rel);
+    for (const c of subCardRels) {
+      const cur = layout.cards.get(c);
+      if (cur) subCards.set(c, { ...cur });
+    }
+    for (const gc of subGroupRels) {
+      const cur = layout.groups.get(gc);
+      if (cur) subGroups.set(gc, { ...cur });
+    }
+    const last = { dx: 0, dy: 0 };
     let moved = false;
     const move = (ev) => {
-      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) moved = true;
+      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > DRAG_MOVE_THRESHOLD) moved = true;
       if (!moved) return;
-      const dx = (ev.clientX - startX) / viewRef.current.z;
-      const dy = (ev.clientY - startY) / viewRef.current.z;
-      setManual((m) => ({ ...m, cards: { ...m.cards, [rel]: { ...(m.cards[rel] || {}), x: Math.round(origX + dx), y: Math.round(origY + dy) } } }));
+      last.dx = Math.round((ev.clientX - startX) / viewRef.current.z);
+      last.dy = Math.round((ev.clientY - startY) / viewRef.current.z);
+      setDrag({ type: "groupMove", rel, dx: last.dx, dy: last.dy, group: groupSnap, subCards, subGroups });
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      setDrag(null);
+      if (!moved) return;
+      const next = commitManual((m) => {
+        const cards = { ...m.cards };
+        const groups = { ...m.groups };
+        const prevG = m.groups[rel];
+        groups[rel] = {
+          x: groupSnap.x + last.dx, y: groupSnap.y + last.dy, w: groupSnap.w, h: groupSnap.h,
+          ...(prevG?.dx != null && prevG?.dy != null ? { dx: prevG.dx + last.dx, dy: prevG.dy + last.dy } : { dx: last.dx, dy: last.dy }),
+        };
+        for (const [c, s] of subCards) {
+          if (m.cards[c]) cards[c] = { ...(m.cards[c] || {}), x: s.x + last.dx, y: s.y + last.dy };
+        }
+        for (const [gc, s] of subGroups) {
+          if (m.groups[gc]) groups[gc] = { ...(m.groups[gc] || {}), x: s.x + last.dx, y: s.y + last.dy };
+        }
+        return { ...m, cards, groups };
+      });
+      persistLayout(next);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }, [layout, persistLayout, collectSubtree, commitManual]);
+
+  const startCardMove = useCallback((e, rel) => {
+    const card = layout.cards.get(rel);
+    if (!card) return;
+    // Shift+drag: move the card together with its parent group
+    if (e.shiftKey && card.owner) {
+      startGroupMove(e, card.owner);
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    const orig = { x: card.x, y: card.y, w: card.w, h: card.h };
+    const group = layout.groups.get(card.owner);
+    const groupSnap = group ? { x: group.x, y: group.y, w: group.w, h: group.h } : null;
+    const last = { ...orig };
+    let moved = false;
+    const move = (ev) => {
+      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > DRAG_MOVE_THRESHOLD) moved = true;
+      if (!moved) return;
+      const dx = (ev.clientX - startX) / viewRef.current.z;
+      const dy = (ev.clientY - startY) / viewRef.current.z;
+      last.x = Math.round(orig.x + dx);
+      last.y = Math.round(orig.y + dy);
+      setDrag({ type: "cardMove", rel, owner: card.owner, x: last.x, y: last.y, w: orig.w, h: orig.h, group: groupSnap });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      setDrag(null);
       if (moved) {
-        persistLayout(manualRef.current);
+        const next = commitManual((m) => {
+          let groups = m.groups;
+          if (groupSnap) {
+            const ex = expandForChild(groupSnap, last.x, last.y, last.w, last.h, GROUP_PAD);
+            if (ex.x !== groupSnap.x || ex.y !== groupSnap.y || ex.w !== groupSnap.w || ex.h !== groupSnap.h) {
+              const prev = m.groups[card.owner];
+              groups = { ...groups, [card.owner]: { x: ex.x, y: ex.y, w: ex.w, h: ex.h, ...(prev?.dx != null && prev?.dy != null ? { dx: prev.dx, dy: prev.dy } : prev ? {} : { dx: 0, dy: 0 }) } };
+            }
+          }
+          return { ...m, cards: { ...m.cards, [rel]: { ...(m.cards[rel] || {}), x: last.x, y: last.y, w: last.w, h: last.h } }, groups };
+        });
+        persistLayout(next);
       } else {
         const f = layout.cards.get(rel);
         if (f) window.dispatchEvent(new CustomEvent("open-file-in-editor", { detail: { filePath: f.file.absPath } }));
@@ -661,106 +829,94 @@ const CanvasPanel = ({ nodeId, config }) => {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
-  }, [layout, persistLayout]);
+  }, [layout, persistLayout, startGroupMove, commitManual]);
 
-  const onCardResizeStart = useCallback((e, rel) => {
+  const startCardResize = useCallback((e, rel) => {
     const card = layout.cards.get(rel);
     if (!card) return;
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX, startY = e.clientY;
-    const origW = card.w, origH = card.h;
+    const orig = { x: card.x, y: card.y, w: card.w, h: card.h };
+    const group = layout.groups.get(card.owner);
+    const groupSnap = group ? { x: group.x, y: group.y, w: group.w, h: group.h } : null;
+    const last = { ...orig };
     let moved = false;
     const move = (ev) => {
-      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 2) moved = true;
+      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > DRAG_RESIZE_THRESHOLD) moved = true;
       if (!moved) return;
-      const nw = Math.round(origW + (ev.clientX - startX) / viewRef.current.z);
-      const nh = Math.round(origH + (ev.clientY - startY) / viewRef.current.z);
-      setManual((m) => ({ ...m, cards: { ...m.cards, [rel]: { ...(m.cards[rel] || {}), w: Math.min(1200, Math.max(180, nw)), h: Math.min(900, Math.max(140, nh)) } } }));
+      const nw = Math.min(MAX_CARD_W, Math.max(MIN_CARD_W, Math.round(orig.w + (ev.clientX - startX) / viewRef.current.z)));
+      const nh = Math.min(MAX_CARD_H, Math.max(MIN_CARD_H, Math.round(orig.h + (ev.clientY - startY) / viewRef.current.z)));
+      last.w = nw;
+      last.h = nh;
+      setDrag({ type: "cardResize", rel, owner: card.owner, x: orig.x, y: orig.y, w: nw, h: nh, group: groupSnap });
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      if (moved) persistLayout(manualRef.current);
+      setDrag(null);
+      if (!moved) return;
+      const next = commitManual((m) => {
+        let groups = m.groups;
+        if (groupSnap) {
+          const ex = expandForChild(groupSnap, last.x, last.y, last.w, last.h, GROUP_PAD);
+          if (ex.x !== groupSnap.x || ex.y !== groupSnap.y || ex.w !== groupSnap.w || ex.h !== groupSnap.h) {
+            const prev = m.groups[card.owner];
+            groups = { ...groups, [card.owner]: { x: ex.x, y: ex.y, w: ex.w, h: ex.h, ...(prev?.dx != null && prev?.dy != null ? { dx: prev.dx, dy: prev.dy } : prev ? {} : { dx: 0, dy: 0 }) } };
+          }
+        }
+        return { ...m, cards: { ...m.cards, [rel]: { ...(m.cards[rel] || {}), x: last.x, y: last.y, w: last.w, h: last.h } }, groups };
+      });
+      persistLayout(next);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
-  }, [layout, persistLayout]);
+  }, [layout, persistLayout, commitManual]);
 
-  const onGroupPointerDown = useCallback((e, rel) => {
+  const startGroupResize = useCallback((e, rel, edge) => {
     e.preventDefault();
     e.stopPropagation();
     const g = layout.groups.get(rel);
     if (!g) return;
     const startX = e.clientX, startY = e.clientY;
-    const origX = g.x, origY = g.y;
-    const { cards: subCards, groups: subGroups } = collectSubtree(rel);
-    const snapManualCards = {};
-    const snapManualGroups = {};
-    for (const c of subCards) {
-      const m = manualRef.current.cards[c];
-      if (m) snapManualCards[c] = { x: m.x, y: m.y };
-    }
-    for (const gc of subGroups) {
-      const m = manualRef.current.groups[gc];
-      if (m) snapManualGroups[gc] = { x: m.x, y: m.y };
-    }
+    const orig = { x: g.x, y: g.y, w: g.w, h: g.h };
+    const last = { ...orig };
     let moved = false;
     const move = (ev) => {
-      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) moved = true;
+      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > DRAG_RESIZE_THRESHOLD) moved = true;
       if (!moved) return;
       const dx = Math.round((ev.clientX - startX) / viewRef.current.z);
       const dy = Math.round((ev.clientY - startY) / viewRef.current.z);
-      setManual((m2) => {
-        const next = { cards: { ...m2.cards }, groups: { ...m2.groups } };
-        next.groups[rel] = { ...(m2.groups[rel] || {}), x: origX + dx, y: origY + dy };
-        for (const [c, s] of Object.entries(snapManualCards)) {
-          next.cards[c] = { ...(m2.cards[c] || {}), x: s.x + dx, y: s.y + dy };
-        }
-        for (const [gc, s] of Object.entries(snapManualGroups)) {
-          next.groups[gc] = { ...(m2.groups[gc] || {}), x: s.x + dx, y: s.y + dy };
-        }
-        return next;
-      });
+      let x = orig.x, y = orig.y, w = orig.w, h = orig.h;
+      if (edge.includes("e")) w = orig.w + dx;
+      if (edge.includes("s")) h = orig.h + dy;
+      if (edge.includes("w")) { x = orig.x + dx; w = orig.w - dx; }
+      if (edge.includes("n")) { y = orig.y + dy; h = orig.h - dy; }
+      w = Math.min(MAX_GROUP, Math.max(MIN_GROUP_W, w));
+      h = Math.min(MAX_GROUP, Math.max(MIN_GROUP_H, h));
+      if (edge.includes("w")) x = orig.x + orig.w - w;
+      if (edge.includes("n")) y = orig.y + orig.h - h;
+      Object.assign(last, { x, y, w, h });
+      setDrag({ type: "groupResize", rel, rect: { x, y, w, h } });
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      if (moved) persistLayout(manualRef.current);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
-  }, [layout, persistLayout, collectSubtree]);
-
-  const onGroupResizeStart = useCallback((e, rel) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const g = layout.groups.get(rel);
-    if (!g) return;
-    const startX = e.clientX, startY = e.clientY;
-    const origW = g.w, origH = g.h;
-    let moved = false;
-    const move = (ev) => {
-      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 2) moved = true;
+      setDrag(null);
       if (!moved) return;
-      const nw = Math.round(origW + (ev.clientX - startX) / viewRef.current.z);
-      const nh = Math.round(origH + (ev.clientY - startY) / viewRef.current.z);
-      setManual((m) => ({ ...m, groups: { ...m.groups, [rel]: { ...(m.groups[rel] || {}), w: Math.min(4000, Math.max(220, nw)), h: Math.min(4000, Math.max(90, nh)) } } }));
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      if (moved) persistLayout(manualRef.current);
+      const next = commitManual((m) => {
+        const prev = m.groups[rel];
+        return { ...m, groups: { ...m.groups, [rel]: { x: last.x, y: last.y, w: last.w, h: last.h, ...(prev?.dx != null && prev?.dy != null ? { dx: prev.dx, dy: prev.dy } : prev ? {} : { dx: 0, dy: 0 }) } } };
+      });
+      persistLayout(next);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
-  }, [layout, persistLayout]);
+  }, [layout, persistLayout, commitManual]);
 
   const resetLayout = useCallback(() => {
     setManual({ cards: {}, groups: {} });
@@ -774,7 +930,6 @@ const CanvasPanel = ({ nodeId, config }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#181818", position: "relative", overflow: "hidden" }}>
-      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 10px", background: "#252526", borderBottom: "1px solid #2d2d2d", fontSize: 12, color: "#ccc", flexShrink: 0 }}>
         <span style={{ fontWeight: 600, color: "#4ec9b0", display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -787,9 +942,9 @@ const CanvasPanel = ({ nodeId, config }) => {
           Canvas
         </span>
         {rootName && <span style={{ color: "#d0d0d0", flexShrink: 0 }}>{rootName}</span>}
-        {scan?.framework && (
-          <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "rgba(78,201,176,.12)", color: "#4ec9b0", border: "1px solid #4ec9b033", flexShrink: 0 }}>
-            {FW_LABEL[scan.framework] || scan.framework}
+        {scan?.framework && FW_LABEL[scan.framework] && (
+          <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 3, background: "rgba(78,201,176,.12)", color: "#4ec9b0", border: "1px solid #4ec9b033", flexShrink: 0 }}>
+            {FW_LABEL[scan.framework]}
           </span>
         )}
         {scan && (
@@ -797,26 +952,23 @@ const CanvasPanel = ({ nodeId, config }) => {
             {scan.count} item{scan.count === 1 ? "" : "s"} · {layout.groups.size} group{layout.groups.size === 1 ? "" : "s"}
           </span>
         )}
-
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search files…"
-          style={{ flex: 1, minWidth: 120, maxWidth: 240, background: "#1e1e1e", color: "#d0d0d0", border: "1px solid #3c3c3c", borderRadius: 3, fontSize: 11, padding: "2px 8px", outline: "none" }}
+          style={{ flex: 1, minWidth: 120, maxWidth: 240, background: "#1e1e1e", color: "#d0d0d0", border: "1px solid #3c3c3c", borderRadius: 2, fontSize: 11, padding: "2px 8px", outline: "none" }}
         />
-
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          <button onClick={() => zoomAt(vw / 2, vh / 2, 0.8)} title="Zoom out" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 3, color: "#ccc", cursor: "pointer", width: 22, height: 20, fontSize: 12, lineHeight: 1 }}>−</button>
+          <button onClick={() => zoomAt(vw / 2, vh / 2, 0.8)} title="Zoom out" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 2, color: "#ccc", cursor: "pointer", width: 22, height: 20, fontSize: 12, lineHeight: 1 }}>−</button>
           <span style={{ fontSize: 11, color: "#aaa", minWidth: 38, textAlign: "center" }}>{Math.round(view.z * 100)}%</span>
-          <button onClick={() => zoomAt(vw / 2, vh / 2, 1.25)} title="Zoom in" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 3, color: "#ccc", cursor: "pointer", width: 22, height: 20, fontSize: 12, lineHeight: 1 }}>+</button>
-          <button onClick={fitView} title="Fit all" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 3, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>Fit</button>
-          <button onClick={() => setView({ x: 60, y: 40, z: 1 })} title="Reset zoom" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 3, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>100%</button>
-          <button onClick={resetLayout} title="Reset card positions to auto layout" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 3, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>Reset Layout</button>
-          <button onClick={refreshScan} title="Rescan project" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 3, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>⟳ Scan</button>
+          <button onClick={() => zoomAt(vw / 2, vh / 2, 1.25)} title="Zoom in" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 2, color: "#ccc", cursor: "pointer", width: 22, height: 20, fontSize: 12, lineHeight: 1 }}>+</button>
+          <button onClick={fitView} title="Fit all" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 2, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>Fit</button>
+          <button onClick={() => setView({ x: 60, y: 40, z: 1 })} title="Reset zoom" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 2, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>100%</button>
+          <button onClick={resetLayout} title="Reset card positions to auto layout" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 2, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>Reset Layout</button>
+          <button onClick={refreshScan} title="Rescan project" style={{ background: "#1e1e1e", border: "1px solid #3c3c3c", borderRadius: 2, color: "#ccc", cursor: "pointer", padding: "1px 8px", fontSize: 11 }}>⟳ Scan</button>
         </div>
       </div>
 
-      {/* ── Canvas viewport ─────────────────────────────────────────────────── */}
       <div
         ref={viewportRef}
         onPointerDown={startPan}
@@ -836,28 +988,34 @@ const CanvasPanel = ({ nodeId, config }) => {
             width: 0, height: 0,
           }}
         >
-          {/* Group frames */}
-          {[...layout.groups.entries()].map(([rel, g]) => {
+          {[...effGroups.entries()].map(([rel, g]) => {
             if (!visibleGroups.has(rel)) return null;
             const node = scanRootsByRel.get(rel);
             if (!node) return null;
             const k = kindMeta(rel);
+            const selected = selectedRel === rel;
             return (
-              <div key={rel} style={{ position: "absolute", left: g.x, top: g.y, width: g.w, height: g.h, border: "1px dashed #333", borderRadius: 10, background: "rgba(255,255,255,0.02)", pointerEvents: "none" }}>
+              <div key={rel} style={{ position: "absolute", left: g.x, top: g.y, width: g.w, height: g.h, border: `1px dashed ${selected ? "#4ec9b0" : "#333"}`, borderRadius: 4, background: "rgba(255,255,255,0.02)", pointerEvents: "none" }}>
                 <div
-                  onPointerDown={(e) => onGroupPointerDown(e, rel)}
+                  onPointerDown={(e) => { setSelectedRel(rel); startGroupMove(e, rel); }}
                   title={`${node.name} — drag to move`}
                   style={{ display: "flex", alignItems: "center", gap: 6, height: GROUP_HEADER, padding: "0 12px", borderBottom: "1px dashed #2b2b2b", color: "#bdbdbd", fontSize: 12, fontWeight: 600, cursor: "grab", pointerEvents: "auto", userSelect: "none" }}
                 >
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 4.5V12.5H14V4.5H9L7.5 3H2Z" fill="#333" stroke={k.color} strokeWidth="1" />
-                  </svg>
+                  <VscodeIcon name={node.name} isDir={true} isOpen={false} size={14} style={{ flexShrink: 0 }} />
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.name}</span>
                   <span style={{ color: "#666", fontSize: 10, fontWeight: 400 }}>{node.children.length + countNested(node)}</span>
                   <span style={{ marginLeft: "auto", fontSize: 10, color: k.color, fontWeight: 400, flexShrink: 0 }}>{k.label}</span>
                 </div>
+                {GROUP_HANDLES.map((h) => (
+                  <div
+                    key={h.edge}
+                    onPointerDown={(e) => startGroupResize(e, rel, h.edge)}
+                    title={`Resize ${h.edge.toUpperCase()}`}
+                    style={{ position: "absolute", ...h.pos, width: h.w, height: h.h, cursor: h.cursor, pointerEvents: "auto" }}
+                  />
+                ))}
                 <div
-                  onPointerDown={(e) => onGroupResizeStart(e, rel)}
+                  onPointerDown={(e) => startGroupResize(e, rel, "se")}
                   title="Drag to resize group"
                   style={{ position: "absolute", right: 0, bottom: 0, width: 18, height: 18, cursor: "nwse-resize", pointerEvents: "auto", display: "flex", alignItems: "flex-end", justifyContent: "flex-end", padding: 3 }}
                 >
@@ -869,40 +1027,33 @@ const CanvasPanel = ({ nodeId, config }) => {
             );
           })}
 
-          {/* Cards */}
-          {[...layout.cards.entries()].map(([rel, c]) => {
+          {[...effCards.entries()].map(([rel, c]) => {
             if (!visibleCards.has(rel)) return null;
             const dim = q && !rel.toLowerCase().includes(q);
-            const live = livePathsRef.current.has(rel);
+            const selected = selectedRel === rel;
             const k = kindMeta(rel);
             return (
               <div
                 key={rel}
-                onPointerDown={(e) => onCardPointerDown(e, rel)}
+                onPointerDown={(e) => { setSelectedRel(rel); startCardMove(e, rel); }}
                 title={rel}
                 style={{
                   position: "absolute", left: c.x, top: c.y, width: c.w, height: c.h,
-                  background: "#1f1f1f", border: `1px solid ${live ? "#4ec9b0" : "#333"}`, borderRadius: 8,
+                  background: "#1f1f1f", border: `1px solid ${selected ? "#4ec9b0" : "#333"}`, borderRadius: 3,
                   boxShadow: "0 4px 14px rgba(0,0,0,.4)", cursor: "pointer",
                   opacity: dim ? 0.22 : 1, display: "flex", flexDirection: "column", overflow: "hidden",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 6, height: 30, padding: "0 8px", background: "#252526", borderBottom: "1px solid #2d2d2d", flexShrink: 0 }}>
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                    <rect x="2.5" y="1.5" width="11" height="13" rx="1.5" stroke={k.color} strokeWidth="1.2" />
-                    <line x1="5" y1="4.5" x2="11" y2="4.5" stroke="#555" strokeWidth="1" />
-                    <line x1="5" y1="7" x2="11" y2="7" stroke="#555" strokeWidth="1" />
-                    <line x1="5" y1="9.5" x2="8.5" y2="9.5" stroke="#555" strokeWidth="1" />
-                  </svg>
+                  <PreviewIcon entry={{ ...c.file, path: c.file.absPath, isDir: false }} showPreview={true} size={14} />
                   <span style={{ fontSize: 11.5, color: "#e8e8e8", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.file.name}</span>
-                  {live && <span title="Live preview (auto-updating)" style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ec9b0", flexShrink: 0, boxShadow: "0 0 6px #4ec9b0" }} />}
-                  <span style={{ marginLeft: "auto", fontSize: 9.5, color: k.color, background: `${k.color}1a`, border: `1px solid ${k.color}33`, borderRadius: 8, padding: "0 6px", flexShrink: 0 }}>{k.label}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 9.5, color: k.color, background: `${k.color}1a`, border: `1px solid ${k.color}33`, borderRadius: 3, padding: "0 6px", flexShrink: 0 }}>{k.label}</span>
                 </div>
                 <div style={{ flex: 1, minHeight: 0, padding: 6 }}>
-                  <CardPreview file={c.file} liveSourcesRef={liveSourcesRef} onLive={onCardLive(rel)} />
+                  <CardPreview file={c.file} rel={rel} liveSourcesRef={liveSourcesRef} onLive={onCardLive} />
                 </div>
                 <div
-                  onPointerDown={(e) => onCardResizeStart(e, rel)}
+                  onPointerDown={(e) => startCardResize(e, rel)}
                   title="Drag to resize card"
                   style={{ position: "absolute", right: 0, bottom: 0, width: 20, height: 20, cursor: "nwse-resize", display: "flex", alignItems: "flex-end", justifyContent: "flex-end", padding: 4 }}
                 >
@@ -915,7 +1066,6 @@ const CanvasPanel = ({ nodeId, config }) => {
           })}
         </div>
 
-        {/* Empty states */}
         {!rootPath && (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: "#666", fontSize: 13, background: "rgba(24,24,24,.85)" }}>
             <svg width="46" height="46" viewBox="0 0 16 16" fill="none">
@@ -928,7 +1078,7 @@ const CanvasPanel = ({ nodeId, config }) => {
             <span>No project open</span>
             <button
               onClick={() => window.electronAPI.openFolder()}
-              style={{ background: "#007acc", border: "none", color: "#fff", borderRadius: 4, padding: "6px 16px", fontSize: 12, cursor: "pointer" }}
+              style={{ background: "#007acc", border: "none", color: "#fff", borderRadius: 2, padding: "6px 16px", fontSize: 12, cursor: "pointer" }}
             >
               Open Project
             </button>
@@ -941,15 +1091,14 @@ const CanvasPanel = ({ nodeId, config }) => {
           </div>
         )}
         {scanning && (
-          <div style={{ position: "absolute", top: 10, right: 10, color: "#888", fontSize: 11, background: "#1e1e1e", border: "1px solid #333", borderRadius: 3, padding: "3px 8px" }}>
+          <div style={{ position: "absolute", top: 10, right: 10, color: "#888", fontSize: 11, background: "#1e1e1e", border: "1px solid #333", borderRadius: 2, padding: "3px 8px" }}>
             Scanning…
           </div>
         )}
       </div>
 
-      {/* ── Hint bar ───────────────────────────────────────────────────────── */}
       <div style={{ padding: "2px 10px", background: "#1c1c1c", borderTop: "1px solid #2a2a2a", color: "#666", fontSize: 10.5, flexShrink: 0 }}>
-        Scroll: pan · Ctrl+Scroll: zoom · Middle-drag/Shift+drag: pan · Drag card/group header: move · Drag corner handle: resize · Click card: open in editor
+        Scroll: pan · Ctrl+Scroll: zoom · Middle-drag/Shift+drag: pan · Drag card: move (push parent edge to expand) · Shift+drag card: move card+group · Drag group header: move · Drag group edge/corner: resize · Click card: open in editor
       </div>
     </div>
   );

@@ -19,21 +19,69 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// ─── JSX Transpilation for Component Preview ─────────────────────────────────
-ipcMain.handle("jsx:transpile", async (_e, code) => {
-  try {
-    const result = esbuild.transformSync(code, {
-      loader: "tsx",
-      format: "cjs",
-      jsx: "transform",
-      jsxFactory: "React.createElement",
-      jsxFragment: "React.Fragment",
-      target: "es2020",
-    });
-    return { success: true, code: result.code };
-  } catch (err) {
-    return { success: false, error: err.message };
+// ─── Component Bundling for Canvas/Preview ──────────────────────────────────
+// Real module resolution: esbuild bundles the component with the project's
+// node_modules (clsx, class-variance-authority, @radix-ui/*, react-day-picker,
+// date-fns, ...) plus local imports and the "@" -> src alias, leaving only
+// react/react-dom as externals. The renderer evals the CJS output with a
+// sandbox require() that maps those to the host React.
+const BUNDLE_CONCURRENCY = 4;
+let bundleActive = 0;
+const bundleQueue = [];
+const nextBundle = async () => {
+  while (bundleQueue.length && bundleActive < BUNDLE_CONCURRENCY) {
+    const task = bundleQueue.shift();
+    bundleActive++;
+    try { task.resolve(await task.fn()); } catch (err) { task.reject(err); }
+    bundleActive--;
   }
+};
+const queuedBundle = (fn) => new Promise((resolve, reject) => {
+  bundleQueue.push({ fn, resolve, reject });
+  nextBundle();
+});
+
+ipcMain.handle("component:bundle", async (_e, { source, filePath, projectRoot } = {}) => {
+  if (typeof source !== "string" || !source.trim()) {
+    return { ok: false, error: "Empty source" };
+  }
+  if (typeof filePath !== "string" || !filePath) {
+    return { ok: false, error: "Missing file path" };
+  }
+  return queuedBundle(async () => {
+    try {
+      const srcDir = path.join(projectRoot || path.dirname(filePath), "src");
+      const result = await esbuild.build({
+        stdin: {
+          contents: source,
+          resolveDir: path.dirname(filePath),
+          sourcefile: filePath,
+          loader: "tsx",
+        },
+        bundle: true,
+        format: "cjs",
+        platform: "browser",
+        target: "es2020",
+        jsx: "automatic",
+        loader: {
+          ".css": "empty", ".scss": "empty", ".less": "empty", ".pcss": "empty",
+          ".png": "dataurl", ".jpg": "dataurl", ".jpeg": "dataurl", ".gif": "dataurl", ".webp": "dataurl", ".svg": "dataurl",
+        },
+        external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
+        alias: { "@": srcDir },
+        absWorkingDir: projectRoot || path.dirname(filePath),
+        write: false,
+        logLevel: "silent",
+        define: { "process.env.NODE_ENV": '"development"' },
+      });
+      return { ok: true, code: result.outputFiles[0].text };
+    } catch (err) {
+      const e = err?.errors?.[0];
+      const loc = e?.location;
+      const where = loc ? ` (${path.basename(loc.file || filePath)}:${loc.line}:${loc.column})` : "";
+      return { ok: false, error: `${e?.text || err?.message || String(err)}${where}` };
+    }
+  });
 });
 
 // ─── Long path helper (Windows) ──────────────────────────────────────────────
@@ -236,24 +284,33 @@ const detectFramework = (rootPath) => {
   } catch { return "unknown"; }
 };
 
-const scanCanvasDir = (absPath, relPath) => {
-  const out = { name: path.basename(absPath), relPath, absPath, groups: [], children: [] };
-  let entries;
-  try {
-    entries = fs.readdirSync(toLongPath(absPath), { withFileTypes: true })
-      .filter((e) => !e.name.startsWith(".") && !CANVAS_EXCLUDE_DIRS.has(e.name));
-  } catch { return out; }
-  entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  for (const e of entries) {
-    const childAbs = path.join(absPath, e.name);
-    const childRel = relPath ? `${relPath}/${e.name}` : e.name;
-    if (e.isDirectory()) {
-      out.groups.push(scanCanvasDir(childAbs, childRel));
-    } else if (CANVAS_EXT_RE.test(e.name)) {
-      out.children.push({ name: e.name, relPath: childRel, absPath: childAbs, ext: e.name.slice(e.name.lastIndexOf(".")) });
+// Iterative scan — no recursion, so deeply nested trees can't overflow the
+// call stack on large projects. Each directory fails soft (permission errors,
+// long paths) without aborting the whole scan.
+const scanCanvasDir = (rootAbs, rootRel) => {
+  const root = { name: path.basename(rootAbs), relPath: rootRel, absPath: rootAbs, groups: [], children: [] };
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(toLongPath(node.absPath), { withFileTypes: true })
+        .filter((e) => !e.name.startsWith(".") && !CANVAS_EXCLUDE_DIRS.has(e.name));
+    } catch { continue; }
+    entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    for (const e of entries) {
+      const childAbs = path.join(node.absPath, e.name);
+      const childRel = node.relPath ? `${node.relPath}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        const g = { name: e.name, relPath: childRel, absPath: childAbs, groups: [], children: [] };
+        node.groups.push(g);
+        stack.push(g);
+      } else if (CANVAS_EXT_RE.test(e.name)) {
+        node.children.push({ name: e.name, relPath: childRel, absPath: childAbs, ext: e.name.slice(e.name.lastIndexOf(".")) });
+      }
     }
   }
-  return out;
+  return root;
 };
 
 ipcMain.handle("canvas:scan", async (_e, rootPath) => {
@@ -270,7 +327,9 @@ ipcMain.handle("canvas:scan", async (_e, rootPath) => {
     const tally = (n) => { count += n.children.length; n.groups.forEach(tally); };
     roots.forEach(tally);
     return { root: rootPath, framework: detectFramework(rootPath), roots, count };
-  } catch { return null; }
+  } catch (err) {
+    return { error: err?.message || String(err) };
+  }
 });
 
 ipcMain.handle("canvas:saveLayout", async (_e, rootPath, data) => {
@@ -548,7 +607,7 @@ ipcMain.handle("fs:watch", (event, rootPath) => {
     debounce(affectedDir, () => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win && !win.isDestroyed() && !event.sender.isDestroyed()) {
-        event.sender.send("fs:change", affectedDir);
+        event.sender.send("fs:change", affectedDir, changedPath);
       }
     });
   };

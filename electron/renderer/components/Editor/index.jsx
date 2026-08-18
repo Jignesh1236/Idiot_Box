@@ -402,6 +402,7 @@ const EditorPanel = ({ config, nodeId }) => {
   const originalRef = useRef("");
   const loadedRef   = useRef(false);
   const saveTimer   = useRef(null);
+  const lastSelfSaveRef = useRef(0);
 
   pathRef.current = filePath;
 
@@ -590,6 +591,38 @@ const EditorPanel = ({ config, nodeId }) => {
     return () => { cancelled = true; cleanup(); };
   }, [ready, filePath, minimap, wordWrap, nodeId, hasProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Live reload: external edits (other apps / git / build tools) → auto-update
+  useEffect(() => {
+    if (!filePath) return;
+    let timer = null;
+    const unsub = window.electronAPI.onFsChange((_dir, changedPath) => {
+      if (changedPath !== filePath) return;
+      if (Date.now() - lastSelfSaveRef.current < 1200) return; // our own save
+      if (dirtyFlags.get(filePath)) return; // unsaved local edits win
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const text = await window.electronAPI.readTextFile(filePath);
+        if (text === null) return;
+        const ed = editorRef.current;
+        if (!ed) return;
+        const model = ed.getModel();
+        const cur = model?.getValue() ?? "";
+        if (cur === text) return;
+        if (model) model.setValue(text);
+        originalRef.current = text;
+        setOriginalContent(text);
+        dirtyFlags.set(filePath, false);
+        updateTabName(nodeId, filePath);
+        setCursorPos((p) => ({ ...p, totalLines: text.split("\n").length }));
+        try {
+          window.dispatchEvent(new CustomEvent("component:sourceChanged", { detail: { path: filePath, code: text } }));
+        } catch { /* ignore */ }
+        flashStatus("File changed on disk — reloaded");
+      }, 150);
+    });
+    return () => { unsub(); if (timer) clearTimeout(timer); };
+  }, [filePath, nodeId]);
+
   // ── Save / Save As ───────────────────────────────────────────────────────
   const doSave = useCallback(async () => {
     const p = pathRef.current;
@@ -598,6 +631,7 @@ const EditorPanel = ({ config, nodeId }) => {
     const text = editorRef.current?.getValue() ?? content;
     const result = await window.electronAPI.writeFileText(p, text);
     if (result?.success) {
+      lastSelfSaveRef.current = Date.now();
       originalRef.current = text;
       setOriginalContent(text);
       setDirty(nodeId, p, false);

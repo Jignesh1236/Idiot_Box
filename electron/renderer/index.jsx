@@ -451,10 +451,6 @@ const App = () => {
         return;
       }
 
-      // If already open, just switch to it
-      const existing = findTabByFilePath(m.getRoot(), filePath);
-      if (existing) { m.doAction(Actions.selectTab(existing.getId())); return; }
-
       const name = filePath.replace(/.*[\\/]/, "") || filePath;
       const tabset = findEditorTabset(m.getRoot());
       const parentId = tabset ? tabset.getId() : m.getRoot().getId();
@@ -463,6 +459,7 @@ const App = () => {
         id: "editor-tab-" + Date.now(),
         config: { filePath },
       }, parentId, DockLocation.CENTER, -1, true));
+      forceLayoutRedraw(m);
       scheduleSaveProjectTabs();
     };
 
@@ -617,7 +614,7 @@ const App = () => {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0, overflow: "hidden" }}>
-          <span style={{ opacity: 0.9 }}>ppoo</span>
+          <span style={{ opacity: 0.9 }}>Idiot Box</span>
           <span id="pw-hostbar-left" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

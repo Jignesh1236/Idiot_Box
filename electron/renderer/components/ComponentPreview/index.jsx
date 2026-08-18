@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import ReactDOM from "react-dom/client";
+import * as ReactDOMPkg from "react-dom";
+import * as ReactJSXRuntime from "react/jsx-runtime";
 
 // Error Boundary to catch runtime errors inside previewed user components
 class PreviewErrorBoundary extends React.Component {
@@ -314,9 +316,9 @@ const ComponentPreview = ({ nodeId, config }) => {
       codeToTranspile = `export default function PreviewSnippet() { return (\n${source}\n); }`;
     }
 
-    const res = await window.electronAPI.transpileJsx(codeToTranspile);
-    if (!res?.success) {
-      setTranspileError(res?.error || "Transpilation failed");
+    const res = await window.electronAPI.bundleComponent(codeToTranspile, path, window.__currentProjectPath);
+    if (!res?.ok) {
+      setTranspileError(res?.error || "Bundling failed");
       setComponentToRender(null);
       return;
     }
@@ -325,31 +327,20 @@ const ComponentPreview = ({ nodeId, config }) => {
       const exportsObj = {};
       const moduleObj = { exports: exportsObj };
 
-      const customRequire = (name) => {
-        if (name === "react") return React;
-        if (name === "react-dom") return React;
-        if (/\.(css|scss|less|pcss)$/i.test(name)) {
-          const fullCssPath = resolvePath(path, name);
-          if (fullCssPath) {
-            window.electronAPI.readTextFile(fullCssPath).then((cssContent) => {
-              if (cssContent !== null) injectPreviewCss(fullCssPath, cssContent);
-            }).catch(() => {});
-          }
-          return {};
-        }
-        return {};
+      const sandboxRequire = (id) => {
+        if (id === "react") return React;
+        if (id === "react-dom") return ReactDOMPkg;
+        if (id === "react-dom/client") return ReactDOM;
+        if (id === "react/jsx-runtime" || id === "react/jsx-dev-runtime") return ReactJSXRuntime;
+        return null;
       };
 
       const runner = new Function(
-        'React', 'useState', 'useEffect', 'useRef', 'useCallback', 'useMemo', 'useReducer', 'useContext', 'useId',
-        'require', 'exports', 'module',
-        `${res.code};\nconst exp = module.exports.default || exports.default || module.exports;\nif (typeof exp === 'function' || (exp && typeof exp === 'object')) return exp;\nreturn (typeof App !== 'undefined' ? App : null) || (typeof Component !== 'undefined' ? Component : null);`
+        'React', 'require', 'exports', 'module',
+        `${res.code};\nconst exp = module.exports.default || exports.default || module.exports;\nif (typeof exp === 'function') return exp;\nif (exp && typeof exp === 'object') {\n  for (const k of Object.keys(exp)) {\n    const v = exp[k];\n    if (typeof v === 'function') return v;\n  }\n}\nreturn (typeof App !== 'undefined' ? App : null) || (typeof Component !== 'undefined' ? Component : null);`
       );
 
-      const evaluated = runner(
-        React, React.useState, React.useEffect, React.useRef, React.useCallback, React.useMemo, React.useReducer, React.useContext, React.useId,
-        customRequire, exportsObj, moduleObj
-      );
+      const evaluated = runner(React, sandboxRequire, exportsObj, moduleObj);
 
       if (!evaluated) {
         setTranspileError("No default export or React component found in file");

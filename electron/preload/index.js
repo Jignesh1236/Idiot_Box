@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveFileAs:     (filePath, text) => ipcRenderer.invoke("fs:saveFileAs", { filePath, text }),
   readFileAsDataUrl: (filePath) => ipcRenderer.invoke("fs:readFileAsDataUrl", filePath),
   transpileJsx:   (code) => ipcRenderer.invoke("jsx:transpile", code),
+  bundleComponent: (source, filePath, projectRoot) => ipcRenderer.invoke("component:bundle", { source, filePath, projectRoot }),
   copyImageToClipboard: (filePath) => ipcRenderer.invoke("media:copyImage", filePath),
   onOpenFileInEditor: (callback) => {
     const handler = (_e, payload) => callback(payload);
@@ -75,7 +76,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   unwatchDir: (rootPath) => ipcRenderer.invoke("fs:unwatch", rootPath),
   // Returns unsubscribe function
   onFsChange: (callback) => {
-    const handler = (_e, affectedDir) => callback(affectedDir);
+    const handler = (_e, affectedDir, changedPath) => callback(affectedDir, changedPath);
     ipcRenderer.on("fs:change", handler);
     return () => ipcRenderer.removeListener("fs:change", handler);
   },

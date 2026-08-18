@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ReactDOM from "react-dom/client";
+import * as ReactDOMPkg from "react-dom";
+import * as ReactJSXRuntime from "react/jsx-runtime";
 import VscodeIcon from "../shared/VscodeIcon.jsx";
 import { PreviewIcon } from "../Project/window/ContentArea.jsx";
 
@@ -184,6 +186,25 @@ function computeLayout(roots, manual, naturalSizes) {
 }
 
 // ── Per-card live preview (shadow DOM + transpileJsx) ────────────────────────
+// Cap concurrent transpile requests so a large canvas loads in waves instead
+// of flooding IPC and janking the UI.
+const TRANSPILE_POOL = 5;
+const transpileQueue = [];
+let transpileActive = 0;
+const transpilePooled = (fn) => new Promise((resolve, reject) => {
+  const run = () => {
+    transpileActive++;
+    fn().then(
+      (r) => { transpileActive--; next(); resolve(r); },
+      (e) => { transpileActive--; next(); reject(e); }
+    );
+  };
+  const next = () => {
+    while (transpileActive < TRANSPILE_POOL && transpileQueue.length) transpileQueue.shift()();
+  };
+  transpileQueue.push(run);
+  next();
+});
 class CardErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -197,6 +218,34 @@ class CardErrorBoundary extends React.Component {
       );
     }
     return this.props.children;
+  }
+}
+
+// Panel-level safety net: if anything in the canvas render throws, show the
+// real message with a working Retry instead of the workbench's dead-end
+// "Error rendering component" overlay. Retry remounts the whole panel.
+class PanelErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null, attempt: 0 }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error) { console.error("Canvas Panel Error:", error); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, background: "#181818", color: "#f48771", fontSize: 12, padding: 20 }}>
+          <div style={{ fontWeight: 600 }}>Canvas error</div>
+          <div style={{ color: "#e8a8a0", fontFamily: "Consolas, monospace", whiteSpace: "pre-wrap", wordBreak: "break-all", maxWidth: 700, maxHeight: 200, overflow: "auto" }}>
+            {this.state.error?.message || String(this.state.error)}
+          </div>
+          <button
+            onClick={() => this.setState((s) => ({ error: null, attempt: s.attempt + 1 }))}
+            style={{ background: "#007acc", border: "none", color: "#fff", borderRadius: 2, padding: "5px 14px", fontSize: 12, cursor: "pointer" }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return <div key={this.state.attempt} style={{ display: "contents" }}>{this.props.children}</div>;
   }
 }
 
@@ -218,6 +267,7 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
   const rootRef = useRef(null);
   const scaledRef = useRef(null);
   const innerRef = useRef(null);
+  const iframeRef = useRef(null);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
   const [comp, setComp] = useState(null);
@@ -315,6 +365,32 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
     inner.style.transform = `scale(${1 / z})`;
   }, [isHtml, onNatural, rel, canvasZoom]);
 
+  // HTML previews: the card auto-sizes to the page's natural size (reported
+  // like components). The iframe re-flows with its width (crisp, no scaling);
+  // when the card is smaller than the page the preview scrolls.
+  const measureHtml = useCallback(() => {
+    const host = hostRef.current;
+    if (!host || !host.shadowRoot) return;
+    const rootEl = rootRef.current, iframe = iframeRef.current;
+    if (!rootEl || !iframe) return;
+    let doc = null;
+    try { doc = iframe.contentDocument || iframe.contentWindow?.document; } catch {}
+    if (!doc || !doc.documentElement) return;
+    const de = doc.documentElement, b = doc.body;
+    const w = Math.max(1, Math.ceil(Math.max(de.scrollWidth, b ? b.scrollWidth : 0)));
+    const h = Math.max(1, Math.ceil(Math.max(de.scrollHeight, b ? b.scrollHeight : 0)));
+    const nat = { w, h };
+    host.__nat = nat;
+    const reported = host.__reportedNat;
+    if (!reported || reported.w !== nat.w || reported.h !== nat.h) {
+      host.__reportedNat = nat;
+      onNatural(rel, nat);
+    }
+    const fw = Math.max(1, rootEl.clientWidth);
+    const fh = Math.max(1, rootEl.clientHeight);
+    rootEl.style.overflow = fw < nat.w || fh < nat.h ? "auto" : "hidden";
+  }, [onNatural, rel]);
+
   const load = useCallback(async (sourceOverride) => {
     const host = hostRef.current;
     if (!host || !host.shadowRoot) return;
@@ -342,31 +418,35 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
     if (!/export\s+default|function|const|class/i.test(source) && /^\s*</.test(source.trim())) {
       codeToTranspile = `export default function PreviewSnippet() { return (\n${source}\n); }`;
     }
-    const res = await window.electronAPI.transpileJsx(codeToTranspile);
-    if (!res?.success) {
+    const res = await transpilePooled(() =>
+      window.electronAPI.bundleComponent(codeToTranspile, file.absPath, window.__currentProjectPath)
+    );
+    if (!res?.ok) {
       setStatus("error");
-      setError(res?.error || "Transpilation failed");
+      setError(res?.error || "Bundling failed");
       return;
     }
     try {
       const exportsObj = {};
       const moduleObj = { exports: exportsObj };
-      const customRequire = (name) => (name === "react" || name === "react-dom") ? React : {};
+      const sandboxRequire = (id) => {
+        if (id === "react") return React;
+        if (id === "react-dom") return ReactDOMPkg;
+        if (id === "react-dom/client") return ReactDOM;
+        if (id === "react/jsx-runtime" || id === "react/jsx-dev-runtime") return ReactJSXRuntime;
+        return null;
+      };
       const runner = new Function(
-        "React", "useState", "useEffect", "useRef", "useCallback", "useMemo", "useReducer", "useContext", "useId",
-        "require", "exports", "module",
-        `${res.code};\nconst exp = module.exports.default || exports.default || module.exports;\nif (typeof exp === 'function' || (exp && typeof exp === 'object')) return exp;\nreturn (typeof App !== 'undefined' ? App : null) || (typeof Component !== 'undefined' ? Component : null);`
+        "React", "require", "exports", "module",
+        `${res.code};\nconst exp = module.exports.default || exports.default || module.exports;\nif (typeof exp === 'function') return exp;\nif (exp && typeof exp === 'object') {\n  for (const k of Object.keys(exp)) {\n    const v = exp[k];\n    if (typeof v === 'function') return v;\n  }\n}\nreturn (typeof App !== 'undefined' ? App : null) || (typeof Component !== 'undefined' ? Component : null);`
       );
-      const evaluated = runner(
-        React, React.useState, React.useEffect, React.useRef, React.useCallback, React.useMemo, React.useReducer, React.useContext, React.useId,
-        customRequire, exportsObj, moduleObj
-      );
+      const evaluated = runner(React, sandboxRequire, exportsObj, moduleObj);
       if (!evaluated) {
         setStatus("error");
         setError("No default export or component found");
         return;
       }
-      setComp(evaluated);
+      setComp(() => evaluated);
       setStatus("ready");
     } catch (err) {
       setStatus("error");
@@ -386,7 +466,9 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
         <div ref={rootRef} style={{ width: "100%", height: "100%", overflow: "hidden", position: "relative" }}>
           {isHtml ? (
             <iframe
+              ref={iframeRef}
               srcDoc={html || ""}
+              onLoad={measureHtml}
               sandbox="allow-scripts allow-same-origin"
               style={{ width: "100%", height: "100%", border: 0, background: "#fff", display: "block" }}
             />
@@ -416,11 +498,14 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
   // Re-fit when the card area changes size (resize) — without any re-render.
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || isHtml) return;
-    const ro = new ResizeObserver(() => measureAndFit());
+    if (!host) return;
+    const ro = new ResizeObserver(() => {
+      if (isHtml) measureHtml();
+      else measureAndFit();
+    });
     ro.observe(host);
     return () => ro.disconnect();
-  }, [isHtml, measureAndFit]);
+  }, [isHtml, measureAndFit, measureHtml]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -438,8 +523,15 @@ const CardPreview = React.memo(function CardPreview({ file, rel, liveSourcesRef,
     host.__stylesHost = stylesHost;
     load();
     return () => {
-      try { host.__root?.unmount(); } catch {}
+      const root = host.__root;
       host.__root = null;
+      if (root) {
+        // Deferred: unmounting the shadow root synchronously while the parent
+        // is mid-render (cards culled during a layout recompute) corrupts
+        // React's internal state and takes down the whole panel. Let the
+        // current render finish first.
+        setTimeout(() => { try { root.unmount(); } catch {} }, 0);
+      }
     };
   }, [load]);
 
@@ -518,6 +610,7 @@ const CanvasPanel = ({ nodeId, config }) => {
   const [selectedRel, setSelectedRel] = useState(null);
   const [naturalSizes, setNaturalSizes] = useState({});
   const [menu, setMenu] = useState(null);
+  const [scanError, setScanError] = useState(null);
 
   const viewportRef = useRef(null);
   const viewRef = useRef(view);
@@ -529,6 +622,8 @@ const CanvasPanel = ({ nodeId, config }) => {
   const panRef = useRef(null);
   const spaceRef = useRef(false);
   const fittedRef = useRef(false);
+  const pendingNatRef = useRef({});
+  const natFlushRef = useRef(null);
   const livePathsRef = useRef(livePaths);
   livePathsRef.current = livePaths;
 
@@ -548,20 +643,41 @@ const CanvasPanel = ({ nodeId, config }) => {
   }, []);
   const onCardLive = useCallback((relPath, on) => setLiveState(relPath, on), [setLiveState]);
   const onCardNatural = useCallback((relPath, size) => {
-    setNaturalSizes((prev) => {
-      const cur = prev[relPath];
-      if (cur && cur.w === size.w && cur.h === size.h) return prev;
-      return { ...prev, [relPath]: { w: size.w, h: size.h } };
+    pendingNatRef.current[relPath] = { w: size.w, h: size.h };
+    if (natFlushRef.current) return;
+    natFlushRef.current = requestAnimationFrame(() => {
+      natFlushRef.current = null;
+      setNaturalSizes((prev) => {
+        const p = pendingNatRef.current;
+        pendingNatRef.current = {};
+        let changed = false;
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(p)) {
+          const cur = prev[k];
+          if (!cur || cur.w !== v.w || cur.h !== v.h) { next[k] = v; changed = true; }
+        }
+        return changed ? next : prev;
+      });
     });
   }, []);
 
   const refreshScan = useCallback(async () => {
     const root = window.__currentProjectPath;
-    if (!root) { setScan(null); return; }
+    if (!root) { setScan(null); setScanError(null); return; }
     setScanning(true);
-    const data = await window.electronAPI.scanCanvas(root);
-    if (data) setScan(data);
-    setScanning(false);
+    setScanError(null);
+    try {
+      const data = await window.electronAPI.scanCanvas(root);
+      if (data?.error) {
+        setScanError(data.error);
+      } else if (data) {
+        setScan(data);
+      }
+    } catch (err) {
+      setScanError(err?.message || String(err));
+    } finally {
+      setScanning(false);
+    }
   }, []);
 
   const persistLayout = useCallback((data) => {
@@ -578,6 +694,10 @@ const CanvasPanel = ({ nodeId, config }) => {
     window.electronAPI.loadCanvasLayout(window.__currentProjectPath).then((data) => {
       setManual({ cards: data?.cards || {}, groups: data?.groups || {} });
     }).catch(() => {});
+    return () => {
+      if (natFlushRef.current) cancelAnimationFrame(natFlushRef.current);
+      natFlushRef.current = null;
+    };
   }, [rootPath]);
 
   useEffect(() => { refreshScan(); }, [refreshScan]);
@@ -792,6 +912,8 @@ const CanvasPanel = ({ nodeId, config }) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
         zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+      } else if (e.shiftKey) {
+        setView((v) => ({ ...v, x: v.x - e.deltaY }));
       } else {
         setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
       }
@@ -812,13 +934,18 @@ const CanvasPanel = ({ nodeId, config }) => {
   }, []);
 
   const startPan = useCallback((e) => {
-    const panAllowed = e.button === 1 || (e.button === 0 && (spaceRef.current || e.shiftKey));
+    const panAllowed = e.button === 1 || e.button === 2 || (e.button === 0 && (spaceRef.current || e.shiftKey));
     if (!panAllowed) return;
     e.preventDefault();
-    panRef.current = { startX: e.clientX, startY: e.clientY, x: viewRef.current.x, y: viewRef.current.y };
+    panRef.current = { startX: e.clientX, startY: e.clientY, x: viewRef.current.x, y: viewRef.current.y, button: e.button, moved: false };
     const move = (ev) => {
       const p = panRef.current;
       if (!p) return;
+      if (!p.moved && Math.abs(ev.clientX - p.startX) + Math.abs(ev.clientY - p.startY) > DRAG_MOVE_THRESHOLD) {
+        p.moved = true;
+        if (p.button === 2) setMenu(null);
+      }
+      if (!p.moved) return;
       setView((v) => ({ ...v, x: p.x + (ev.clientX - p.startX), y: p.y + (ev.clientY - p.startY) }));
     };
     const up = () => {
@@ -1034,10 +1161,15 @@ const CanvasPanel = ({ nodeId, config }) => {
 
   const resetLayout = useCallback(() => {
     setManual({ cards: {}, groups: {} });
+    setSelectedRel(null);
+    setMenu(null);
+    setQuery("");
     if (window.__currentProjectPath) {
       window.electronAPI.saveCanvasLayout(window.__currentProjectPath, { version: 2, cards: {}, groups: {} }).catch(() => {});
     }
-  }, []);
+    // Refit after the auto layout lands so the freshly laid-out canvas is in view.
+    requestAnimationFrame(() => requestAnimationFrame(() => fitView()));
+  }, [fitView]);
 
   const q = query.trim().toLowerCase();
   const rootName = scan?.root ? scan.root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : null;
@@ -1045,7 +1177,8 @@ const CanvasPanel = ({ nodeId, config }) => {
   const menuNode = menu?.kind === "group" ? scanRootsByRel.get(menu.rel) : null;
 
   return (
-    <div onContextMenu={(e) => e.preventDefault()} style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#181818", position: "relative", overflow: "hidden" }}>
+    <PanelErrorBoundary>
+      <div onContextMenu={(e) => e.preventDefault()} style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "#181818", position: "relative", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 10px", background: "#252526", borderBottom: "1px solid #2d2d2d", fontSize: 12, color: "#ccc", flexShrink: 0 }}>
         <span style={{ fontWeight: 600, color: "#4ec9b0", display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -1212,6 +1345,13 @@ const CanvasPanel = ({ nodeId, config }) => {
             Scanning…
           </div>
         )}
+        {scanError && (
+          <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 10, background: "#3a1d1d", border: "1px solid #6e2b2b", color: "#f48771", fontSize: 11, borderRadius: 2, padding: "5px 10px", zIndex: 5, maxWidth: "70%" }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Scan failed: {scanError}</span>
+            <button onClick={() => refreshScan()} style={{ background: "#f48771", color: "#1c1c1c", border: "none", borderRadius: 2, padding: "2px 8px", fontSize: 11, cursor: "pointer", flexShrink: 0 }}>Retry</button>
+            <button onClick={() => setScanError(null)} style={{ background: "transparent", border: "none", color: "#f48771", cursor: "pointer", fontSize: 11, flexShrink: 0 }}>✕</button>
+          </div>
+        )}
       </div>
 
       {menu && (
@@ -1251,9 +1391,10 @@ const CanvasPanel = ({ nodeId, config }) => {
       )}
 
       <div style={{ padding: "2px 10px", background: "#1c1c1c", borderTop: "1px solid #2a2a2a", color: "#666", fontSize: 10.5, flexShrink: 0 }}>
-        Scroll: pan · Ctrl+Scroll: zoom · Middle-drag/Shift+drag: pan · Drag card: move (push parent edge to expand) · Shift+drag card: move card+group · Drag group header: move · Drag group edge/corner: resize · Click card: open in editor · Right-click: context menu
+        Scroll: pan · Shift+Scroll: pan horizontal · Ctrl+Scroll: zoom · Middle-drag/Shift+drag: pan · Drag card: move (push parent edge to expand) · Shift+drag card: move card+group · Drag group header: move · Drag group edge/corner: resize · Click card: open in editor · Right-click: context menu
       </div>
-    </div>
+      </div>
+    </PanelErrorBoundary>
   );
 };
 

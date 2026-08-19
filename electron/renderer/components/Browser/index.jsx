@@ -93,7 +93,30 @@ const BrowserPanel = (props) => {
       setInputValue(cur); setDisplayUrl(cur);
       try { setCanGoBack(wv.canGoBack()); setCanGoForward(wv.canGoForward()); } catch {}
     });
+
+    // Mouse back/forward buttons (XButtons) inside the page → navigation.
+    // The guest page cannot reach us directly, so we relay via a title marker
+    // ("__IBX_NAV__b"/"__IBX_NAV__f") caught below in page-title-updated.
+    wv.addEventListener("dom-ready", () => {
+      try {
+        wv.executeJavaScript(`(() => {
+          const mark = (b) => { document.title = "__IBX_NAV__" + b; };
+          window.addEventListener("mouseup", (e) => {
+            if (e.button === 3) mark("b");
+            else if (e.button === 4) mark("f");
+          }, true);
+          return true;
+        })()`).catch(() => {});
+      } catch {}
+    });
+
     wv.addEventListener("page-title-updated", (e) => {
+      const t = e.title || "";
+      if (t.startsWith("__IBX_NAV__")) {
+        if (t === "__IBX_NAV__b") { try { wv.goBack(); } catch {} }
+        else if (t === "__IBX_NAV__f") { try { wv.goForward(); } catch {} }
+        return;
+      }
       const nid = nodeIdRef.current;
       const m = window.__flexModel?.current;
       if (m) {

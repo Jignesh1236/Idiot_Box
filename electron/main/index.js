@@ -1333,6 +1333,64 @@ app.whenReady().then(async () => {
       return result;
     },
   });
+
+  // Keep browser-action popup windows inside the app window so they don't
+  // overlap the window's edges or the webview's right-side scrollbar, and
+  // hold them hidden until the content size settles so they don't visibly
+  // flicker/grow while loading.
+  chromeExt.on("browser-action-popup-created", (popup) => {
+    const pwin = popup?.browserWindow;
+    const parent = popup?.parent;
+    if (!pwin || !parent) return;
+
+    let settleTimer = null;
+    let settleShown = false;
+    let suppressShow = true;
+
+    const clamp = () => {
+      try {
+        if (pwin.isDestroyed() || parent.isDestroyed()) return;
+        const pb = parent.getContentBounds();
+        const wb = pwin.getBounds();
+        const x = Math.max(pb.x, Math.min(wb.x, pb.x + pb.width - wb.width));
+        const y = Math.max(pb.y, Math.min(wb.y, pb.y + pb.height - wb.height));
+        if (x !== wb.x || y !== wb.y) pwin.setBounds({ ...wb, x, y });
+      } catch {}
+    };
+
+    const showSettled = () => {
+      if (settleShown || pwin.isDestroyed() || parent.isDestroyed()) return;
+      settleShown = true;
+      suppressShow = false;
+      clamp();
+      pwin.show();
+    };
+
+    const kickSettle = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(showSettled, 120);
+    };
+
+    const onLayoutChange = () => { clamp(); kickSettle(); };
+
+    // The library shows the popup on the first size report, then keeps
+    // resizing as content loads. Hide it until it stops resizing so the
+    // user never sees the jump/grow flicker.
+    pwin.on("show", () => {
+      if (suppressShow) { try { pwin.hide(); } catch {} }
+      kickSettle();
+    });
+    pwin.on("resize", onLayoutChange);
+    pwin.on("move", onLayoutChange);
+    pwin.once("ready-to-show", kickSettle);
+    if (typeof popup.on === "function") {
+      popup.on("resized", onLayoutChange);
+      popup.on("moved", onLayoutChange);
+    }
+    // Safety net: never keep the popup hidden indefinitely.
+    setTimeout(showSettled, 1000);
+  });
+
   loadChromeExtensions();
   const PP_FILE_MIME = {
     ".js": "text/javascript",

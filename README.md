@@ -1,3 +1,4 @@
+<img src="https://files.catbox.moe/wpu6fh.png" width=200px>
 # Idiot Box
 
 A desktop IDE built on Electron + React + Monaco. Visual project map (Canvas), VS Code-grade editor with a real extension host, integrated terminal, browser panel, live component previews, and a full file manager — all in one window.
@@ -15,6 +16,8 @@ A desktop IDE built on Electron + React + Monaco. Visual project map (Canvas), V
 - **Settings Window** — live-updating editor preferences (minimap, word wrap) via BroadcastChannel.
 - **Command Palette** — quick actions for projects, files, panels and layout.
 - **Session Restore** — remembers your window state and open tabs.
+
+<img src="https://files.catbox.moe/to6wz3.png">
 
 ## Stack
 

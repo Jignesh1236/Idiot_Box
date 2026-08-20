@@ -1,5 +1,5 @@
 // Main process entry point
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage, clipboard, protocol, net: electronNet } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage, clipboard, protocol, net: electronNet, session } = require("electron");
 const path    = require("path");
 const fs      = require("fs");
 const { pathToFileURL } = require("url");
@@ -7,6 +7,7 @@ const { spawn } = require("child_process");
 const chokidar = require("chokidar");
 const pty     = require("node-pty");
 const esbuild = require("esbuild");
+const { ElectronChromeExtensions } = require("electron-chrome-extensions");
 
 // ─── Custom scheme: extension-host file access ───────────────────────────────
 // The web-worker extension host runs in a sandboxed worker that cannot
@@ -628,7 +629,7 @@ ipcMain.handle("fs:unwatch", async (event, rootPath) => {
 });
 
 // ─── Browser webview context menu ────────────────────────────────────────────
-ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionText, linkURL, srcURL, isEditable, pageURL, x, y }) => {
+ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionText, linkURL, srcURL, isEditable, pageURL, x, y, webContentsId }) => {
   return new Promise((resolve) => {
     const act = (action, data) => resolve({ action, data });
     const sep = { type: "separator" };
@@ -668,6 +669,20 @@ ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionTe
     items.push({ label: "Save Page As…", click: () => act("saveAs") });
     items.push({ label: "Print…",        click: () => act("print") });
     items.push(sep);
+
+    // Chrome extension contextMenus
+    if (chromeExt && webContentsId) {
+      try {
+        const wc = require("electron").webContents.fromId(webContentsId);
+        const extItems = wc ? chromeExt.getContextMenuItems(wc, { linkURL, srcURL, selectionText, isEditable, editable: isEditable, pageURL, x, y }) : [];
+        if (extItems && extItems.length) {
+          items.push(sep);
+          items.push(...extItems);
+          items.push(sep);
+        }
+      } catch {}
+    }
+
     items.push({ label: "View Page Source", click: () => act("viewSource", { url: pageURL }) });
     items.push({ label: "Inspect Element",  click: () => act("inspect", { x, y }) });
 
@@ -1008,6 +1023,110 @@ ipcMain.handle("session:load", () => {
   try { return JSON.parse(fs.readFileSync(SESSION_FILE, "utf8")); } catch { return null; }
 });
 
+// ─── Chrome extensions ──────────────────────────────────────────────────────
+// Native session.extensions API + electron-chrome-extensions for
+// chrome.tabs/windows/action/storage/... support in the browser webviews.
+const EXTENSIONS_FILE = path.join(app.getPath("userData"), "extensions.json");
+let chromeExt = null;
+const pendingCreateTabs = [];   // FIFO of { url, resolve } awaiting webview attach
+let lastGuestWc = null;
+let lastGuestWin = null;
+
+// The package instance exposes the session via `.ctx.session`.
+function chromeExtensionsApi() {
+  if (!chromeExt) return null;
+  const ses = chromeExt.ctx?.session || session.defaultSession;
+  return ses.extensions || ses;
+}
+
+function loadChromeExtensions() {
+  if (!chromeExt) return;
+  let entries = [];
+  try { entries = JSON.parse(fs.readFileSync(EXTENSIONS_FILE, "utf8")); } catch { entries = []; }
+  for (const e of entries) {
+    const p = typeof e === "string" ? e : e?.path;
+    if (!p || e?.enabled === false) continue;
+    try { chromeExtensionsApi().loadExtension(p); } catch (err) { console.error("loadExtension failed:", p, err); }
+  }
+}
+
+function readChromeExtensionEntries() {
+  let entries = [];
+  try { entries = JSON.parse(fs.readFileSync(EXTENSIONS_FILE, "utf8")); } catch { entries = []; }
+  return entries;
+}
+
+function saveChromeExtensionEntry(entry) {
+  let entries = readChromeExtensionEntries();
+  const i = entries.findIndex((e) => (typeof e === "string" ? e === entry.path : e.path === entry.path));
+  if (i >= 0) entries[i] = entry;
+  else entries.push(entry);
+  try { fs.writeFileSync(EXTENSIONS_FILE, JSON.stringify(entries, null, 2)); } catch {}
+}
+
+ipcMain.handle("chrome:loadExtension", async () => {
+  const r = await dialog.showOpenDialog({
+    title: "Load unpacked Chrome extension", properties: ["openDirectory"],
+  });
+  if (r.canceled || !r.filePaths.length || !chromeExt) return { ok: false };
+  try {
+    const ext = await chromeExtensionsApi().loadExtension(r.filePaths[0]);
+    saveChromeExtensionEntry({ path: r.filePaths[0], id: ext.id, enabled: true });
+    return { ok: true, id: ext.id, name: ext.name };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("chrome:listExtensions", () => {
+  if (!chromeExt) return [];
+  const out = [];
+  try {
+    const all = chromeExtensionsApi().getAllExtensions() || [];
+    const entries = readChromeExtensionEntries();
+    for (const ext of all) {
+      const entry = entries.find((e) => typeof e === "object" && e.id === ext.id);
+      out.push({
+        id: ext.id,
+        name: ext.name,
+        version: ext.version,
+        description: ext.manifest?.description || "",
+        path: entry?.path || ext.path || "",
+        enabled: entry ? entry.enabled !== false : true,
+      });
+    }
+  } catch {}
+  return out;
+});
+
+ipcMain.handle("chrome:setExtensionEnabled", async (_e, id, enabled) => {
+  if (!chromeExt) return { ok: false };
+  const entries = readChromeExtensionEntries();
+  const entry = entries.find((e) => typeof e === "object" && e.id === id);
+  if (!entry) return { ok: false, error: "Not found" };
+  try {
+    if (enabled) {
+      const ext = await chromeExtensionsApi().loadExtension(entry.path);
+      entry.id = ext.id;
+    } else {
+      chromeExtensionsApi().removeExtension(id);
+    }
+    entry.enabled = !!enabled;
+    saveChromeExtensionEntry(entry);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("chrome:removeExtension", (_e, id) => {
+  if (!chromeExt) return { ok: false };
+  try { chromeExtensionsApi().removeExtension(id); } catch {}
+  const entries = readChromeExtensionEntries().filter((e) => typeof e !== "object" || e.id !== id);
+  try { fs.writeFileSync(EXTENSIONS_FILE, JSON.stringify(entries, null, 2)); } catch {}
+  return { ok: true };
+});
+
 // ─── Settings window ──────────────────────────────────────────────────────────
 let settingsWin = null;
 function openSettingsWindow() {
@@ -1015,6 +1134,7 @@ function openSettingsWindow() {
   settingsWin = new BrowserWindow({
     width: 780, height: 520, minWidth: 600, minHeight: 400,
     title: "Settings", backgroundColor: "#1a1a1a",
+    icon: path.join(__dirname, "../renderer/assets/idot_box.png"),
     parent: BrowserWindow.getAllWindows()[0], modal: false, show: false,
     webPreferences: { preload: path.join(__dirname, "../preload/index.js"), contextIsolation: true, nodeIntegration: false },
   });
@@ -1033,6 +1153,8 @@ function buildMenu() {
       label: "File", submenu: [
         { label: "Open Project", accelerator: "CmdOrCtrl+O",       click: async () => { const r = await dialog.showOpenDialog({ title: "Open Project", properties: ["openDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:openProject", r.filePaths[0]); } } },
         { label: "New Project",  accelerator: "CmdOrCtrl+Shift+N", click: async () => { const r = await dialog.showOpenDialog({ title: "Select folder for new project", properties: ["openDirectory","createDirectory"] }); if (!r.canceled && r.filePaths.length) { lastProjectPath = r.filePaths[0]; sendToRenderer("menu:newProject", r.filePaths[0]); } } },
+        { type: "separator" },
+        { label: "Load Extension…", click: () => sendToRenderer("menu:loadExtension", null) },
         { type: "separator" },
         { label: "Save",            accelerator: "CmdOrCtrl+S",          click: () => sendToRenderer("menu:saveFile", null) },
         { label: "Save As",         accelerator: "CmdOrCtrl+Shift+S",    click: () => sendToRenderer("menu:saveFileAs", null) },
@@ -1075,11 +1197,25 @@ function createWindow() {
   const win = new BrowserWindow({
     ...winState,
     backgroundColor: "#0d0d0d",
+    icon: path.join(__dirname, "../renderer/assets/idot_box.png"),
     show: false,
-    webPreferences: { preload: path.join(__dirname, "../preload/index.js"), contextIsolation: true, nodeIntegration: false, webviewTag: true },
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload-bundle.cjs"),
+      contextIsolation: true, nodeIntegration: false, webviewTag: true,
+    },
   });
 
   win.webContents.setBackgroundThrottling(false);
+
+  // Register every browser webview as a chrome.tabs tab
+  win.webContents.on("did-attach-webview", (_e, wc) => {
+    lastGuestWc = wc; lastGuestWin = win;
+    try { chromeExt?.addTab(wc, win); } catch {}
+    wc.on("did-navigate", () => { try { chromeExt?.selectTab(wc); } catch {} });
+    wc.on("focus",       () => { try { chromeExt?.selectTab(wc); } catch {} });
+    const pending = pendingCreateTabs.shift();
+    if (pending) pending.resolve([wc, win]);
+  });
 
   // TEMP ext-host self-check (remove later)
   const checkLog = path.join(process.env.TEMP || "/tmp", "opencode", "ppoo-check.log");
@@ -1183,6 +1319,21 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  ElectronChromeExtensions.handleCRXProtocol(session.defaultSession);
+  chromeExt = new ElectronChromeExtensions({
+    license: "GPL-3.0",
+    session: session.defaultSession,
+    async createTab(details) {
+      const url = details.url || "about:blank";
+      const result = await new Promise((resolve) => {
+        pendingCreateTabs.push({ url, resolve });
+        sendToRenderer("chrome:createTab", url);
+        setTimeout(() => resolve([lastGuestWc, lastGuestWin]), 4000);
+      });
+      return result;
+    },
+  });
+  loadChromeExtensions();
   const PP_FILE_MIME = {
     ".js": "text/javascript",
     ".mjs": "text/javascript",

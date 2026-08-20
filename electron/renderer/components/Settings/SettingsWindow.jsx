@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import useSettings from "../shared/useSettings.jsx";
-import EditorPage  from "./pages/EditorPage.jsx";
+import EditorPage     from "./pages/EditorPage.jsx";
+import ExtensionsPage from "./pages/ExtensionsPage.jsx";
 import "../../variables.css";
 import "./settings.css";
 
 // ─── Navigation items ─────────────────────────────────────────────────────────
 const NAV = [
-  { id: "editor", label: "Editor" },
+  { id: "editor",     label: "Editor" },
+  { id: "extensions", label: "Extensions" },
   // Add more categories here — each needs a matching <Page> in the switch below
 ];
 
@@ -22,8 +24,9 @@ const SettingsWindow = () => {
   const renderPage = () => {
     if (loading) return <div style={{ color: "#555", fontSize: 12 }}>Loading...</div>;
     switch (activePage) {
-      case "editor": return <EditorPage settings={settings} onSave={updateSettings} />;
-      default:       return null;
+      case "editor":     return <EditorPage settings={settings} onSave={updateSettings} />;
+      case "extensions": return <ExtensionsPage />;
+      default:           return null;
     }
   };
 

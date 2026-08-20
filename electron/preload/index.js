@@ -83,11 +83,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ── Menu events ────────────────────────────────────────────────────────────
   onMenuEvent: (channel, callback) => {
-    const valid = ["menu:openProject","menu:newProject","menu:saveProject","menu:closeProject","menu:resetLayout","menu:saveFile","menu:saveFileAs","menu:toggleAutoSave","menu:commandPalette"];
+    const valid = ["menu:openProject","menu:newProject","menu:saveProject","menu:closeProject","menu:resetLayout","menu:saveFile","menu:saveFileAs","menu:toggleAutoSave","menu:commandPalette","menu:loadExtension"];
     if (!valid.includes(channel)) return () => {};
     const handler = (_e, payload) => callback(payload);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
+  },
+
+  // ── Chrome extensions ───────────────────────────────────────────────────────
+  loadChromeExtension: () => ipcRenderer.invoke("chrome:loadExtension"),
+  listChromeExtensions: () => ipcRenderer.invoke("chrome:listExtensions"),
+  setChromeExtensionEnabled: (id, enabled) => ipcRenderer.invoke("chrome:setExtensionEnabled", id, enabled),
+  removeChromeExtension: (id) => ipcRenderer.invoke("chrome:removeExtension", id),
+  // Absolute path of the chrome.* API preload to attach to <webview> tags
+  getWebviewPreload: () => (typeof __WEBVIEW_PRELOAD__ !== "undefined" ? __WEBVIEW_PRELOAD__ : undefined),
+  onChromeCreateTab: (callback) => {
+    const handler = (_e, url) => callback(url);
+    ipcRenderer.on("chrome:createTab", handler);
+    return () => ipcRenderer.removeListener("chrome:createTab", handler);
   },
 
   // ── Terminal ──────────────────────────────────────────────────────────────

@@ -7,6 +7,9 @@ const UNLOCK_ICON = "M8 1a4 4 0 0 1 4 4v1h-1V5a3 3 0 0 0-5.7-1.37l-.78-.62A4 4 0
 const LOCAL_ICON  = "M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm-1 12.93A6 6 0 0 1 2 8c0-.33.03-.66.07-1H4v1h2v1H5v1h1v2l1 1zm5.1-3.83A4.9 4.9 0 0 0 13 8c0-2.5-1.83-4.55-4.2-4.96L9 4v1H7V4h-.44l3.55 5.1zm-9.4.14A5 5 0 0 1 2 8c0 1.72.87 3.23 2.2 4.14l.83-1.04z";
 
 // ── BrowserPanel ───────────────────────────────────────────────────────────────
+const WEBVIEW_PRELOAD = typeof window !== "undefined" && window.electronAPI?.getWebviewPreload
+  ? window.electronAPI.getWebviewPreload() : undefined;
+
 const BrowserPanel = (props) => {
   const { nodeId, config } = props || {};
   const initialUrl = config?.url || "https://www.google.com";
@@ -27,6 +30,16 @@ const BrowserPanel = (props) => {
   const lockRef      = useRef(null);
   const nodeIdRef    = useRef(nodeId);
   const goToUrlRef   = useRef(null);
+  const actionListRef = useRef(null);
+
+  const syncActionTab = useCallback(() => {
+    try {
+      const id = webviewRef.current?.getWebContentsId();
+      if (typeof id === "number" && actionListRef.current) {
+        actionListRef.current.setAttribute("tab", String(id));
+      }
+    } catch {}
+  }, []);
 
   // Keep nodeIdRef current (nodeId itself doesn't change but keep defensive)
   useEffect(() => { nodeIdRef.current = nodeId; }, [nodeId]);
@@ -87,6 +100,7 @@ const BrowserPanel = (props) => {
       const cur = wv.getURL();
       setInputValue(cur); setDisplayUrl(cur);
       try { setCanGoBack(wv.canGoBack()); setCanGoForward(wv.canGoForward()); } catch {}
+      syncActionTab();
     });
     wv.addEventListener("did-navigate-in-page", () => {
       const cur = wv.getURL();
@@ -97,24 +111,55 @@ const BrowserPanel = (props) => {
     // Mouse back/forward buttons (XButtons) inside the page → navigation.
     // The guest page cannot reach us directly, so we relay via a title marker
     // ("__IBX_NAV__b"/"__IBX_NAV__f") caught below in page-title-updated.
-    wv.addEventListener("dom-ready", () => {
+    // HTML file drag-and-drop → "__IBX_DROP__<path>" marker → opened via ppoo-file://
+    const INJECT_SCRIPT = `(() => {
+      const mark = (b) => { document.title = "__IBX_NAV__" + b; };
+      window.addEventListener("mouseup", (e) => {
+        if (e.button === 3) mark("b");
+        else if (e.button === 4) mark("f");
+      }, true);
+      const dropPath = (dt) => {
+        try {
+          const uri = dt.getData("text/uri-list");
+          const m = uri && uri.match(/^file:\/\/\/([^\r\n]+)/m);
+          if (m) return decodeURIComponent(m[1]).replace(/\//g, "\\\\");
+          if (dt.files && dt.files[0] && dt.files[0].path) return dt.files[0].path;
+        } catch {}
+        return "";
+      };
+      window.addEventListener("dragover", (e) => { e.preventDefault(); }, true);
+      window.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const p = dropPath(e.dataTransfer);
+        if (p) document.title = "__IBX_DROP__" + p;
+      }, true);
+      return true;
+    })()`;
+    const injectGuest = (attempt) => {
+      if (attempt > 3) return;
       try {
-        wv.executeJavaScript(`(() => {
-          const mark = (b) => { document.title = "__IBX_NAV__" + b; };
-          window.addEventListener("mouseup", (e) => {
-            if (e.button === 3) mark("b");
-            else if (e.button === 4) mark("f");
-          }, true);
-          return true;
-        })()`).catch(() => {});
-      } catch {}
-    });
+        wv.executeJavaScript(INJECT_SCRIPT)
+          .then((ok) => { if (!ok && attempt < 3) setTimeout(() => injectGuest(attempt + 1), 250); })
+          .catch(() => { setTimeout(() => injectGuest(attempt + 1), 250); });
+      } catch {
+        setTimeout(() => injectGuest(attempt + 1), 250);
+      }
+    };
+    wv.addEventListener("dom-ready", () => injectGuest(1));
 
     wv.addEventListener("page-title-updated", (e) => {
       const t = e.title || "";
       if (t.startsWith("__IBX_NAV__")) {
         if (t === "__IBX_NAV__b") { try { wv.goBack(); } catch {} }
         else if (t === "__IBX_NAV__f") { try { wv.goForward(); } catch {} }
+        return;
+      }
+      if (t.startsWith("__IBX_DROP__")) {
+        const p = t.slice("__IBX_DROP__".length);
+        if (/\.html?$/i.test(p)) {
+          const url = "ppoo-file://file/" + encodeURI(p.replace(/\\/g, "/")).replace(/#/g, "%23");
+          goToUrlRef.current(url);
+        }
         return;
       }
       const nid = nodeIdRef.current;
@@ -155,6 +200,7 @@ const BrowserPanel = (props) => {
         pageURL:    wv.getURL(),
         x:          Math.round(e.params?.x || 0),
         y:          Math.round(e.params?.y || 0),
+        webContentsId: wv.getWebContentsId ? wv.getWebContentsId() : undefined,
       };
       const result = await window.electronAPI.showBrowserWebviewContextMenu(params);
       if (!result) return;
@@ -218,9 +264,9 @@ const BrowserPanel = (props) => {
 
   // Stable ref-callback — created ONCE so webview never remounts on re-render
   const webviewRefCb = useCallback((el) => {
-    if (el) { webviewRef.current = el; attachListenersRef.current(el); }
+    if (el) { webviewRef.current = el; attachListenersRef.current(el); syncActionTab(); }
     else    { attachedRef.current = false; webviewRef.current = null; }
-  }, []); // empty deps intentional
+  }, [syncActionTab]);
 
   // ── Lock popup ─────────────────────────────────────────────────────────────
   const handleLockClick = useCallback((e) => {
@@ -250,8 +296,29 @@ const BrowserPanel = (props) => {
   }, [nodeId]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
+  const handleHostDrop = useCallback((e) => {
+    e.preventDefault();
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    let p = "";
+    try { if (dt.files && dt.files[0] && window.electronAPI.getPathForFile) p = window.electronAPI.getPathForFile(dt.files[0]); } catch {}
+    if (!p) {
+      try {
+        const m = dt.getData("text/uri-list").match(/^file:\/\/\/([^\r\n]+)/m);
+        if (m) p = decodeURIComponent(m[1]).replace(/\//g, "\\");
+      } catch {}
+    }
+    if (p && /\.html?$/i.test(p)) {
+      const url = "ppoo-file://file/" + encodeURI(p.replace(/\\/g, "/")).replace(/#/g, "%23");
+      goToUrlRef.current(url);
+    }
+  }, []);
+
   return (
-    <div className="browser">
+    <div className="browser"
+      onDragOver={(e) => { e.preventDefault(); }}
+      onDrop={handleHostDrop}
+    >
 
       {/* Toolbar */}
       {!barHidden && (
@@ -313,6 +380,12 @@ const BrowserPanel = (props) => {
           <button className="browser__btn" onClick={() => setBarHidden(true)} title="Hide toolbar">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3 10l5-5 5 5"/></svg>
           </button>
+
+          {/* Extension actions (browser-action-list) */}
+          <browser-action-list
+            ref={actionListRef}
+            style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 2 }}
+          />
         </div>
       )}
 
@@ -354,6 +427,7 @@ const BrowserPanel = (props) => {
           className="browser__view"
           ref={webviewRefCb}
           src={navUrl}
+          preload={WEBVIEW_PRELOAD}
           allowpopups
           allowfullscreen
         />

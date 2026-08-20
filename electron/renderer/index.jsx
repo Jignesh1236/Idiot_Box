@@ -225,7 +225,41 @@ const App = () => {
     const u1 = window.electronAPI.onMenuEvent("menu:openProject", handleOpen);
     const u2 = window.electronAPI.onMenuEvent("menu:newProject",  handleOpen);
     const u3 = window.electronAPI.onMenuEvent("menu:closeProject", handleClose);
-    return () => { u1(); u2(); u3(); };
+    const u4 = window.electronAPI.onMenuEvent("menu:loadExtension", () => {
+      window.electronAPI.loadChromeExtension();
+    });
+    return () => { u1(); u2(); u3(); u4(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Chrome extension tabs (chrome.tabs.create) ─────────────────────────
+  useEffect(() => {
+    const unsub = window.electronAPI.onChromeCreateTab((url) => {
+      const m = modelRef.current;
+      if (!m) return;
+      let tabsetId = null;
+      // Prefer the tabset of the currently focused browser tab
+      const nodes = m.getRoot().getChildren();
+      outer: for (const row of nodes) {
+        for (const child of row.getChildren()) {
+          if (child.getType() !== "tabset") continue;
+          for (const tab of child.getChildren()) {
+            const cfg = tab.getConfig();
+            if (cfg?.type === "browser") { tabsetId = child.getId(); break outer; }
+          }
+        }
+      }
+      if (!tabsetId) {
+        const first = nodes.find((n) => n.getType() === "tabset");
+        tabsetId = first?.getId();
+      }
+      if (!tabsetId) return;
+      m.doAction(Actions.addNode({
+        type: "tab", component: "panel3", name: "New Tab", enableClose: true,
+        config: { type: "browser", title: "New Tab", url: url || "https://www.google.com" },
+      }, tabsetId, DockLocation.CENTER, -1, true));
+      scheduleSaveProjectTabs();
+    });
+    return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Command palette → app actions ───────────────────────────────────────

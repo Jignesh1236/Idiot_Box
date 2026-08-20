@@ -1329,7 +1329,7 @@
           return dispatcher;
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React4 = require_react(), Internals = {
+        var React5 = require_react(), Internals = {
           d: {
             f: noop,
             r: function() {
@@ -1347,7 +1347,7 @@
           },
           p: 0,
           findDOMNode: null
-        }, REACT_PORTAL_TYPE = Symbol.for("react.portal"), ReactSharedInternals = React4.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+        }, REACT_PORTAL_TYPE = Symbol.for("react.portal"), ReactSharedInternals = React5.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
         "function" === typeof Map && null != Map.prototype && "function" === typeof Map.prototype.forEach && "function" === typeof Set && null != Set.prototype && "function" === typeof Set.prototype.clear && "function" === typeof Set.prototype.forEach || console.error(
           "React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills"
         );
@@ -2882,7 +2882,7 @@
           "number" === type && getActiveElement(node.ownerDocument) === node || node.defaultValue === "" + value || (node.defaultValue = "" + value);
         }
         function validateOptionProps(element, props) {
-          null == props.value && ("object" === typeof props.children && null !== props.children ? React4.Children.forEach(props.children, function(child) {
+          null == props.value && ("object" === typeof props.children && null !== props.children ? React5.Children.forEach(props.children, function(child) {
             null == child || "string" === typeof child || "number" === typeof child || "bigint" === typeof child || didWarnInvalidChild || (didWarnInvalidChild = true, console.error(
               "Cannot infer the option value of complex children. Pass a `value` prop or use a plain string as children to <option>."
             ));
@@ -18514,14 +18514,14 @@
           ));
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var Scheduler = require_scheduler(), React4 = require_react(), ReactDOM2 = require_react_dom(), assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy");
+        var Scheduler = require_scheduler(), React5 = require_react(), ReactDOM2 = require_react_dom(), assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy");
         Symbol.for("react.scope");
         var REACT_ACTIVITY_TYPE = Symbol.for("react.activity");
         Symbol.for("react.legacy_hidden");
         Symbol.for("react.tracing_marker");
         var REACT_MEMO_CACHE_SENTINEL = Symbol.for("react.memo_cache_sentinel");
         Symbol.for("react.view_transition");
-        var MAYBE_ITERATOR_SYMBOL = Symbol.iterator, REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), isArrayImpl = Array.isArray, ReactSharedInternals = React4.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, NotPending = Object.freeze({
+        var MAYBE_ITERATOR_SYMBOL = Symbol.iterator, REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"), isArrayImpl = Array.isArray, ReactSharedInternals = React5.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, NotPending = Object.freeze({
           pending: false,
           data: null,
           method: null,
@@ -21309,7 +21309,7 @@
           }
         };
         (function() {
-          var isomorphicReactPackageVersion = React4.version;
+          var isomorphicReactPackageVersion = React5.version;
           if ("19.2.8" !== isomorphicReactPackageVersion)
             throw Error(
               'Incompatible React versions: The "react" and "react-dom" packages must have the exact same version. Instead got:\n  - react:      ' + (isomorphicReactPackageVersion + "\n  - react-dom:  19.2.8\nLearn more: https://react.dev/warnings/version-mismatch")
@@ -21450,11 +21450,11 @@
   });
 
   // electron/renderer/settings-entry.jsx
-  var import_react4 = __toESM(require_react());
+  var import_react5 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // electron/renderer/components/Settings/SettingsWindow.jsx
-  var import_react3 = __toESM(require_react());
+  var import_react4 = __toESM(require_react());
 
   // electron/renderer/components/shared/useSettings.jsx
   var import_react = __toESM(require_react());
@@ -21516,25 +21516,102 @@
   };
   var EditorPage_default = EditorPage;
 
+  // electron/renderer/components/Settings/pages/ExtensionsPage.jsx
+  var import_react3 = __toESM(require_react());
+  var ExtensionsPage = () => {
+    const [list, setList] = (0, import_react3.useState)([]);
+    const [loading, setLoading] = (0, import_react3.useState)(true);
+    const [error, setError] = (0, import_react3.useState)("");
+    const [busyId, setBusyId] = (0, import_react3.useState)("");
+    const refresh = (0, import_react3.useCallback)(async () => {
+      setLoading(true);
+      try {
+        const res = await window.electronAPI.listChromeExtensions();
+        setList(res || []);
+      } catch (e) {
+        setError(String(e));
+      }
+      setLoading(false);
+    }, []);
+    (0, import_react3.useEffect)(() => {
+      refresh();
+    }, [refresh]);
+    const loadNew = async () => {
+      const res = await window.electronAPI.loadChromeExtension();
+      if (res?.error) setError(res.error);
+      else refresh();
+    };
+    const toggleEnabled = async (ext) => {
+      setBusyId(ext.id);
+      setError("");
+      const res = await window.electronAPI.setChromeExtensionEnabled(ext.id, !ext.enabled);
+      if (res?.error) setError(res.error);
+      else refresh();
+      setBusyId("");
+    };
+    const removeExt = async (ext) => {
+      setBusyId(ext.id);
+      setError("");
+      await window.electronAPI.removeChromeExtension(ext.id);
+      refresh();
+      setBusyId("");
+    };
+    return /* @__PURE__ */ import_react3.default.createElement("div", null, /* @__PURE__ */ import_react3.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 } }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "sw-row__desc", style: { margin: 0 } }, "Chrome extensions loaded into the browser. Installed paths are kept in userData and auto-loaded on startup."), /* @__PURE__ */ import_react3.default.createElement("button", { className: "sw-btn", onClick: loadNew, style: { marginLeft: 12, flexShrink: 0 } }, "+ Load Extension")), error && /* @__PURE__ */ import_react3.default.createElement("div", { style: { color: "#e06c75", fontSize: 12, marginBottom: 10 } }, error), loading ? /* @__PURE__ */ import_react3.default.createElement("div", { style: { color: "#555", fontSize: 12 } }, "Loading...") : list.length === 0 ? /* @__PURE__ */ import_react3.default.createElement("div", { style: { color: "#555", fontSize: 12, padding: 16, border: "1px dashed #333", borderRadius: 6 } }, 'No extensions installed. Click "Load Extension" and pick an unpacked extension folder (e.g. a folder with manifest.json), or use File \u2192 Load Extension\u2026 from the main window.') : list.map((ext) => /* @__PURE__ */ import_react3.default.createElement(
+      "div",
+      {
+        key: ext.id,
+        className: "sw-row",
+        style: { opacity: ext.enabled ? 1 : 0.55, alignItems: "center" }
+      },
+      /* @__PURE__ */ import_react3.default.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "sw-row__label", style: { marginBottom: 2 } }, ext.name), /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-row__desc", style: { margin: 0 } }, "v", ext.version, " \xB7 ", ext.id, ext.description ? ` \u2014 ${ext.description.slice(0, 90)}` : ""), ext.path && /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-row__desc", style: { margin: 0, color: "#777", fontSize: 10, wordBreak: "break-all" } }, ext.path)),
+      /* @__PURE__ */ import_react3.default.createElement("label", { className: "sw-toggle-row", style: { flexShrink: 0 } }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "sw-toggle-label", style: { minWidth: 64 } }, busyId === ext.id ? "..." : ext.enabled ? "Enabled" : "Disabled"), /* @__PURE__ */ import_react3.default.createElement(
+        "button",
+        {
+          className: `sw-toggle-btn${ext.enabled ? " sw-toggle-btn--on" : ""}`,
+          onClick: () => toggleEnabled(ext),
+          disabled: busyId === ext.id,
+          "aria-checked": ext.enabled,
+          role: "switch",
+          "aria-label": `Toggle ${ext.name}`
+        },
+        /* @__PURE__ */ import_react3.default.createElement("span", { className: "sw-toggle-thumb" })
+      )),
+      /* @__PURE__ */ import_react3.default.createElement(
+        "button",
+        {
+          className: "sw-btn sw-btn--danger",
+          onClick: () => removeExt(ext),
+          disabled: busyId === ext.id,
+          style: { flexShrink: 0, marginLeft: 8 }
+        },
+        "Remove"
+      )
+    )));
+  };
+  var ExtensionsPage_default = ExtensionsPage;
+
   // electron/renderer/components/Settings/SettingsWindow.jsx
   var NAV = [
-    { id: "editor", label: "Editor" }
+    { id: "editor", label: "Editor" },
+    { id: "extensions", label: "Extensions" }
     // Add more categories here — each needs a matching <Page> in the switch below
   ];
   var SettingsWindow = () => {
-    const [activePage, setActivePage] = (0, import_react3.useState)("editor");
+    const [activePage, setActivePage] = (0, import_react4.useState)("editor");
     const [settings, updateSettings, loading] = useSettings_default();
     const renderPage = () => {
-      if (loading) return /* @__PURE__ */ import_react3.default.createElement("div", { style: { color: "#555", fontSize: 12 } }, "Loading...");
+      if (loading) return /* @__PURE__ */ import_react4.default.createElement("div", { style: { color: "#555", fontSize: 12 } }, "Loading...");
       switch (activePage) {
         case "editor":
-          return /* @__PURE__ */ import_react3.default.createElement(EditorPage_default, { settings, onSave: updateSettings });
+          return /* @__PURE__ */ import_react4.default.createElement(EditorPage_default, { settings, onSave: updateSettings });
+        case "extensions":
+          return /* @__PURE__ */ import_react4.default.createElement(ExtensionsPage_default, null);
         default:
           return null;
       }
     };
     const pageTitle = NAV.find((n) => n.id === activePage)?.label ?? "";
-    return /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-shell" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-sidebar" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-sidebar__title" }, "Settings"), NAV.map((item) => /* @__PURE__ */ import_react3.default.createElement(
+    return /* @__PURE__ */ import_react4.default.createElement("div", { className: "sw-shell" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "sw-sidebar" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "sw-sidebar__title" }, "Settings"), NAV.map((item) => /* @__PURE__ */ import_react4.default.createElement(
       "div",
       {
         key: item.id,
@@ -21542,12 +21619,12 @@
         onClick: () => setActivePage(item.id)
       },
       item.label
-    ))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-content" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-content__header" }, /* @__PURE__ */ import_react3.default.createElement("span", { className: "sw-content__title" }, pageTitle)), /* @__PURE__ */ import_react3.default.createElement("div", { className: "sw-content__body" }, renderPage())));
+    ))), /* @__PURE__ */ import_react4.default.createElement("div", { className: "sw-content" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "sw-content__header" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "sw-content__title" }, pageTitle)), /* @__PURE__ */ import_react4.default.createElement("div", { className: "sw-content__body" }, renderPage())));
   };
   var SettingsWindow_default = SettingsWindow;
 
   // electron/renderer/settings-entry.jsx
-  import_client.default.createRoot(document.getElementById("settings-root")).render(/* @__PURE__ */ import_react4.default.createElement(SettingsWindow_default, null));
+  import_client.default.createRoot(document.getElementById("settings-root")).render(/* @__PURE__ */ import_react5.default.createElement(SettingsWindow_default, null));
 })();
 /*! Bundled license information:
 

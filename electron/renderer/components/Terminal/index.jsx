@@ -2,7 +2,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 
 let nextTerminalId = 1;
@@ -173,7 +172,6 @@ const TerminalPanel = ({ nodeId, config }) => {
 
       fit = new FitAddon();
       term.loadAddon(fit);
-      term.loadAddon(new WebLinksAddon());
 
       // elRef div is ALWAYS rendered (placeholder is an overlay), so it is
       // available from the first commit — no waiting required.

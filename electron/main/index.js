@@ -1378,11 +1378,10 @@ app.whenReady().then(async () => {
     // user never sees the jump/grow flicker.
     pwin.on("show", () => {
       if (suppressShow) { try { pwin.hide(); } catch {} }
-      kickSettle();
+      if (!settleShown) kickSettle();
     });
     pwin.on("resize", onLayoutChange);
     pwin.on("move", onLayoutChange);
-    pwin.once("ready-to-show", kickSettle);
     if (typeof popup.on === "function") {
       popup.on("resized", onLayoutChange);
       popup.on("moved", onLayoutChange);

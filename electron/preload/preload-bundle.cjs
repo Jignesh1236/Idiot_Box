@@ -154,6 +154,8 @@ var require_index = __commonJS({
       showTerminalTabContextMenu: () => ipcRenderer.invoke("terminal:tabContextMenu"),
       // ── Panel Add Menu ──────────────────────────────────────────────────────────
       showPanelAddMenu: () => ipcRenderer.invoke("panel:addMenu"),
+      // ── Port scanner ────────────────────────────────────────────────────────────
+      scanPorts: () => ipcRenderer.invoke("port:scan"),
       // ── Open URL in browser ───────────────────────────────────────────────────
       openUrl: (url) => ipcRenderer.invoke("open:url", url),
       // ── Project config (per-project tab state) ────────────────────────────────

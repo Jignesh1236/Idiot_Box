@@ -6,12 +6,16 @@ const PortManager = () => {
   const [scanning, setScanning] = useState(false);
   const ref = useRef(null);
 
-  const scanPorts = () => {
+  const scanPorts = async () => {
     setScanning(true);
-    window.electronAPI.onMenuEvent("panel:addMenu", (result) => {
+    try {
+      const result = await window.electronAPI.scanPorts();
       setPorts(result || []);
+    } catch {
+      setPorts([]);
+    } finally {
       setScanning(false);
-    });
+    }
   };
 
   useEffect(() => {
@@ -22,7 +26,7 @@ const PortManager = () => {
   }, []);
 
   const openInBrowser = (url) => {
-    window.electronAPI.openUrl(url);
+    window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url, config: { type: "browser", title: url, url } } }));
   };
 
   return (

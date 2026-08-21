@@ -5,12 +5,16 @@ const PortPanel = () => {
   const [ports, setPorts] = useState([]);
   const [scanning, setScanning] = useState(false);
 
-  const scanPorts = () => {
+  const scanPorts = async () => {
     setScanning(true);
-    window.electronAPI.onMenuEvent("panel:addMenu", (result) => {
+    try {
+      const result = await window.electronAPI.scanPorts();
       setPorts(result || []);
+    } catch {
+      setPorts([]);
+    } finally {
       setScanning(false);
-    });
+    }
   };
 
   useEffect(() => {
@@ -72,7 +76,7 @@ const PortPanel = () => {
               http://localhost:{port}
             </span>
             <button
-              onClick={() => window.electronAPI.openUrl(`http://localhost:${port}`)}
+              onClick={() => window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url: `http://localhost:${port}`, config: { type: "browser", title: `localhost:${port}`, url: `http://localhost:${port}` } } }))}
               style={{
                 background: "none", border: "none", color: "#0645ad", cursor: "pointer", fontSize: 11,
                 padding: 0,

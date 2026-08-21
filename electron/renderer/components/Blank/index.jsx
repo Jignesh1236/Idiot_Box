@@ -97,6 +97,45 @@ const PANEL_TYPES = [
     ),
     config: {},
   },
+  {
+    id: "portManager",
+    name: "Port Manager",
+    component: "portManager",
+    description: "Scan and open localhost development ports",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="4" width="12" height="8" rx="1.5" stroke="#569cd6" strokeWidth="1.2" fill="none" />
+        <path d="M6 8H10M8 6V10" stroke="#569cd6" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    ),
+    config: {},
+  },
+  {
+    id: "log",
+    name: "Log",
+    component: "logPanel",
+    description: "Application logs and output console",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+        <rect x="3" y="3" width="10" height="10" rx="1" stroke="#dcdcaa" strokeWidth="1.2" fill="none" />
+        <path d="M6 6H10M6 8H10M6 10H8" stroke="#dcdcaa" strokeWidth="1" strokeLinecap="round" />
+      </svg>
+    ),
+    config: {},
+  },
+  {
+    id: "port",
+    name: "Port Scanner",
+    component: "portPanel",
+    description: "Lightweight port scanner for localhost",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="5" stroke="#9cdcfe" strokeWidth="1.2" fill="none" />
+        <path d="M8 5V8L10.5 9.5" stroke="#9cdcfe" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    config: {},
+  },
 ];
 
 const BlankPanel = ({ nodeId, config }) => {

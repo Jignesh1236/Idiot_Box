@@ -970,6 +970,8 @@ function scanPorts() {
   });
 }
 
+ipcMain.handle("port:scan", async () => scanPorts());
+
 ipcMain.handle("panel:addMenu", async (event) => {
   const ports = await scanPorts();
   return new Promise((resolve) => {

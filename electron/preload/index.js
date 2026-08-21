@@ -144,6 +144,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ── Panel Add Menu ──────────────────────────────────────────────────────────
   showPanelAddMenu: () => ipcRenderer.invoke("panel:addMenu"),
 
+  // ── Port scanner ────────────────────────────────────────────────────────────
+  scanPorts: () => ipcRenderer.invoke("port:scan"),
+
   // ── Open URL in browser ───────────────────────────────────────────────────
   openUrl: (url) => ipcRenderer.invoke("open:url", url),
 

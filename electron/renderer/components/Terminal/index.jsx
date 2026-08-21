@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 
 let nextTerminalId = 1;
@@ -172,6 +173,21 @@ const TerminalPanel = ({ nodeId, config }) => {
 
       fit = new FitAddon();
       term.loadAddon(fit);
+      term.loadAddon(new WebLinksAddon((event, uri) => {
+        // Open localhost links inside the app's Browser panel, external links in OS browser
+        try {
+          if (uri.includes("localhost") || uri.includes("127.0.0.1") || uri.match(/^\d+\.\d+\.\d+\.\d+/)) {
+            window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url: uri, config: { type: "browser", title: "Browser", url: uri } } }));
+          } else if (/^https?:\/\//i.test(uri)) {
+            // For http(s) links, also open inside Browser panel to keep navigation isolated
+            window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url: uri, config: { type: "browser", title: "Browser", url: uri } } }));
+          } else {
+            window.electronAPI.openUrl(uri);
+          }
+        } catch {
+          try { window.electronAPI.openUrl(uri); } catch {}
+        }
+      }));
 
       // elRef div is ALWAYS rendered (placeholder is an overlay), so it is
       // available from the first commit — no waiting required.

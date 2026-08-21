@@ -431,6 +431,76 @@ const App = () => {
     return () => window.removeEventListener("browser:openSettings", handler);
   }, []);
 
+  // ── Navigation isolation: main window never navigates ──────────────────────
+  // All link clicks / history pushes / redirects stay in Browser panel or iframe.
+  useEffect(() => {
+    const clickHandler = (e) => {
+      const a = e.target.closest?.("a[href]");
+      if (!a) return;
+      if (a.closest("webview") || a.closest("iframe")) return;
+      const href = a.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("file://") || href.startsWith("data:")) return;
+      const url = a.href;
+      // treat localhost / ip / domain / http(s) as external -> Browser panel
+      if (/^https?:\/\//i.test(url) || url.includes("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(href) || /^[^\s]+\.[^\s]+/.test(href)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url, config: { type: "browser", title: "Browser", url } } }));
+      }
+    };
+    document.addEventListener("click", clickHandler, true);
+
+    const origPush = history.pushState.bind(history);
+    const origReplace = history.replaceState.bind(history);
+    const shouldIntercept = (url) => {
+      if (!url || typeof url !== "string") return false;
+      try {
+        const u = new URL(url, window.location.href);
+        if (u.protocol === "http:" || u.protocol === "https:" || u.protocol === "ppoo-file:") return true;
+        if (u.hostname === "localhost" || u.hostname === "127.0.0.1" || /^\d+\.\d+\.\d+\.\d+$/.test(u.hostname)) return true;
+      } catch {}
+      return false;
+    };
+    history.pushState = function(...args) {
+      const url = args[2];
+      if (shouldIntercept(url)) {
+        const abs = (()=>{ try{ return new URL(String(url), window.location.href).href; } catch{ return String(url); }})() ;
+        window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url: abs, config: { type: "browser", title: "Browser", url: abs } } }));
+        return;
+      }
+      return origPush(...args);
+    };
+    history.replaceState = function(...args) {
+      const url = args[2];
+      if (shouldIntercept(url)) {
+        const abs = (()=>{ try{ return new URL(String(url), window.location.href).href; } catch{ return String(url); }})() ;
+        window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url: abs, config: { type: "browser", title: "Browser", url: abs } } }));
+        return;
+      }
+      return origReplace(...args);
+    };
+
+    const origOpen = window.open;
+    window.open = function(url, target, features) {
+      if (url) {
+        const str = String(url);
+        if (/^https?:\/\//i.test(str) || str.includes("localhost") || /^[^\s]+\.[^\s]+/.test(str)) {
+          window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url: str, config: { type: "browser", title: "Browser", url: str } } }));
+          return null;
+        }
+      }
+      return origOpen ? origOpen.call(window, url, target, features) : null;
+    };
+
+    return () => {
+      document.removeEventListener("click", clickHandler, true);
+      history.pushState = origPush;
+      history.replaceState = origReplace;
+      window.open = origOpen;
+    };
+  }, []);
+
   // ── Open files in the Editor as flexlayout tabs ──────────────────────────
   useEffect(() => {
     const IMAGE_VIDEO_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".mp4", ".webm"];

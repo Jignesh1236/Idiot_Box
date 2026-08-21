@@ -122,6 +122,18 @@ var require_index = __commonJS({
         ipcRenderer.on("chrome:createTab", handler);
         return () => ipcRenderer.removeListener("chrome:createTab", handler);
       },
+      // ── Navigation isolation bridge: main -> renderer as window event ────────
+      _initNavIsolation: (() => {
+        try {
+          ipcRenderer.on("add-browser-panel", (_e, data) => {
+            const url = data?.url || data;
+            if (url) window.dispatchEvent(new CustomEvent("add-browser-panel", { detail: { url, config: { type: "browser", title: "Browser", url } } }));
+          });
+        } catch {
+        }
+        return () => {
+        };
+      })(),
       // ── Terminal ──────────────────────────────────────────────────────────────
       getProjectPath: () => ipcRenderer.invoke("terminal:getProjectPath"),
       openTerminal: (tabId, cwd, forceRestart) => ipcRenderer.invoke("terminal:open", { tabId, cwd, forceRestart: !!forceRestart }),

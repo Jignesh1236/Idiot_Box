@@ -1278,6 +1278,33 @@ function createWindow() {
 
   win.webContents.setBackgroundThrottling(false);
 
+  // ── Navigation isolation guard: main window must never navigate away from IDE ──
+  // All http/https/localhost/redirects/window.location/target="_blank" stay in their own view.
+  const safeForward = (url) => {
+    if (!url) return;
+    try {
+      const js = `window.dispatchEvent(new CustomEvent("add-browser-panel", {detail:{url: ${JSON.stringify(url)} }}))`;
+      win.webContents.executeJavaScript(js).catch(()=>{});
+    } catch {}
+    try { win.webContents.send("add-browser-panel", { url }); } catch {}
+  };
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("file://")) {
+      event.preventDefault();
+      if (/^(https?:|ppoo-file:|view-source:)/i.test(url) || url.startsWith("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(url) || /^[^\s]+\.[^\s]+/.test(url)) {
+        safeForward(url);
+      } else {
+        safeForward(url);
+      }
+    }
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && !url.startsWith("file://") && !url.startsWith("about:blank")) {
+      safeForward(url);
+    }
+    return { action: "deny" };
+  });
+
   // Register every browser webview as a chrome.tabs tab
   win.webContents.on("did-attach-webview", (_e, wc) => {
     lastGuestWc = wc; lastGuestWin = win;
@@ -1291,7 +1318,14 @@ function createWindow() {
   // TEMP ext-host self-check (remove later)
   const checkLog = path.join(process.env.TEMP || "/tmp", "opencode", "ppoo-check.log");
   const checkErr = path.join(process.env.TEMP || "/tmp", "opencode", "ppoo-console-errors.log");
-  win.webContents.on("console-message", (_e, level, message, line, sourceId) => {
+  // console-message new API (Electron 43+): (event, params) where params = {level, message, lineNumber, sourceId}
+  win.webContents.on("console-message", (...args) => {
+    let level, message, line, sourceId;
+    if (args.length === 2 && args[1] && typeof args[1] === "object") {
+      ({ level, message, lineNumber: line, sourceId } = args[1]);
+    } else {
+      [, level, message, line, sourceId] = args;
+    }
     if (level >= 1) {
       try { fs.appendFileSync(checkErr, `[${level}] ${message} (${sourceId}:${line})\n`); } catch {}
     }

@@ -68,7 +68,7 @@ const BrowserPanel = (props) => {
     }
     setNavUrl(fixed); setInputValue(fixed); setDisplayUrl(fixed); setLockOpen(false);
     if (webviewRef.current) {
-      try { webviewRef.current.loadURL(fixed); } catch {}
+      try { const p = webviewRef.current.loadURL(fixed); if (p && p.catch) p.catch(() => {}); } catch {}
     }
   }, []);
 
@@ -88,11 +88,12 @@ const BrowserPanel = (props) => {
     wv.addEventListener("did-stop-loading",     () => setIsLoading(false));
     wv.addEventListener("did-fail-load", (e) => {
       setIsLoading(false);
+      // -3 = ERR_ABORTED (e.g. localhost dev server not running or navigation cancelled) — ignore silently
       if (e.isMainFrame && e.errorCode !== -3) {
         const validatedUrl = wv.getURL() || navUrl;
         if (validatedUrl.startsWith("https://localhost") || validatedUrl.startsWith("https://127.0.0.1")) {
           const httpUrl = validatedUrl.replace("https://", "http://");
-          try { wv.loadURL(httpUrl); } catch {}
+          try { const p = wv.loadURL(httpUrl); if (p && p.catch) p.catch(() => {}); } catch {}
         }
       }
     });
@@ -113,27 +114,27 @@ const BrowserPanel = (props) => {
     // ("__IBX_NAV__b"/"__IBX_NAV__f") caught below in page-title-updated.
     // HTML file drag-and-drop → "__IBX_DROP__<path>" marker → opened via ppoo-file://
     const INJECT_SCRIPT = `(() => {
-      const mark = (b) => { document.title = "__IBX_NAV__" + b; };
-      window.addEventListener("mouseup", (e) => {
-        if (e.button === 3) mark("b");
-        else if (e.button === 4) mark("f");
-      }, true);
-      const dropPath = (dt) => {
-        try {
-          const uri = dt.getData("text/uri-list");
-          const m = uri && uri.match(/^file:\/\/\/([^\r\n]+)/m);
-          if (m) return decodeURIComponent(m[1]).replace(/\//g, "\\\\");
-          if (dt.files && dt.files[0] && dt.files[0].path) return dt.files[0].path;
-        } catch {}
-        return "";
-      };
-      window.addEventListener("dragover", (e) => { e.preventDefault(); }, true);
-      window.addEventListener("drop", (e) => {
-        e.preventDefault();
-        const p = dropPath(e.dataTransfer);
-        if (p) document.title = "__IBX_DROP__" + p;
-      }, true);
-      return true;
+      try {
+        var mark = function(b){ try{ document.title="__IBX_NAV__"+b; }catch(e){} };
+        try{ window.addEventListener("mouseup", function(e){ try{ if(e.button===3) mark("b"); else if(e.button===4) mark("f"); }catch(e){} }, true); }catch(e){}
+        try{
+          window.addEventListener("dragover", function(e){ try{ e.preventDefault(); }catch(e){} }, true);
+          window.addEventListener("drop", function(e){
+            try{ e.preventDefault(); }catch(e){}
+            var p=""; try{
+              var dt=e.dataTransfer;
+              if(dt){
+                var uri=""; try{ uri=dt.getData("text/uri-list"); }catch(e){}
+                var m=uri && uri.match(/^file:\\/\\/\\/([^\\r\\n]+)/m);
+                if(m) p=decodeURIComponent(m[1]);
+                else if(dt.files && dt.files[0] && dt.files[0].path) p=dt.files[0].path;
+              }
+            }catch(e){}
+            if(p){ try{ document.title="__IBX_DROP__"+p; }catch(e){} }
+          }, true);
+        }catch(e){}
+        return true;
+      } catch(e){ return true; }
     })()`;
     const injectGuest = (attempt) => {
       if (attempt > 3) return;
@@ -258,6 +259,55 @@ const BrowserPanel = (props) => {
         default: break;
       }
     });
+
+    // ── Navigation isolation: keep all popups / _blank / window.open inside app ──
+    // Without this, target="_blank" and window.open would create a new Electron
+    // BrowserWindow or navigate the main window; we intercept and open as a new
+    // flexlayout Browser tab (panel3) staying inside the IDE.
+    const openInNewTab = (url) => {
+      if (!url) return;
+      try {
+        const m = window.__flexModel?.current;
+        const nid = nodeIdRef.current;
+        if (m) {
+          const tabNode = m.getNodeById(nid);
+          const tabset = tabNode?.getParent();
+          if (tabset) {
+            m.doAction(Actions.addNode({
+              type: "tab", component: "panel3", name: "New Tab", enableClose: true,
+              config: { type: "browser", title: "New Tab", url },
+            }, tabset.getId(), DockLocation.CENTER));
+            return;
+          }
+        }
+      } catch {}
+      // fallback: navigate current webview if flexlayout not available
+      try { wv.loadURL(url); } catch {}
+    };
+
+    const handleNewWindow = (e) => {
+      try { e.preventDefault(); } catch {}
+      const url = e.url || e.params?.url || "";
+      if (url) openInNewTab(url);
+    };
+
+    // Electron <webview> fires "new-window" for target="_blank" and window.open
+    // Newer versions may fire "did-create-window" — handle both.
+    try { wv.addEventListener("new-window", handleNewWindow); } catch {}
+    try { wv.addEventListener("did-create-window", handleNewWindow); } catch {}
+
+    // Fallback: some webview implementations use window-open with details
+    // Add a JS-level guard inside guest to catch redirects that try to use
+    // window.location = external URL via top navigation. The main process
+    // will-navigate guard (electron/main/index.js) also blocks top-level nav.
+    try {
+      wv.addEventListener("will-navigate", (e) => {
+        const url = e.url || "";
+        // Allow navigation inside webview for http/https and ppoo-file/view-source
+        if (/^(https?:|ppoo-file:|view-source:|data:|blob:|about:)/i.test(url)) return;
+        // Block exotic top-navigation attempts
+      });
+    } catch {}
 
     setIsLoading(false);
   };

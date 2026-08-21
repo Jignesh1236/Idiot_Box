@@ -39,6 +39,7 @@
     "@codingame/monaco-vscode-yaml-default-extension": "^36.0.0",
     "@monaco-editor/react": "^4.7.0",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
     "electron-chrome-extensions": "^4.9.0",

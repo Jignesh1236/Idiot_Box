@@ -76,7 +76,34 @@ var require_index = __commonJS({
       },
       // ── Menu events ────────────────────────────────────────────────────────────
       onMenuEvent: (channel, callback) => {
-        const valid = ["menu:openProject", "menu:newProject", "menu:saveProject", "menu:closeProject", "menu:resetLayout", "menu:saveFile", "menu:saveFileAs", "menu:toggleAutoSave", "menu:commandPalette", "menu:loadExtension"];
+        const valid = [
+          "menu:openProject",
+          "menu:newProject",
+          "menu:saveProject",
+          "menu:closeProject",
+          "menu:resetLayout",
+          "menu:saveFile",
+          "menu:saveFileAs",
+          "menu:toggleAutoSave",
+          "menu:commandPalette",
+          "menu:loadExtension",
+          "menu:undo",
+          "menu:redo",
+          "menu:cut",
+          "menu:copy",
+          "menu:paste",
+          "menu:selectAll",
+          "menu:find",
+          "menu:findNext",
+          "menu:findPrevious",
+          "menu:replace",
+          "menu:fullscreen",
+          "menu:newTerminal",
+          "menu:splitTerminalRight",
+          "menu:splitTerminalDown",
+          "menu:clearTerminal",
+          "menu:killTerminal"
+        ];
         if (!valid.includes(channel)) return () => {
         };
         const handler = (_e, payload) => callback(payload);

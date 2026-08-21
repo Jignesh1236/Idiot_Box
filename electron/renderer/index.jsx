@@ -262,25 +262,30 @@ const App = () => {
     return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Command palette → app actions ───────────────────────────────────────
+  // ── Menu events from main process ───────────────────────────────────────
   useEffect(() => {
-    const handler = (e) => {
-      const cmd = e.detail?.cmd;
-      if (!cmd) return;
-      if (cmd === "newProject") window.electronAPI.openFolder();
-      else if (cmd === "saveProject") doSaveProjectTabs();
-      else if (cmd === "closeProject") {
-        doSaveProjectTabs();
-        currentProjectRef.current = null;
-        window.__currentProjectPath = null;
-        window.dispatchEvent(new CustomEvent("project:closed"));
-      } else if (cmd === "resetLayout") {
-        modelRef.current = Model.fromJson(DEFAULT_JSON);
-        setTick((t) => t + 1);
-      }
-    };
-    window.addEventListener("menu:action", handler);
-    return () => window.removeEventListener("menu:action", handler);
+    const handlers = [
+      window.electronAPI.onMenuEvent("menu:undo", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "undo" } }))),
+      window.electronAPI.onMenuEvent("menu:redo", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "redo" } }))),
+      window.electronAPI.onMenuEvent("menu:cut", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "cut" } }))),
+      window.electronAPI.onMenuEvent("menu:copy", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "copy" } }))),
+      window.electronAPI.onMenuEvent("menu:paste", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "paste" } }))),
+      window.electronAPI.onMenuEvent("menu:selectAll", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "selectAll" } }))),
+      window.electronAPI.onMenuEvent("menu:find", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "find" } }))),
+      window.electronAPI.onMenuEvent("menu:findNext", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "findNext" } }))),
+      window.electronAPI.onMenuEvent("menu:findPrevious", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "findPrevious" } }))),
+      window.electronAPI.onMenuEvent("menu:replace", () => window.dispatchEvent(new CustomEvent("editor:command", { detail: { cmd: "replace" } }))),
+      window.electronAPI.onMenuEvent("menu:fullscreen", () => {
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        else document.documentElement.requestFullscreen().catch(() => {});
+      }),
+      window.electronAPI.onMenuEvent("menu:newTerminal", () => window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { location: "BOTTOM" } }))),
+      window.electronAPI.onMenuEvent("menu:splitTerminalRight", () => window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { location: "RIGHT" } }))),
+      window.electronAPI.onMenuEvent("menu:splitTerminalDown", () => window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { location: "BOTTOM" } }))),
+      window.electronAPI.onMenuEvent("menu:clearTerminal", () => window.dispatchEvent(new CustomEvent("terminal:command", { detail: { cmd: "clear" } }))),
+      window.electronAPI.onMenuEvent("menu:killTerminal", () => window.dispatchEvent(new CustomEvent("terminal:command", { detail: { cmd: "kill" } }))),
+    ];
+    return () => handlers.forEach((u) => u());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

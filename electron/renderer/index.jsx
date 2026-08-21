@@ -15,6 +15,7 @@ import ComponentPreview from "./components/ComponentPreview/index.jsx";
 import CanvasPanel from "./components/Canvas/index.jsx";
 import CommandPalette from "./components/CommandPalette/index.jsx";
 import PortPanel from "./components/Port/index.jsx";
+import LogPanel from "./components/Log/index.jsx";
 
 const DEFAULT_JSON = {
   global: {
@@ -47,6 +48,7 @@ const DEFAULT_JSON = {
             children: [
               { type: "tab", name: "Project", component: "projectPanel" },
               { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
+              { type: "tab", name: "Log", component: "logPanel" },
             ],
           },
         ],
@@ -69,6 +71,7 @@ const factory = (node) => {
     case "blank":             return <BlankPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "componentPreview":  return <ComponentPreview config={node.getConfig()} nodeId={node.getId()} />;
     case "canvas":            return <CanvasPanel config={node.getConfig()} nodeId={node.getId()} />;
+    case "logPanel":          return <LogPanel />;
     default:                  return null;
   }
 };

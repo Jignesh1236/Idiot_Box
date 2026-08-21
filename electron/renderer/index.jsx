@@ -17,6 +17,8 @@ import CommandPalette from "./components/CommandPalette/index.jsx";
 import PortPanel from "./components/Port/index.jsx";
 import LogPanel from "./components/Log/index.jsx";
 
+import PortManager from "./components/PortManager/index.jsx";
+
 const DEFAULT_JSON = {
   global: {
     tabEnableClose: false,
@@ -58,6 +60,12 @@ const DEFAULT_JSON = {
         type: "tabset", weight: 25, id: "editor-tabset",
         children: [{ type: "tab", name: "Editor", component: "editor" }],
       },
+      {
+        type: "row", weight: 20,
+        children: [
+          { type: "tab", name: "Port Manager", component: "portManager" },
+        ],
+      },
     ],
   },
 };
@@ -74,6 +82,7 @@ const factory = (node) => {
     case "canvas":            return <CanvasPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "logPanel":          return <LogPanel />;
     case "portPanel":         return <PortPanel />;
+    case "portManager":       return <PortManager />;
     default:                  return null;
   }
 };

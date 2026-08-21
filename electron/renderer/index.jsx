@@ -49,6 +49,7 @@ const DEFAULT_JSON = {
               { type: "tab", name: "Project", component: "projectPanel" },
               { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
               { type: "tab", name: "Log", component: "logPanel" },
+              { type: "tab", name: "Ports", component: "portPanel" },
             ],
           },
         ],
@@ -72,6 +73,7 @@ const factory = (node) => {
     case "componentPreview":  return <ComponentPreview config={node.getConfig()} nodeId={node.getId()} />;
     case "canvas":            return <CanvasPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "logPanel":          return <LogPanel />;
+    case "portPanel":         return <PortPanel />;
     default:                  return null;
   }
 };

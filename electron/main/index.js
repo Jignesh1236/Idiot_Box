@@ -1346,6 +1346,7 @@ app.whenReady().then(async () => {
     let settleTimer = null;
     let settleShown = false;
     let suppressShow = true;
+    let contentLoaded = false;
 
     const clamp = () => {
       try {
@@ -1373,20 +1374,27 @@ app.whenReady().then(async () => {
 
     const onLayoutChange = () => { clamp(); kickSettle(); };
 
-    // The library shows the popup on the first size report, then keeps
-    // resizing as content loads. Hide it until it stops resizing so the
-    // user never sees the jump/grow flicker.
+    // Hide the initial premature show (library shows on first preferred-size-changed)
     pwin.on("show", () => {
       if (suppressShow) { try { pwin.hide(); } catch {} }
       if (!settleShown) kickSettle();
     });
+
+    // Wait for content to fully load, then wait for size to stabilize
+    pwin.webContents.on("did-finish-load", () => {
+      contentLoaded = true;
+      if (!settleShown) kickSettle();
+    });
+
+    // Also track resize/move for any post-load adjustments
     pwin.on("resize", onLayoutChange);
     pwin.on("move", onLayoutChange);
     if (typeof popup.on === "function") {
       popup.on("resized", onLayoutChange);
       popup.on("moved", onLayoutChange);
     }
-    // Safety net: never keep the popup hidden indefinitely.
+
+    // Safety net: show anyway after 1s
     setTimeout(showSettled, 1000);
   });
 

@@ -134,6 +134,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ── Panel Add Menu ──────────────────────────────────────────────────────────
   showPanelAddMenu: () => ipcRenderer.invoke("panel:addMenu"),
 
+  // ── Open URL in browser ───────────────────────────────────────────────────
+  openUrl: (url) => ipcRenderer.invoke("open:url", url),
+
   // ── Project config (per-project tab state) ────────────────────────────────
   readProjectTabs:  (rootPath)        => ipcRenderer.invoke("projectConfig:readTabs",  rootPath),
   writeProjectTabs: (rootPath, data)  => ipcRenderer.invoke("projectConfig:writeTabs", rootPath, data),

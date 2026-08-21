@@ -14,6 +14,7 @@ import BlankPanel from "./components/Blank/index.jsx";
 import ComponentPreview from "./components/ComponentPreview/index.jsx";
 import CanvasPanel from "./components/Canvas/index.jsx";
 import CommandPalette from "./components/CommandPalette/index.jsx";
+import PortPanel from "./components/Port/index.jsx";
 
 const DEFAULT_JSON = {
   global: {
@@ -292,6 +293,17 @@ const App = () => {
     const handler = () => { if (modelRef.current) modelRef.current.doAction(Actions.selectTab("terminal-tab")); };
     window.addEventListener("focus-terminal-tab", handler);
     return () => window.removeEventListener("focus-terminal-tab", handler);
+  }, []);
+
+  // Open URL in default browser
+  useEffect(() => {
+    const handler = (e) => {
+      const url = e.detail?.url;
+      if (!url) return;
+      window.dispatchEvent(new CustomEvent("open-in-browser", { detail: { url } }));
+    };
+    window.addEventListener("open-in-browser", handler);
+    return () => window.removeEventListener("open-in-browser", handler);
   }, []);
 
   // Add/Split terminal panel in flexlayout

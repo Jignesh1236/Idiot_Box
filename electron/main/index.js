@@ -1240,7 +1240,7 @@ function buildMenu() {
         { type: "separator" },
         { label: "Reset Window", accelerator: "CmdOrCtrl+R", click: () => sendToRenderer("menu:resetLayout", null) },
         { type: "separator" },
-        { label: "Close Window", accelerator: "CmdOrCtrl+W", role: "close" },
+        { label: "Close Window", role: "close" },
       ],
     },
     {
@@ -1305,12 +1305,23 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // ── Fix Ctrl+W: only close project, never close window/app ───
+  const handleCtrlW = (event, input) => {
+    if ((input.control || input.meta) && String(input.key || "").toLowerCase() === "w" && input.type === "keyDown" && !input.shift && !input.alt) {
+      try { event.preventDefault(); } catch {}
+      lastProjectPath = null;
+      sendToRenderer("menu:closeProject", null);
+    }
+  };
+  win.webContents.on("before-input-event", handleCtrlW);
+
   // Register every browser webview as a chrome.tabs tab
   win.webContents.on("did-attach-webview", (_e, wc) => {
     lastGuestWc = wc; lastGuestWin = win;
     try { chromeExt?.addTab(wc, win); } catch {}
     wc.on("did-navigate", () => { try { chromeExt?.selectTab(wc); } catch {} });
     wc.on("focus",       () => { try { chromeExt?.selectTab(wc); } catch {} });
+    try { wc.on("before-input-event", handleCtrlW); } catch {}
     const pending = pendingCreateTabs.shift();
     if (pending) pending.resolve([wc, win]);
   });

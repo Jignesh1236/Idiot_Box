@@ -501,6 +501,30 @@ const App = () => {
     };
   }, []);
 
+  // ── Fix Ctrl+W: only close project, never close window/app ───
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && String(e.key || "").toLowerCase() === "w" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === "function") try { e.stopImmediatePropagation(); } catch {}
+        try {
+          // Mimic handleClose: clear current project and notify
+          currentProjectRef.current = null;
+          window.__currentProjectPath = null;
+          window.dispatchEvent(new CustomEvent("project:closed"));
+        } catch {}
+        return false;
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    document.addEventListener("keydown", handler, true);
+    return () => {
+      window.removeEventListener("keydown", handler, true);
+      document.removeEventListener("keydown", handler, true);
+    };
+  }, []);
+
   // ── Open files in the Editor as flexlayout tabs ──────────────────────────
   useEffect(() => {
     const IMAGE_VIDEO_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".mp4", ".webm"];

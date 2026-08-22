@@ -123,19 +123,6 @@ const PANEL_TYPES = [
     ),
     config: {},
   },
-  {
-    id: "port",
-    name: "Port Scanner",
-    component: "portPanel",
-    description: "Lightweight port scanner for localhost",
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="5" stroke="#9cdcfe" strokeWidth="1.2" fill="none" />
-        <path d="M8 5V8L10.5 9.5" stroke="#9cdcfe" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-    config: {},
-  },
 ];
 
 const BlankPanel = ({ nodeId, config }) => {

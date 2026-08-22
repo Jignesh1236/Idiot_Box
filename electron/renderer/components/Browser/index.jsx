@@ -44,6 +44,25 @@ const BrowserPanel = (props) => {
   // Keep nodeIdRef current (nodeId itself doesn't change but keep defensive)
   useEffect(() => { nodeIdRef.current = nodeId; }, [nodeId]);
 
+  // Track last Browser group — so links from terminal/port/preview open in same group
+  useEffect(() => {
+    try {
+      const m = window.__flexModel?.current;
+      if (m && nodeId) {
+        const tabNode = m.getNodeById(nodeId);
+        const tabset = tabNode?.getParent();
+        if (tabset) {
+          const id = tabset.getId();
+          window.__lastBrowserTabsetId = id;
+          // Also try to sync with main's ref if available (via global)
+          if (window.__flexModel) {
+            // no direct access to lastBrowserTabsetRef, but global is enough
+          }
+        }
+      }
+    } catch {}
+  }, [nodeId]);
+
   // ── Security display ────────────────────────────────────────────────────────
   let hostname = "", protocol = "";
   try { const u = new URL(displayUrl); hostname = u.hostname; protocol = u.protocol; } catch {}
@@ -102,12 +121,44 @@ const BrowserPanel = (props) => {
       setInputValue(cur); setDisplayUrl(cur);
       try { setCanGoBack(wv.canGoBack()); setCanGoForward(wv.canGoForward()); } catch {}
       syncActionTab();
+      try {
+        const m = window.__flexModel?.current;
+        const nid = nodeIdRef.current;
+        if (m && nid) {
+          const tabNode = m.getNodeById(nid);
+          const tabset = tabNode?.getParent();
+          if (tabset) window.__lastBrowserTabsetId = tabset.getId();
+        }
+      } catch {}
     });
     wv.addEventListener("did-navigate-in-page", () => {
       const cur = wv.getURL();
       setInputValue(cur); setDisplayUrl(cur);
       try { setCanGoBack(wv.canGoBack()); setCanGoForward(wv.canGoForward()); } catch {}
+      try {
+        const m = window.__flexModel?.current;
+        const nid = nodeIdRef.current;
+        if (m && nid) {
+          const tabNode = m.getNodeById(nid);
+          const tabset = tabNode?.getParent();
+          if (tabset) window.__lastBrowserTabsetId = tabset.getId();
+        }
+      } catch {}
     });
+    // Keep last Browser group up to date when webview gains focus
+    try {
+      wv.addEventListener("focus", () => {
+        try {
+          const m = window.__flexModel?.current;
+          const nid = nodeIdRef.current;
+          if (m && nid) {
+            const tabNode = m.getNodeById(nid);
+            const tabset = tabNode?.getParent();
+            if (tabset) window.__lastBrowserTabsetId = tabset.getId();
+          }
+        } catch {}
+      });
+    } catch {}
 
     // Mouse back/forward buttons (XButtons) inside the page → navigation.
     // The guest page cannot reach us directly, so we relay via a title marker
@@ -268,15 +319,52 @@ const BrowserPanel = (props) => {
       if (!url) return;
       try {
         const m = window.__flexModel?.current;
-        const nid = nodeIdRef.current;
         if (m) {
-          const tabNode = m.getNodeById(nid);
-          const tabset = tabNode?.getParent();
-          if (tabset) {
+          let targetTabsetId = null;
+          // 1) Last Browser group (global)
+          const lastId = window.__lastBrowserTabsetId;
+          if (lastId) {
+            try {
+              const n = m.getNodeById(lastId);
+              if (n && n.getType() === "tabset") targetTabsetId = lastId;
+            } catch {}
+          }
+          // 2) Biggest window fallback
+          if (!targetTabsetId) {
+            try {
+              let biggest = null;
+              let maxArea = -1;
+              const walk = (node) => {
+                if (node.getType() === "tabset") {
+                  let area = 0;
+                  try { const r = node.getRect(); if (r) area = r.width * r.height; } catch {}
+                  const cnt = node.getChildren()?.length || 0;
+                  if (area > 0) {
+                    if (area > maxArea) { maxArea = area; biggest = node.getId(); }
+                  } else if (cnt > 0 && !biggest) {
+                    biggest = node.getId();
+                  }
+                  if (!biggest) biggest = node.getId();
+                }
+                node.getChildren()?.forEach(walk);
+              };
+              walk(m.getRoot());
+              targetTabsetId = biggest;
+            } catch {}
+          }
+          // 3) Fallback to current Browser's parent
+          if (!targetTabsetId) {
+            const nid = nodeIdRef.current;
+            const tabNode = m.getNodeById(nid);
+            const tabset = tabNode?.getParent();
+            if (tabset) targetTabsetId = tabset.getId();
+          }
+          if (targetTabsetId) {
+            try { window.__lastBrowserTabsetId = targetTabsetId; } catch {}
             m.doAction(Actions.addNode({
               type: "tab", component: "panel3", name: "New Tab", enableClose: true,
               config: { type: "browser", title: "New Tab", url },
-            }, tabset.getId(), DockLocation.CENTER));
+            }, targetTabsetId, DockLocation.CENTER));
             return;
           }
         }

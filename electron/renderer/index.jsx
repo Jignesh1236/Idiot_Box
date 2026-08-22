@@ -51,7 +51,6 @@ const DEFAULT_JSON = {
               { type: "tab", name: "Project", component: "projectPanel" },
               { type: "tab", name: "Terminal", component: "terminal", id: "terminal-tab" },
               { type: "tab", name: "Log", component: "logPanel" },
-              { type: "tab", name: "Ports", component: "portPanel" },
             ],
           },
         ],

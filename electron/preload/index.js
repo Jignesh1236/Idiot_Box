@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readDir:     (dir)   => ipcRenderer.invoke("fs:readDir",    dir),
   readDirAll:  (dir)   => ipcRenderer.invoke("fs:readDirAll", dir),
   stat:        (p)     => ipcRenderer.invoke("fs:stat",       p),
+  findFiles:   (rootPath, query, limit) => ipcRenderer.invoke("fs:findFiles", rootPath, query, limit),
+  searchText:  (rootPath, query, limit) => ipcRenderer.invoke("fs:searchText", rootPath, query, limit),
 
   // ── File operations ────────────────────────────────────────────────────────
   newFolder:        (parentPath, name)          => ipcRenderer.invoke("fs:newFolder",  { parentPath, name }),
@@ -156,6 +158,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ── Project config (per-project tab state) ────────────────────────────────
   readProjectTabs:  (rootPath)        => ipcRenderer.invoke("projectConfig:readTabs",  rootPath),
   writeProjectTabs: (rootPath, data)  => ipcRenderer.invoke("projectConfig:writeTabs", rootPath, data),
+
+  // ── Git ─────────────────────────────────────────────────────────────────────
+  gitStatus:  (rootPath)             => ipcRenderer.invoke("git:status", rootPath),
+  gitDiff:    (rootPath, filePath)   => ipcRenderer.invoke("git:diff", rootPath, filePath),
+  gitDiffAll: (rootPath)             => ipcRenderer.invoke("git:diffAll", rootPath),
 
   // ── Canvas (Visual Project Map) ────────────────────────────────────────────
   scanCanvas:        (rootPath) => ipcRenderer.invoke("canvas:scan",        rootPath),

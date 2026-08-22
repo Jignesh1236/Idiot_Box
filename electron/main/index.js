@@ -225,6 +225,176 @@ ipcMain.handle("fs:readDirAll", async (_e, dirPath) => {
   } catch { return []; }
 });
 
+// ─── File finder (Ctrl+P) and text search (Ctrl+Shift+F) ───────────────────────
+const FIND_IGNORE_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".nuxt", "out", "coverage", ".cache", ".parcel-cache", ".turbo", ".vscode", ".idea"]);
+const FIND_IGNORE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".mp4", ".webm", ".avi", ".mov", ".mkv", ".woff", ".woff2", ".ttf", ".eot", ".zip", ".tar", ".gz", ".pdf", ".exe", ".dll"]);
+function shouldIgnoreFile(name, isDir) {
+  if (name.startsWith(".")) return name !== ".env" && name !== ".env.example";
+  if (isDir) return FIND_IGNORE_DIRS.has(name);
+  const ext = path.extname(name).toLowerCase();
+  return FIND_IGNORE_EXTS.has(ext);
+}
+ipcMain.handle("fs:findFiles", async (_e, rootPath, query = "", limit = 100) => {
+  if (!rootPath || !fs.existsSync(rootPath)) return [];
+  const q = String(query || "").toLowerCase().trim();
+  const results = [];
+  const stack = [rootPath];
+  const gitignore = (() => {
+    try {
+      const gi = fs.readFileSync(path.join(rootPath, ".gitignore"), "utf8");
+      return gi.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#")).map((l) => l.replace(/\/$/, ""));
+    } catch { return []; }
+  })();
+  const isIgnoredByGitignore = (rel) => gitignore.some((pat) => {
+    if (pat.includes("*")) {
+      const re = new RegExp("^" + pat.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+      return re.test(rel) || re.test(path.basename(rel));
+    }
+    return rel === pat || rel.startsWith(pat + "/") || path.basename(rel) === pat;
+  });
+  while (stack.length && results.length < limit * 3) {
+    const dir = stack.pop();
+    let entries = [];
+    try { entries = fs.readdirSync(toLongPath(dir), { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (shouldIgnoreFile(e.name, e.isDirectory())) continue;
+      const full = path.join(dir, e.name);
+      const rel = path.relative(rootPath, full).replace(/\\/g, "/");
+      if (isIgnoredByGitignore(rel)) continue;
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else {
+        if (!q || rel.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)) {
+          results.push({ path: full, rel, name: e.name });
+          if (results.length >= limit) break;
+        } else if (q) {
+          // Fuzzy: check if query chars appear in order
+          let qi = 0;
+          const nameLow = e.name.toLowerCase();
+          for (let i = 0; i < nameLow.length && qi < q.length; i++) if (nameLow[i] === q[qi]) qi++;
+          if (qi === q.length) results.push({ path: full, rel, name: e.name });
+        }
+      }
+    }
+  }
+  // Sort by relevance: exact name match first, then rel, then alphabetical
+  results.sort((a, b) => {
+    const aName = a.name.toLowerCase(), bName = b.name.toLowerCase();
+    const aExact = aName === q, bExact = bName === q;
+    if (aExact !== bExact) return aExact ? -1 : 1;
+    const aStarts = aName.startsWith(q), bStarts = bName.startsWith(q);
+    if (aStarts !== bStarts) return aStarts ? -1 : 1;
+    return a.rel.localeCompare(b.rel);
+  });
+  return results.slice(0, limit);
+});
+
+ipcMain.handle("fs:searchText", async (_e, rootPath, query, limit = 200) => {
+  if (!rootPath || !query || !query.trim()) return [];
+  const q = String(query).trim();
+  if (q.length < 2) return [];
+  // Try ripgrep first
+  const tryRg = () => new Promise((resolve) => {
+    const { spawn } = require("child_process");
+    const rg = spawn("rg", ["--no-heading", "--line-number", "--color", "never", "--max-count", String(limit), "--glob", "!.git/*", "--glob", "!node_modules/*", "-i", q, rootPath], { timeout: 8000, windowsHide: true });
+    let out = "";
+    let err = "";
+    rg.stdout.on("data", (d) => { out += d.toString(); if (out.length > 500000) rg.kill(); });
+    rg.stderr.on("data", (d) => { err += d.toString(); });
+    rg.on("error", () => resolve(null));
+    rg.on("close", (code) => {
+      if (code !== 0 && code !== 1 && !out) return resolve(null);
+      const results = [];
+      for (const line of out.split("\n")) {
+        if (!line.trim()) continue;
+        const m = line.match(/^([^:]+):(\d+):(.*)$/);
+        if (m) {
+          const file = m[1];
+          const rel = path.relative(rootPath, file).replace(/\\/g, "/");
+          if (rel.includes("node_modules") || rel.startsWith(".git/")) continue;
+          results.push({ path: file, rel, line: parseInt(m[2], 10), text: m[3].trim().slice(0, 300), preview: m[3].trim().slice(0, 120) });
+          if (results.length >= limit) break;
+        }
+      }
+      resolve(results);
+    });
+    setTimeout(() => { try { rg.kill(); } catch {}; resolve(null); }, 7500);
+  });
+  const rgRes = await tryRg();
+  if (rgRes && rgRes.length) return rgRes;
+  // Fallback: Node fs walk + grep
+  const results = [];
+  const stack = [rootPath];
+  const qLower = q.toLowerCase();
+  while (stack.length && results.length < limit) {
+    const dir = stack.pop();
+    let entries = [];
+    try { entries = fs.readdirSync(toLongPath(dir), { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (shouldIgnoreFile(e.name, e.isDirectory())) continue;
+      const full = path.join(dir, e.name);
+      const rel = path.relative(rootPath, full).replace(/\\/g, "/");
+      if (rel.includes("node_modules") || rel.startsWith(".git/")) continue;
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else {
+        const ext = path.extname(e.name).toLowerCase();
+        if ([".json", ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".scss", ".py", ".md", ".txt", ".yaml", ".yml", ".xml", ".php", ".rs", ".go", ".java", ".c", ".cpp", ".h"].includes(ext) || !ext) {
+          try {
+            const content = fs.readFileSync(toLongPath(full), "utf8");
+            const lines = content.split("\n");
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].toLowerCase().includes(qLower)) {
+                results.push({ path: full, rel, line: i + 1, text: lines[i].trim().slice(0, 300), preview: lines[i].trim().slice(0, 120) });
+                if (results.length >= limit) break;
+              }
+            }
+          } catch {}
+        }
+        if (results.length >= limit) break;
+      }
+    }
+  }
+  return results.slice(0, limit);
+});
+
+// ─── Git helpers ───────────────────────────────────────────────────────────────
+ipcMain.handle("git:status", async (_e, rootPath) => {
+  if (!rootPath) return [];
+  const { exec } = require("child_process");
+  return new Promise((resolve) => {
+    exec('git status --porcelain -uall', { cwd: rootPath, timeout: 4000, windowsHide: true }, (err, stdout) => {
+      if (err || !stdout) return resolve([]);
+      const out = [];
+      for (const line of stdout.split("\n")) {
+        if (!line.trim()) continue;
+        const x = line.slice(0, 1), y = line.slice(1, 2);
+        const file = line.slice(3).trim().replace(/^"(.*)"$/, "$1");
+        const status = (x + y).trim() || "??";
+        out.push({ status, x, y, path: path.join(rootPath, file), rel: file });
+      }
+      resolve(out);
+    });
+  });
+});
+ipcMain.handle("git:diff", async (_e, rootPath, filePath) => {
+  if (!rootPath || !filePath) return "";
+  try {
+    const rel = path.relative(rootPath, filePath).replace(/\\/g, "/");
+    const { execSync } = require("child_process");
+    const out = execSync(`git diff --unified=0 -- "${rel.replace(/"/g, '\\"')}"`, { cwd: rootPath, timeout: 3000, encoding: "utf8", windowsHide: true });
+    return String(out || "");
+  } catch { return ""; }
+});
+ipcMain.handle("git:diffAll", async (_e, rootPath) => {
+  if (!rootPath) return "";
+  try {
+    const { execSync } = require("child_process");
+    const out = execSync(`git diff --unified=0`, { cwd: rootPath, timeout: 4000, encoding: "utf8", windowsHide: true });
+    return String(out || "");
+  } catch { return ""; }
+});
+
 // ─── Project config (tabs state + pin config) ──────────────────────────────────
 const PIN_DIR  = ".project_config";
 const PIN_FILE = ".pinconfig";

@@ -427,6 +427,21 @@ const EditorPanel = ({ config, nodeId }) => {
     return () => settingsListeners.delete(handler);
   }, []);
 
+  // ── Git diff gutter CSS ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (document.getElementById("git-diff-style")) return;
+    const style = document.createElement("style");
+    style.id = "git-diff-style";
+    style.textContent = `
+      .git-diff-added { background: rgba(115,201,145,0.15) !important; }
+      .git-diff-added-glyph { border-left: 3px solid #73c991 !important; margin-left: 3px; }
+      .git-diff-modified { background: rgba(204,167,0,0.12) !important; }
+      .git-diff-modified-glyph { border-left: 3px solid #cca700 !important; margin-left: 3px; }
+      .git-diff-removed { background: rgba(244,71,71,0.12) !important; }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
   // ── Bootstrap VS Code services once ──────────────────────────────────────
   useEffect(() => {
     ensureEditorReady()
@@ -622,6 +637,105 @@ const EditorPanel = ({ config, nodeId }) => {
     });
     return () => { unsub(); if (timer) clearTimeout(timer); };
   }, [filePath, nodeId]);
+
+  // ── Reveal line (from SearchPanel / Problems) ──────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      const p = e.detail?.path;
+      const line = e.detail?.line;
+      const col = e.detail?.column || 1;
+      if (!p || p !== filePath) return;
+      const ed = editorRef.current;
+      if (!ed) return;
+      try {
+        ed.revealLineInCenter(line || 1);
+        ed.setPosition({ lineNumber: line || 1, column: col });
+        ed.focus();
+      } catch {}
+    };
+    window.addEventListener("editor:revealLine", handler);
+    return () => window.removeEventListener("editor:revealLine", handler);
+  }, [filePath]);
+
+  // ── Git diff gutter ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!filePath || !hasProject) return;
+    let cancelled = false;
+    let decorationIds = [];
+    const updateDiff = async () => {
+      const ed = editorRef.current;
+      if (!ed || cancelled) return;
+      try {
+        const root = window.__currentProjectPath;
+        if (!root) return;
+        const diff = await window.electronAPI.gitDiff(root, filePath);
+        if (cancelled || !ed) return;
+        const model = ed.getModel();
+        if (!model) return;
+        // Parse unified diff with --unified=0 to get changed lines
+        const added = new Set();
+        const modified = new Set();
+        const removed = new Set();
+        for (const line of String(diff || "").split("\n")) {
+          if (line.startsWith("@@")) {
+            const m = line.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+            if (m) {
+              const start = parseInt(m[1], 10);
+              const count = m[2] ? parseInt(m[2], 10) : 1;
+              if (count === 0) {
+                // Deletion
+                removed.add(start);
+              } else {
+                for (let i = 0; i < count; i++) {
+                  const ln = start + i;
+                  // Simple heuristic: if original had 0 lines, it's added
+                  if (line.includes("@@ -0,0")) added.add(ln);
+                  else modified.add(ln);
+                }
+              }
+            }
+          }
+        }
+        // Fallback: if diff is non-empty but parsing failed, mark all as modified
+        if (!added.size && !modified.size && !removed.size && String(diff).trim()) {
+          // Try to get changed lines via git diff --name-only and mark whole file?
+        }
+        const decorations = [];
+        for (const ln of added) {
+          decorations.push({ range: { startLineNumber: ln, startColumn: 1, endLineNumber: ln, endColumn: 1 }, options: { isWholeLine: true, linesDecorationsClassName: "git-diff-added", glyphMarginClassName: "git-diff-added-glyph" } });
+        }
+        for (const ln of modified) {
+          if (!added.has(ln)) decorations.push({ range: { startLineNumber: ln, startColumn: 1, endLineNumber: ln, endColumn: 1 }, options: { isWholeLine: true, linesDecorationsClassName: "git-diff-modified", glyphMarginClassName: "git-diff-modified-glyph" } });
+        }
+        for (const ln of removed) {
+          decorations.push({ range: { startLineNumber: ln, startColumn: 1, endLineNumber: ln, endColumn: 1 }, options: { isWholeLine: true, linesDecorationsClassName: "git-diff-removed" } });
+        }
+        // Apply decorations (monaco API)
+        try {
+          decorationIds = ed.deltaDecorations(decorationIds, decorations);
+        } catch {
+          try { decorationIds = model.deltaDecorations(decorationIds, decorations); } catch {}
+        }
+      } catch {}
+    };
+    updateDiff();
+    const iv = setInterval(updateDiff, 3000);
+    const onFs = () => setTimeout(updateDiff, 500);
+    window.addEventListener("project:opened", onFs);
+    const unsub = window.electronAPI.onFsChange(onFs);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      window.removeEventListener("project:opened", onFs);
+      unsub();
+      try {
+        const ed = editorRef.current;
+        if (ed && decorationIds.length) {
+          try { ed.deltaDecorations(decorationIds, []); } catch {}
+        }
+      } catch {}
+    };
+  }, [filePath, hasProject, content]);
 
   // ── Save / Save As ───────────────────────────────────────────────────────
   const doSave = useCallback(async () => {

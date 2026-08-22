@@ -13,7 +13,16 @@ const ArrowSvg = () => (
 const TreeRow = ({
   label, iconEl, depth, hasChildren, isOpen, isSelected, isDropTarget,
   onClick, onDoubleClick, onArrowClick, onDragEnter, onDragOver, onDragLeave, onDrop, onContextMenu,
-}) => (
+  gitStatus,
+}) => {
+  const gitColor = gitStatus ? (
+    String(gitStatus).includes("M") ? "#cca700" :
+    String(gitStatus).includes("A") ? "#73c991" :
+    String(gitStatus).includes("D") ? "#f44747" :
+    String(gitStatus).includes("?") ? "#73c991" :
+    String(gitStatus).includes("R") ? "#569cd6" : "#888"
+  ) : null;
+  return (
   <div
     className={[
       "pw-tree-row",
@@ -43,8 +52,12 @@ const TreeRow = ({
     </span>
     <span className="pw-tree-row__icon" aria-hidden="true">{iconEl}</span>
     <span className="pw-tree-row__label" title={label}>{label}</span>
+    {gitStatus && (
+      <span style={{ marginLeft: "auto", fontSize: 10, color: gitColor, fontWeight: 700, paddingRight: 8, flexShrink: 0 }}>{String(gitStatus).trim().slice(0, 2)}</span>
+    )}
   </div>
 );
+};
 
 // ── Recursive folder node ─────────────────────────────────────────────────────
 const FolderNode = ({
@@ -54,6 +67,7 @@ const FolderNode = ({
   showHidden, showFolders, showFiles, showPreview,
   onFileClick, onFileDblClick, onFileCtxMenu,
   onExternalDrop,
+  getGitStatus,
 }) => {
   const isOpen     = expandedSet.has(entry.path);
   const isSelected = selectedPath === entry.path;
@@ -136,6 +150,7 @@ const FolderNode = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onContextMenu={handleCtxMenu}
+        gitStatus={getGitStatus(entry.path)}
       />
       {isOpen && hasLoaded && filteredChildren && filteredChildren
         .map((child) => child.isDir ? (
@@ -161,6 +176,7 @@ const FolderNode = ({
           onFileDblClick={onFileDblClick}
           onFileCtxMenu={onFileCtxMenu}
           onExternalDrop={onExternalDrop}
+          getGitStatus={getGitStatus}
         />
       ) : (
         <TreeRow
@@ -178,6 +194,7 @@ const FolderNode = ({
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(entry.path); }}
           onDragLeave={(e) => { e.stopPropagation(); if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget((p) => p === entry.path ? null : p); }}
           onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(e); }}
+          gitStatus={getGitStatus ? getGitStatus(child.path) : null}
           onContextMenu={(e) => onFileCtxMenu?.(e, child.path)}
         />
       ))}
@@ -201,7 +218,57 @@ const SidebarTree = ({
   // Bump this to force a re-fetch of rootChildren after mutations
   const [localRefresh, setLocalRefresh] = useState(0);
   const [pinned,       setPinned]       = useState([]);
+  const [gitStatus,    setGitStatus]    = useState(new Map());
   const { dialog: inputDialog, ask }    = useInputDialog();
+
+  // ── Git status polling ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!rootPath) { setGitStatus(new Map()); return; }
+    let cancelled = false;
+    const fetchGit = async () => {
+      try {
+        const res = await window.electronAPI.gitStatus(rootPath);
+        if (cancelled) return;
+        const m = new Map();
+        for (const item of (res || [])) {
+          const rel = String(item.rel || "").replace(/\\/g, "/");
+          const full = String(item.path || "").replace(/\\/g, "/");
+          if (rel) m.set(rel, item.status);
+          if (full) m.set(full, item.status);
+          // Also store without leading ./ 
+          if (rel.startsWith("./")) m.set(rel.slice(2), item.status);
+        }
+        setGitStatus(m);
+      } catch {}
+    };
+    fetchGit();
+    const iv = setInterval(fetchGit, 4000);
+    const onFs = () => setTimeout(fetchGit, 600);
+    window.addEventListener("project:opened", onFs);
+    const unsub = window.electronAPI.onFsChange(onFs);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      window.removeEventListener("project:opened", onFs);
+      unsub();
+    };
+  }, [rootPath]);
+
+  const getGitStatus = useCallback((fullPath) => {
+    if (!fullPath || !gitStatus.size) return null;
+    const norm = String(fullPath).replace(/\\/g, "/");
+    if (gitStatus.has(norm)) return gitStatus.get(norm);
+    if (rootPath) {
+      const rel = norm.startsWith(rootPath.replace(/\\/g, "/")) ? norm.slice(rootPath.replace(/\\/g, "/").length + 1) : null;
+      if (rel && gitStatus.has(rel)) return gitStatus.get(rel);
+      if (rel && gitStatus.has("./" + rel)) return gitStatus.get("./" + rel);
+    }
+    // Try basename fallback for nested
+    for (const [k, v] of gitStatus.entries()) {
+      if (norm.endsWith("/" + k) || norm === k) return v;
+    }
+    return null;
+  }, [gitStatus, rootPath]);
 
   // Helper: find a rootPath that can host .trash (top-most ancestor of folderPath)
   const findTrashRoot = useCallback((folderPath) => {
@@ -733,6 +800,7 @@ const SidebarTree = ({
             onDragLeave={handleRootDragLeave}
             onDrop={handleRootDrop}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); handleContextMenu(rootPath, e.shiftKey); }}
+            gitStatus={getGitStatus(rootPath)}
           />
           {expandedSet.has(rootPath) && rootChildren && rootChildren
             .filter((c) => showHidden || !c.name.startsWith("."))
@@ -778,6 +846,7 @@ const SidebarTree = ({
               onDragLeave={() => {}}
               onDrop={() => {}}
               onContextMenu={(e) => handleFileContextMenu(e, entry.path)}
+              gitStatus={getGitStatus(entry.path)}
             />
           ))}
         </>

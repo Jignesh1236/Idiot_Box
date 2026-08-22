@@ -14,6 +14,10 @@ import BlankPanel from "./components/Blank/index.jsx";
 import ComponentPreview from "./components/ComponentPreview/index.jsx";
 import CanvasPanel from "./components/Canvas/index.jsx";
 import CommandPalette from "./components/CommandPalette/index.jsx";
+import QuickOpen from "./components/QuickOpen/index.jsx";
+import SearchPanel from "./components/SearchPanel/index.jsx";
+import ProblemsPanel from "./components/Problems/index.jsx";
+import GitPanel from "./components/GitPanel/index.jsx";
 import PortPanel from "./components/Port/index.jsx";
 import LogPanel from "./components/Log/index.jsx";
 
@@ -62,7 +66,9 @@ const DEFAULT_JSON = {
       {
         type: "row", weight: 20,
         children: [
-          { type: "tab", name: "Port Manager", component: "portManager" },
+          { type: "tabset", weight: 40, children: [{ type: "tab", name: "Port Manager", component: "portManager" }] },
+          { type: "tabset", weight: 30, children: [{ type: "tab", name: "Problems", component: "problems" }] },
+          { type: "tabset", weight: 30, children: [{ type: "tab", name: "Git", component: "gitPanel" }] },
         ],
       },
     ],
@@ -79,6 +85,8 @@ const factory = (node) => {
     case "blank":             return <BlankPanel config={node.getConfig()} nodeId={node.getId()} />;
     case "componentPreview":  return <ComponentPreview config={node.getConfig()} nodeId={node.getId()} />;
     case "canvas":            return <CanvasPanel config={node.getConfig()} nodeId={node.getId()} />;
+    case "problems":          return <ProblemsPanel />;
+    case "gitPanel":          return <GitPanel />;
     case "logPanel":          return <LogPanel />;
     case "portPanel":         return <PortPanel />;
     case "portManager":       return <PortManager />;
@@ -858,6 +866,8 @@ const App = () => {
       </div>
 
       <CommandPalette />
+      <QuickOpen />
+      <SearchPanel />
     </div>
   );
 };

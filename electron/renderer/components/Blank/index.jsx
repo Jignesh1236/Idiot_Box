@@ -123,6 +123,33 @@ const PANEL_TYPES = [
     ),
     config: {},
   },
+  {
+    id: "problems",
+    name: "Problems",
+    component: "problems",
+    description: "Errors and warnings from TypeScript and linter",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="5" stroke="#f44747" strokeWidth="1.2" fill="none" />
+        <path d="M8 5V9" stroke="#f44747" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="8" cy="11.5" r="0.7" fill="#f44747" />
+      </svg>
+    ),
+    config: {},
+  },
+  {
+    id: "git",
+    name: "Git",
+    component: "gitPanel",
+    description: "Git status, diff and file changes",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+        <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2H5L7 4.5H13.5A1.5 1.5 0 0 1 15 6V12.5A1.5 1.5 0 0 1 13.5 14H3.5A1.5 1.5 0 0 1 2 12.5V3.5Z" fill="#f14e32" opacity="0.9" />
+        <path d="M6 7L8 9L10 7" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    config: {},
+  },
 ];
 
 const BlankPanel = ({ nodeId, config }) => {

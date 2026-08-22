@@ -61,17 +61,22 @@ const PortManager = () => {
   })();
 
   const scanPorts = useCallback(async () => {
+    if (scanning) return;
     setScanning(true);
+    const t = setTimeout(() => setScanning(false), 5000);
     try {
-      const result = await window.electronAPI.scanPorts();
+      const result = await Promise.race([
+        window.electronAPI.scanPorts(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000)),
+      ]);
       setPorts(normalizePorts(result));
     } catch (e) {
       console.error("scanPorts failed", e);
-      setPorts([]);
     } finally {
+      clearTimeout(t);
       setScanning(false);
     }
-  }, []);
+  }, [scanning]);
 
   useEffect(() => {
     scanPorts();

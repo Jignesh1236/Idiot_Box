@@ -955,6 +955,7 @@ ipcMain.handle("terminal:tabContextMenu", (event) => {
 // ─── Port scanner ────────────────────────────────────────────────────────────
 const net = require("net");
 const COMMON_PORTS = [3000, 3001, 5000, 5173, 8080, 8081, 4200, 8000, 3005, 3006, 4173, 4321, 9000, 9001];
+let scanPortsInProgress = null;
 function scanPortsViaConnect(ports) {
   return new Promise((resolve) => {
     const active = [];
@@ -1005,70 +1006,64 @@ function scanPortsViaNetstatDetailed() {
     });
   });
 }
-function getProcessName(pid) {
+function execAsync(cmd, timeout = 1800) {
+  return new Promise((resolve) => {
+    const { exec } = require("child_process");
+    exec(cmd, { timeout, windowsHide: true }, (err, stdout) => {
+      if (err || !stdout) return resolve("");
+      resolve(String(stdout));
+    });
+  });
+}
+async function getProcessName(pid) {
   if (!pid) return "";
   try {
-    const { execSync } = require("child_process");
     if (process.platform === "win32") {
-      const out = execSync(`tasklist /FI "PID eq ${pid}" /NH /FO CSV 2>nul`, { timeout: 1500, encoding: "utf8" });
-      // CSV: "node.exe","1234","Console","1","45,000 K"
+      const out = await execAsync(`tasklist /FI "PID eq ${pid}" /NH /FO CSV 2>nul`, 1200);
       const m = out.match(/"([^"]+)"\s*,\s*"${pid}"/) || out.match(/"([^"]+)","${pid}"/);
       if (m) return m[1];
       const parts = out.split(",");
       if (parts[0]) return parts[0].replace(/"/g, "").trim();
     } else {
-      const out = execSync(`ps -p ${pid} -o comm= 2>/dev/null || ps -o comm= -p ${pid} 2>/dev/null`, { timeout: 1500, encoding: "utf8" });
+      const out = await execAsync(`ps -p ${pid} -o comm= 2>/dev/null || ps -o comm= -p ${pid} 2>/dev/null`, 1200);
       return out.trim().split("\n")[0].trim();
     }
   } catch {}
   return "";
 }
-function getProcessCmdline(pid) {
+async function getProcessCmdline(pid) {
   if (!pid) return "";
   try {
-    const { execSync } = require("child_process");
     if (process.platform === "win32") {
-      try {
-        const out = execSync(`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine" 2>nul`, { timeout: 1500, encoding: "utf8" });
-        return (out || "").trim();
-      } catch {}
-      try {
-        const out2 = execSync(`wmic process where ProcessId=${pid} get CommandLine /value 2>nul`, { timeout: 1500, encoding: "utf8" });
-        const m = out2.match(/CommandLine=(.*)/);
-        if (m) return m[1].trim();
-      } catch {}
+      let out = await execAsync(`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine" 2>nul`, 1200);
+      if (out && out.trim()) return out.trim();
+      const out2 = await execAsync(`wmic process where ProcessId=${pid} get CommandLine /value 2>nul`, 1200);
+      const m = out2.match(/CommandLine=(.*)/);
+      if (m) return m[1].trim();
     } else {
-      const out = execSync(`ps -p ${pid} -o args= 2>/dev/null || cat /proc/${pid}/cmdline 2>/dev/null | tr '\\0' ' '`, { timeout: 1500, encoding: "utf8" });
+      const out = await execAsync(`ps -p ${pid} -o args= 2>/dev/null || cat /proc/${pid}/cmdline 2>/dev/null | tr '\\0' ' '`, 1200);
       return out.trim();
     }
   } catch {}
   return "";
 }
-function getProcessCwd(pid) {
+async function getProcessCwd(pid) {
   if (!pid) return "";
   try {
-    const { execSync } = require("child_process");
     if (process.platform !== "win32") {
-      try {
-        const out = execSync(`readlink /proc/${pid}/cwd 2>/dev/null || pwdx ${pid} 2>/dev/null | cut -d: -f2`, { timeout: 1200, encoding: "utf8" });
-        return out.trim();
-      } catch {}
+      const out = await execAsync(`readlink /proc/${pid}/cwd 2>/dev/null || pwdx ${pid} 2>/dev/null | cut -d: -f2`, 1000);
+      return out.trim();
     } else {
-      // Windows: try to get cwd via PowerShell from process handle (best effort via CommandLine parent dir)
-      // Fallback to executable path's directory
-      try {
-        const out = execSync(`powershell -NoProfile -Command "$p=(Get-Process -Id ${pid} -ErrorAction SilentlyContinue); if($p){ try{(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ExecutablePath}catch{} } " 2>nul`, { timeout: 1500, encoding: "utf8" });
-        const exe = out.trim();
-        if (exe) {
-          const dir = require("path").dirname(exe);
-          return dir;
-        }
-      } catch {}
+      const out = await execAsync(`powershell -NoProfile -Command "$p=(Get-Process -Id ${pid} -ErrorAction SilentlyContinue); if($p){ try{(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ExecutablePath}catch{} } " 2>nul`, 1200);
+      const exe = out.trim();
+      if (exe) return require("path").dirname(exe);
     }
   } catch {}
   return "";
 }
 async function scanPortsDetailed() {
+  if (scanPortsInProgress) return scanPortsInProgress;
+  scanPortsInProgress = (async () => {
   const [detailed, viaConnect] = await Promise.all([
     scanPortsViaNetstatDetailed().catch(() => []),
     scanPortsViaConnect(COMMON_PORTS).catch(() => []),
@@ -1080,22 +1075,33 @@ async function scanPortsDetailed() {
   for (const p of viaConnect) {
     if (!map.has(p)) map.set(p, { port: p, pid: null });
   }
-  // Enrich with process names/cwd/cmdline (limit to avoid slow)
+  // Enrich with process names/cwd/cmdline (limit to avoid slow/blocking)
   const entries = [...map.values()].sort((a, b) => a.port - b.port).slice(0, 30);
-  for (const e of entries) {
+  const enrichCount = Math.min(entries.length, 10);
+  for (let i = 0; i < enrichCount; i++) {
+    const e = entries[i];
     if (e.pid) {
-      try { e.name = getProcessName(e.pid); } catch { e.name = ""; }
-      try { e.cwd = getProcessCwd(e.pid); } catch { e.cwd = ""; }
-      try { e.cmdline = getProcessCmdline(e.pid); } catch { e.cmdline = ""; }
+      try { e.name = await getProcessName(e.pid); } catch { e.name = ""; }
+      try { e.cwd = await getProcessCwd(e.pid); } catch { e.cwd = ""; }
+      try { e.cmdline = await getProcessCmdline(e.pid); } catch { e.cmdline = ""; }
+      // Small yield to avoid blocking
+      await new Promise((r) => setImmediate(r));
     } else {
       e.name = "";
       e.cwd = "";
       e.cmdline = "";
     }
   }
+  for (let i = enrichCount; i < entries.length; i++) {
+    entries[i].name = "";
+    entries[i].cwd = "";
+    entries[i].cmdline = "";
+  }
   // Filter to web range if too many, but keep all if under 30
   const web = entries.filter((e) => (e.port >= 3000 && e.port <= 9999) || [80, 443].includes(e.port));
   return web.length ? web : entries;
+  })();
+  try { return await scanPortsInProgress; } finally { scanPortsInProgress = null; }
 }
 async function scanPorts() {
   const detailed = await scanPortsDetailed().catch(() => []);

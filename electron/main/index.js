@@ -1040,9 +1040,27 @@ async function getProcessCmdline(pid) {
       const out2 = await execAsync(`wmic process where ProcessId=${pid} get CommandLine /value 2>nul`, 1200);
       const m = out2.match(/CommandLine=(.*)/);
       if (m) return m[1].trim();
+      // Fallback to parent's cmdline (e.g., npm -> node)
+      try {
+        const parentOut = await execAsync(`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ParentProcessId" 2>nul`, 800);
+        const ppid = parseInt((parentOut || "").trim(), 10);
+        if (ppid) {
+          const pOut = await execAsync(`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${ppid}').CommandLine" 2>nul`, 800);
+          if (pOut && pOut.trim()) return pOut.trim();
+        }
+      } catch {}
     } else {
       const out = await execAsync(`ps -p ${pid} -o args= 2>/dev/null || cat /proc/${pid}/cmdline 2>/dev/null | tr '\\0' ' '`, 1200);
-      return out.trim();
+      if (out && out.trim()) return out.trim();
+      // Try parent
+      try {
+        const ppidOut = await execAsync(`ps -o ppid= -p ${pid} 2>/dev/null`, 800);
+        const ppid = parseInt(ppidOut.trim(), 10);
+        if (ppid) {
+          const pOut = await execAsync(`ps -p ${ppid} -o args= 2>/dev/null`, 800);
+          if (pOut && pOut.trim()) return pOut.trim();
+        }
+      } catch {}
     }
   } catch {}
   return "";
@@ -1052,9 +1070,12 @@ async function getProcessCwd(pid) {
   try {
     if (process.platform !== "win32") {
       const out = await execAsync(`readlink /proc/${pid}/cwd 2>/dev/null || pwdx ${pid} 2>/dev/null | cut -d: -f2`, 1000);
-      return out.trim();
+      if (out && out.trim()) return out.trim();
+      const out2 = await execAsync(`lsof -a -p ${pid} -d cwd -Fn 2>/dev/null | grep '^n' | cut -c2-`, 1000);
+      if (out2 && out2.trim()) return out2.trim();
     } else {
-      const out = await execAsync(`powershell -NoProfile -Command "$p=(Get-Process -Id ${pid} -ErrorAction SilentlyContinue); if($p){ try{(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ExecutablePath}catch{} } " 2>nul`, 1200);
+      // Windows: executable path's dir is best we can get without handle.exe
+      const out = await execAsync(`powershell -NoProfile -Command "try{(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ExecutablePath}catch{}" 2>nul`, 1000);
       const exe = out.trim();
       if (exe) return require("path").dirname(exe);
     }

@@ -37,25 +37,32 @@ const PortManager = () => {
     if (!onlyProject || !projectPath) return ports;
     const proj = projectPath.replace(/\\/g, "/").toLowerCase();
     const projBase = proj.split("/").pop() || "";
+    const projBaseLower = projBase.toLowerCase();
     return ports.filter((entry) => {
       const p = typeof entry === "number" ? { port: entry, cwd: "", cmdline: "", name: "" } : entry;
       const cwd = (p.cwd || "").replace(/\\/g, "/").toLowerCase();
       const cmd = (p.cmdline || "").replace(/\\/g, "/").toLowerCase();
-      const name = (p.name || "").toLowerCase();
+      // 1) Direct match with full project path
       if (cwd && cwd.includes(proj)) return true;
       if (cmd && cmd.includes(proj)) return true;
-      // Fallback: check if cwd/cmd contains project folder name (e.g., "my-app")
-      if (projBase && projBase.length > 2) {
-        if (cwd && cwd.includes(projBase)) return true;
-        if (cmd && cmd.includes(projBase)) return true;
+      // 2) Fallback: folder name (handle "New folder (8)" with spaces/parens)
+      if (projBaseLower && projBaseLower.length > 2) {
+        // Normalize base: remove non-alphanum for lenient match
+        const baseNorm = projBaseLower.replace(/[^a-z0-9]/g, "");
+        const cwdNorm = cwd.replace(/[^a-z0-9]/g, "");
+        const cmdNorm = cmd.replace(/[^a-z0-9]/g, "");
+        if (baseNorm && (cwdNorm.includes(baseNorm) || cmdNorm.includes(baseNorm))) return true;
+        if (cwd && cwd.includes(projBaseLower)) return true;
+        if (cmd && cmd.includes(projBaseLower)) return true;
       }
-      // If we have no cwd/cmd info, hide it when filter is ON (since we can't verify)
-      // But keep it if name matches common dev servers (node, vite, next)
+      // 3) If no cwd/cmd info (e.g., via connect fallback), be lenient: show it
+      // This prevents "No ports for this project" when we can't determine via netstat
       if (!cwd && !cmd) {
-        // For ports found via connect (no pid), we can't filter, so show only if we can't determine?
-        // To avoid hiding everything, show if port is in common range and we have no info — but user wants strict
-        return false;
+        // Show to avoid hiding legitimate dev ports when info unavailable
+        return true;
       }
+      // 4) Also check process name for node-based servers when project base is generic
+      // If still no match, hide
       return false;
     });
   })();

@@ -5,15 +5,20 @@ const PortManager = () => {
   const [ports, setPorts] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [manualPort, setManualPort] = useState("");
+  const [busyPort, setBusyPort] = useState(null);
+  const [actionMsg, setActionMsg] = useState(null);
   const ref = useRef(null);
+
+  const normalizePorts = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.map((p) => (typeof p === "number" ? { port: p, pid: null, name: "" } : p)).slice(0, 30);
+  };
 
   const scanPorts = useCallback(async () => {
     setScanning(true);
     try {
       const result = await window.electronAPI.scanPorts();
-      const list = Array.isArray(result) ? result : [];
-      // Filter out obviously non-web ports if list is huge, keep first 20
-      setPorts(list.slice(0, 30));
+      setPorts(normalizePorts(result));
     } catch (e) {
       console.error("scanPorts failed", e);
       setPorts([]);
@@ -35,6 +40,45 @@ const PortManager = () => {
   const copyUrl = useCallback((url) => {
     try { window.electronAPI.clipboardWrite(url); } catch { try { navigator.clipboard.writeText(url); } catch {} }
   }, []);
+
+  const handleKill = useCallback(async (port) => {
+    if (!window.confirm(`Kill process on port ${port}?`)) return;
+    setBusyPort(port);
+    setActionMsg(null);
+    try {
+      const res = await window.electronAPI.killPort(port);
+      if (res?.ok) {
+        setActionMsg(`Killed PID ${res.pid} on :${port}`);
+        setTimeout(scanPorts, 800);
+      } else {
+        setActionMsg(res?.error || `Failed to kill :${port}`);
+      }
+    } catch (e) {
+      setActionMsg(String(e.message || e));
+    } finally {
+      setBusyPort(null);
+      setTimeout(() => setActionMsg(null), 3500);
+    }
+  }, [scanPorts]);
+
+  const handleRestart = useCallback(async (port) => {
+    setBusyPort(port);
+    setActionMsg(null);
+    try {
+      const res = await window.electronAPI.restartPort(port);
+      if (res?.ok) {
+        setActionMsg(`Killed PID ${res.pid} on :${port} — restart manually`);
+        setTimeout(scanPorts, 1000);
+      } else {
+        setActionMsg(res?.error || `Failed on :${port}`);
+      }
+    } catch (e) {
+      setActionMsg(String(e.message || e));
+    } finally {
+      setBusyPort(null);
+      setTimeout(() => setActionMsg(null), 3500);
+    }
+  }, [scanPorts]);
 
   return (
     <div ref={ref} style={{
@@ -68,6 +112,12 @@ const PortManager = () => {
         </button>
       </div>
 
+      {actionMsg && (
+        <div style={{ margin: "0 8px", padding: "6px 8px", background: "#2d2d2d", border: "1px solid #3a3a3a", borderRadius: 3, fontSize: 11, color: actionMsg.startsWith("Killed") ? "#4ec9b0" : "#f44747" }}>
+          {actionMsg}
+        </div>
+      )}
+
       <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
         {scanning && ports.length === 0 && (
           <div style={{ textAlign: "center", padding: 24, color: "#666", fontSize: 12 }}>
@@ -83,20 +133,26 @@ const PortManager = () => {
           </div>
         )}
 
-        {ports.map((port) => {
+        {ports.map((entry) => {
+          const port = typeof entry === "number" ? entry : entry.port;
+          const pid = typeof entry === "object" ? entry.pid : null;
+          const name = typeof entry === "object" ? entry.name : "";
           const url = `http://localhost:${port}`;
+          const busy = busyPort === port;
           return (
             <div
               key={port}
               style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+                display: "flex", alignItems: "center", gap: 6, padding: "6px 8px",
                 margin: "4px 0", background: "#252526", border: "1px solid #2d2d2d", borderRadius: 4,
+                opacity: busy ? 0.6 : 1,
               }}
             >
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ec9b0", flexShrink: 0, boxShadow: "0 0 6px rgba(78,201,176,0.4)" }} />
-              <span style={{ flex: 1, fontFamily: "Consolas, monospace", fontSize: 12, color: "#d4d4d4" }}>
-                {url}
-              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "Consolas, monospace", fontSize: 12, color: "#d4d4d4" }}>{url}</div>
+                {(pid || name) ? <div style={{ fontSize: 10, color: "#888", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name ? `${name} ` : ""}{pid ? `PID ${pid}` : ""}</div> : null}
+              </div>
               <button
                 onClick={() => copyUrl(url)}
                 style={{ background: "none", border: "1px solid transparent", color: "#888", cursor: "pointer", fontSize: 11, padding: "2px 6px", borderRadius: 3 }}
@@ -108,10 +164,26 @@ const PortManager = () => {
               </button>
               <button
                 onClick={() => openInBrowser(url)}
-                style={{ background: "#0e639c", border: "none", color: "#fff", cursor: "pointer", fontSize: 11, padding: "4px 10px", borderRadius: 3 }}
+                style={{ background: "#0e639c", border: "none", color: "#fff", cursor: "pointer", fontSize: 11, padding: "3px 8px", borderRadius: 3 }}
                 title="Open in Browser panel"
               >
                 Open
+              </button>
+              <button
+                onClick={() => handleKill(port)}
+                disabled={busy}
+                style={{ background: busy ? "#3a3a3a" : "#5a1d1d", border: "none", color: busy ? "#888" : "#ff7b72", cursor: busy ? "default" : "pointer", fontSize: 11, padding: "3px 8px", borderRadius: 3, opacity: busy ? 0.6 : 1 }}
+                title="Kill process on this port"
+              >
+                Kill
+              </button>
+              <button
+                onClick={() => handleRestart(port)}
+                disabled={busy}
+                style={{ background: busy ? "#3a3a3a" : "#2d2d2d", border: "1px solid #3a3a3a", color: busy ? "#888" : "#d4d4d4", cursor: busy ? "default" : "pointer", fontSize: 11, padding: "3px 8px", borderRadius: 3, opacity: busy ? 0.6 : 1 }}
+                title="Restart (kill) — start again manually"
+              >
+                Restart
               </button>
             </div>
           );

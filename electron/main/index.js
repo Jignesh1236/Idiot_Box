@@ -973,42 +973,163 @@ function scanPortsViaConnect(ports) {
     }
   });
 }
-function scanPortsViaNetstat() {
+function scanPortsViaNetstatDetailed() {
   return new Promise((resolve) => {
     const { exec } = require("child_process");
-    const cmd = process.platform === "win32" ? "netstat -ano | findstr LISTENING" : "ss -tln 2>/dev/null || netstat -tln 2>/dev/null || echo ''";
+    const cmd = process.platform === "win32" ? "netstat -ano | findstr LISTENING" : "ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || ss -tln 2>/dev/null || echo ''";
     exec(cmd, { timeout: 2500 }, (err, stdout) => {
       if (err || !stdout) return resolve([]);
-      const ports = new Set();
-      const re = /:(\d+)\b/g;
-      let m;
-      while ((m = re.exec(stdout)) !== null) {
-        const p = parseInt(m[1], 10);
-        if (p >= 1024 && p <= 65535) ports.add(p);
+      const map = new Map(); // port -> pid
+      const lines = stdout.split("\n");
+      for (const line of lines) {
+        // Windows: TCP    0.0.0.0:3000           0.0.0.0:0              LISTENING       1234
+        // Linux: LISTEN 0 128 0.0.0.0:3000 0.0.0.0:* users:(("node",pid=1234,fd=3))
+        let m = line.match(/:(\d+)\s+.*\s+(\d+)\s*$/);
+        if (m) {
+          const port = parseInt(m[1], 10);
+          const pid = parseInt(m[2], 10);
+          if (port >= 1024 && port <= 65535 && pid) {
+            if (!map.has(port) || !map.get(port).pid) map.set(port, { port, pid });
+          }
+          continue;
+        }
+        m = line.match(/:(\d+)\b/);
+        if (m) {
+          const port = parseInt(m[1], 10);
+          if (port >= 1024 && port <= 65535 && !map.has(port)) {
+            map.set(port, { port, pid: null });
+          }
+        }
       }
-      // Prefer web dev range, but return all if no common found
-      const all = [...ports].sort((a, b) => a - b);
-      const web = all.filter((p) => (p >= 3000 && p <= 9999) || [80, 443].includes(p));
-      resolve(web.length ? web : all.slice(0, 20));
+      resolve([...map.values()]);
     });
   });
 }
-async function scanPorts() {
+function getProcessName(pid) {
+  if (!pid) return "";
   try {
-    const [viaNetstat, viaConnect] = await Promise.all([
-      scanPortsViaNetstat().catch(() => []),
-      scanPortsViaConnect(COMMON_PORTS).catch(() => []),
-    ]);
-    const merged = new Set([...viaNetstat, ...viaConnect]);
-    // Also include any common ports that were found via netstat but not in COMMON_PORTS
-    return [...merged].sort((a, b) => a - b);
-  } catch {
-    return scanPortsViaConnect(COMMON_PORTS);
+    const { execSync } = require("child_process");
+    if (process.platform === "win32") {
+      const out = execSync(`tasklist /FI "PID eq ${pid}" /NH /FO CSV 2>nul`, { timeout: 1500, encoding: "utf8" });
+      // CSV: "node.exe","1234","Console","1","45,000 K"
+      const m = out.match(/"([^"]+)"\s*,\s*"${pid}"/) || out.match(/"([^"]+)","${pid}"/);
+      if (m) return m[1];
+      const parts = out.split(",");
+      if (parts[0]) return parts[0].replace(/"/g, "").trim();
+    } else {
+      const out = execSync(`ps -p ${pid} -o comm= 2>/dev/null || ps -o comm= -p ${pid} 2>/dev/null`, { timeout: 1500, encoding: "utf8" });
+      return out.trim().split("\n")[0].trim();
+    }
+  } catch {}
+  return "";
+}
+async function scanPortsDetailed() {
+  const [detailed, viaConnect] = await Promise.all([
+    scanPortsViaNetstatDetailed().catch(() => []),
+    scanPortsViaConnect(COMMON_PORTS).catch(() => []),
+  ]);
+  const map = new Map();
+  for (const d of detailed) {
+    if (!map.has(d.port)) map.set(d.port, d);
   }
+  for (const p of viaConnect) {
+    if (!map.has(p)) map.set(p, { port: p, pid: null });
+  }
+  // Enrich with process names (limit to first 15 to avoid slow)
+  const entries = [...map.values()].sort((a, b) => a.port - b.port).slice(0, 30);
+  for (const e of entries) {
+    if (e.pid) {
+      try { e.name = getProcessName(e.pid); } catch { e.name = ""; }
+    } else {
+      e.name = "";
+    }
+  }
+  // Filter to web range if too many, but keep all if under 30
+  const web = entries.filter((e) => (e.port >= 3000 && e.port <= 9999) || [80, 443].includes(e.port));
+  return web.length ? web : entries;
+}
+async function scanPorts() {
+  const detailed = await scanPortsDetailed().catch(() => []);
+  // Fallback to simple numbers if detailed fails
+  if (detailed.length) return detailed;
+  try {
+    const viaConnect = await scanPortsViaConnect(COMMON_PORTS);
+    return viaConnect.map((p) => ({ port: p, pid: null, name: "" }));
+  } catch { return []; }
 }
 
 ipcMain.handle("port:scan", async () => {
   try { return await scanPorts(); } catch { return []; }
+});
+// Backward compat: old callers expect number[], but new returns objects — handle both
+ipcMain.handle("port:scanDetailed", async () => {
+  try { return await scanPortsDetailed(); } catch { return []; }
+});
+
+ipcMain.handle("port:kill", async (_e, port) => {
+  const p = parseInt(port, 10);
+  if (!p || p < 1 || p > 65535) return { ok: false, error: "Invalid port" };
+  let pid = null;
+  try {
+    const detailed = await scanPortsDetailed().catch(() => []);
+    const entry = detailed.find((e) => e.port === p);
+    pid = entry?.pid || null;
+  } catch {}
+  if (!pid) {
+    try {
+      const { execSync } = require("child_process");
+      if (process.platform === "win32") {
+        const out = execSync(`netstat -ano | findstr :${p} | findstr LISTENING`, { encoding: "utf8", timeout: 2000 });
+        const m = out.match(/\s+(\d+)\s*$/m);
+        if (m) pid = parseInt(m[1], 10);
+      } else {
+        const out = execSync(`lsof -ti :${p} -sTCP:LISTEN 2>/dev/null | head -n 1`, { encoding: "utf8", timeout: 2000 });
+        pid = parseInt(out.trim(), 10) || null;
+      }
+    } catch {}
+  }
+  if (!pid) return { ok: false, error: `No process found on port ${p}` };
+  try {
+    if (process.platform === "win32") {
+      require("child_process").execSync(`taskkill /F /PID ${pid}`, { timeout: 4000, stdio: "ignore" });
+    } else {
+      try { process.kill(pid, "SIGTERM"); } catch {}
+      await new Promise((r) => setTimeout(r, 900));
+      try { process.kill(pid, 0); require("child_process").execSync(`kill -9 ${pid} 2>/dev/null`, { timeout: 2000, stdio: "ignore" }); } catch {}
+    }
+    return { ok: true, pid };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle("port:restart", async (_e, port) => {
+  // Kill first
+  const killRes = await (async () => {
+    try {
+      const p = parseInt(port, 10);
+      const { execSync } = require("child_process");
+      let pid = null;
+      try {
+        const detailed = await scanPortsDetailed().catch(() => []);
+        const entry = detailed.find((e) => e.port === p);
+        pid = entry?.pid || null;
+      } catch {}
+      if (!pid && process.platform === "win32") {
+        try {
+          const out = execSync(`netstat -ano | findstr :${p} | findstr LISTENING`, { encoding: "utf8", timeout: 2000 });
+          const m = out.match(/\s+(\d+)\s*$/m);
+          if (m) pid = parseInt(m[1], 10);
+        } catch {}
+      }
+      if (!pid) return { ok: false, error: `No process on ${p}` };
+      if (process.platform === "win32") execSync(`taskkill /F /PID ${pid}`, { timeout: 4000, stdio: "ignore" });
+      else { try { process.kill(pid, "SIGTERM"); } catch {} }
+      return { ok: true, pid };
+    } catch (e) { return { ok: false, error: String(e) }; }
+  })();
+  // We don't auto-restart unknown command — just report killed, user can start again
+  return killRes;
 });
 
 ipcMain.handle("panel:addMenu", async (event) => {
@@ -1023,7 +1144,9 @@ ipcMain.handle("panel:addMenu", async (event) => {
       items.push({ type: "separator" });
       items.push({ label: "Running Ports", enabled: false });
       for (const p of ports) {
-        items.push({ label: `  http://localhost:${p}`, click: () => act(`port:${p}`) });
+        const portNum = typeof p === "object" ? p.port : p;
+        const labelPid = typeof p === "object" && p.pid ? ` (PID ${p.pid})` : "";
+        items.push({ label: `  http://localhost:${portNum}${labelPid}`, click: () => act(`port:${portNum}`) });
       }
     }
     const menu = Menu.buildFromTemplate(items);

@@ -146,6 +146,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ── Port scanner ────────────────────────────────────────────────────────────
   scanPorts: () => ipcRenderer.invoke("port:scan"),
+  scanPortsDetailed: () => ipcRenderer.invoke("port:scanDetailed"),
+  killPort: (port) => ipcRenderer.invoke("port:kill", port),
+  restartPort: (port) => ipcRenderer.invoke("port:restart", port),
 
   // ── Open URL in browser ───────────────────────────────────────────────────
   openUrl: (url) => ipcRenderer.invoke("open:url", url),

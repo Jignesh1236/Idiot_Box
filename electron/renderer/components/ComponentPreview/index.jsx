@@ -702,7 +702,7 @@ const ComponentPreview = ({ nodeId, config }) => {
       // Never let iframe mount failure affect parent UI
       console.error("Preview mount failed (isolated):", e);
     }
-  }, [sampleMode, transpileError, filePath, previewCode, zoom, lastUpdateKey, getIframeWin, getIframeDoc, getMount, setupIframeGuard]);
+  }, [sampleMode, transpileError, filePath, previewCode, zoom, bgMode, lastUpdateKey, getIframeWin, getIframeDoc, getMount, setupIframeGuard]);
 
   // Cleanup polling on unmount
   useEffect(() => {

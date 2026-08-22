@@ -636,38 +636,54 @@ ipcMain.handle("browser:webviewContextMenu", (event, { hasSelection, selectionTe
     const items = [];
 
     if (linkURL) {
-      items.push({ label: "Open Link in New Tab",  click: () => act("openLinkNewTab", { url: linkURL }) });
-      items.push({ label: "Copy Link Address",     click: () => act("copyLink",       { url: linkURL }) });
+      items.push({ label: "Open Link in New Tab",     click: () => act("openLinkNewTab", { url: linkURL }) });
+      items.push({ label: "Open Link in New Window",  click: () => act("openLinkNewWindow", { url: linkURL }) });
+      items.push({ label: "Save Link As…",            click: () => act("saveLinkAs", { url: linkURL }) });
+      items.push({ label: "Copy Link Address",        click: () => act("copyLink",       { url: linkURL }) });
+      items.push({ label: "Copy Link Text",           click: () => act("copyLinkText", { text: selectionText || linkURL }) });
       items.push(sep);
     }
 
     if (srcURL) {
-      items.push({ label: "Open Image in New Tab", click: () => act("openImageNewTab", { url: srcURL }) });
-      items.push({ label: "Copy Image Address",    click: () => act("copyImageURL",    { url: srcURL }) });
+      items.push({ label: "Open Image in New Tab",    click: () => act("openImageNewTab", { url: srcURL }) });
+      items.push({ label: "Save Image As…",           click: () => act("saveImageAs", { url: srcURL }) });
+      items.push({ label: "Copy Image",               click: () => act("copyImage", { url: srcURL }) });
+      items.push({ label: "Copy Image Address",       click: () => act("copyImageURL",    { url: srcURL }) });
       items.push(sep);
     }
 
     if (hasSelection && selectionText) {
+      const label = `Search Google for "${selectionText.slice(0, 30)}${selectionText.length > 30 ? "…" : ""}"`;
+      items.push({ label, click: () => act("searchSelection", { text: selectionText }) });
+      items.push(sep);
       items.push({ label: "Copy",                  accelerator: "Ctrl+C",  click: () => act("copy") });
-      items.push({ label: `Search for "${selectionText.slice(0, 20)}${selectionText.length > 20 ? "…" : ""}"`, click: () => act("searchSelection", { text: selectionText }) });
+      if (isEditable) items.push({ label: "Cut",   accelerator: "Ctrl+X",  click: () => act("cut")   });
+      items.push({ label: "Select All",            accelerator: "Ctrl+A", click: () => act("selectAll") });
+      items.push(sep);
+    } else if (hasSelection) {
+      items.push({ label: "Copy",                  accelerator: "Ctrl+C",  click: () => act("copy") });
       items.push(sep);
     }
 
     if (isEditable) {
-      if (!hasSelection) items.push({ label: "Copy",    accelerator: "Ctrl+C",  click: () => act("copy")  });
-      items.push({ label: "Paste",   accelerator: "Ctrl+V",  click: () => act("paste") });
+      items.push({ label: "Undo",    accelerator: "Ctrl+Z",  click: () => act("undo") });
+      items.push({ label: "Redo",    accelerator: "Ctrl+Y",  click: () => act("redo") });
+      items.push(sep);
       items.push({ label: "Cut",     accelerator: "Ctrl+X",  click: () => act("cut")   });
+      items.push({ label: "Copy",    accelerator: "Ctrl+C",  click: () => act("copy")  });
+      items.push({ label: "Paste",   accelerator: "Ctrl+V",  click: () => act("paste") });
+      items.push({ label: "Delete",  accelerator: "Delete", click: () => act("delete") });
       items.push({ label: "Select All", accelerator: "Ctrl+A", click: () => act("selectAll") });
       items.push(sep);
     }
 
-    items.push({ label: "Back",    click: () => act("back"),    enabled: true });
-    items.push({ label: "Forward", click: () => act("forward"), enabled: true });
-    items.push({ label: "Reload",  click: () => act("reload") });
+    items.push({ label: "Back",    accelerator: "Alt+Left",  click: () => act("back"),    enabled: true });
+    items.push({ label: "Forward", accelerator: "Alt+Right", click: () => act("forward"), enabled: true });
+    items.push({ label: "Reload",  accelerator: "Ctrl+R",    click: () => act("reload") });
     items.push(sep);
 
-    items.push({ label: "Save Page As…", click: () => act("saveAs") });
-    items.push({ label: "Print…",        click: () => act("print") });
+    items.push({ label: "Save Page As…", accelerator: "Ctrl+S", click: () => act("saveAs") });
+    items.push({ label: "Print…",        accelerator: "Ctrl+P", click: () => act("print") });
     items.push(sep);
 
     // Chrome extension contextMenus

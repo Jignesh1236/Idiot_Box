@@ -307,20 +307,43 @@ const TerminalPanel = ({ nodeId, config }) => {
   useEffect(() => {
     const handler = (e) => {
       const dir = e.detail?.dir;
-      if (!dir) return;
-      setCwd(dir);
-      if (termRef.current) {
-        // Send cd command instead of restarting PTY
-        const cdCmd = `cd "${dir}"\r`;
-        window.electronAPI.writeToTerminal(tabId, cdCmd);
-      } else if (initTerminalRef.current) {
-        // No xterm yet (mounted with no project) — create it now
-        initTerminalRef.current(dir);
+      if (!dir) {
+        console.warn("[Terminal] open-terminal received no dir", e.detail);
+        return;
       }
+      console.log("[Terminal] open-terminal", dir, "tabId", tabId);
+      setCwd(dir);
+      // Ensure a terminal panel exists — if this terminal isn't initialized, create one
+      const ensureTerminal = () => {
+        if (termRef.current) {
+          const cdCmd = `cd "${dir.replace(/"/g, '\\"')}"\r`;
+          try {
+            window.electronAPI.writeToTerminal(tabId, cdCmd);
+            try { termRef.current.focus(); } catch {}
+            // Also ensure the terminal tab is visible
+            try { window.dispatchEvent(new CustomEvent("focus-terminal-tab")); } catch {}
+          } catch (err) {
+            console.error("[Terminal] writeToTerminal failed", err);
+          }
+        } else if (initTerminalRef.current) {
+          console.log("[Terminal] init via open-terminal", dir);
+          initTerminalRef.current(dir);
+        } else {
+          // No terminal at all — create a new one in the layout
+          console.log("[Terminal] no existing terminal, creating new panel for", dir);
+          window.dispatchEvent(new CustomEvent("add-terminal-panel", { detail: { nodeId, location: "BOTTOM" } }));
+          // Retry after a short delay to allow new panel to mount
+          setTimeout(() => {
+            if (initTerminalRef.current) initTerminalRef.current(dir);
+            else window.dispatchEvent(new CustomEvent("open-terminal", { detail: { dir } }));
+          }, 400);
+        }
+      };
+      ensureTerminal();
     };
     window.addEventListener("open-terminal", handler);
     return () => window.removeEventListener("open-terminal", handler);
-  }, [tabId]);
+  }, [tabId, nodeId]);
 
   // ── Menu & Custom events (Open/Close Project) ──────────────────────────────
   // When project opens and terminal has no PTY yet, spawn one.

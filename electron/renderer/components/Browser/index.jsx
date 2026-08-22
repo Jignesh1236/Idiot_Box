@@ -276,7 +276,20 @@ const BrowserPanel = (props) => {
         case "saveAs":      wv.downloadURL?.(wv.getURL()); break;
         case "viewSource":  goToUrlRef.current("view-source:" + (result.data?.url || wv.getURL())); break;
         case "copyLink":    window.electronAPI.clipboardWrite(result.data?.url || ""); break;
+        case "copyLinkText": window.electronAPI.clipboardWrite(result.data?.text || result.data?.url || ""); break;
         case "copyImageURL":window.electronAPI.clipboardWrite(result.data?.url || ""); break;
+        case "copyImage": {
+          // Try to copy image to clipboard via webview
+          try { wv.copyImageAt?.(result.data?.x, result.data?.y); } catch {}
+          // Fallback to copying URL
+          window.electronAPI.clipboardWrite(result.data?.url || "");
+          break;
+        }
+        case "saveLinkAs":   try { wv.downloadURL?.(result.data?.url || wv.getURL()); } catch {} break;
+        case "saveImageAs":  try { wv.downloadURL?.(result.data?.url || ""); } catch {} break;
+        case "undo":         try { wv.undo(); } catch { try { document.execCommand("undo"); } catch {} } break;
+        case "redo":         try { wv.redo(); } catch { try { document.execCommand("redo"); } catch {} } break;
+        case "delete":       try { wv.delete?.(); } catch { try { wv.cut(); wv.paste(); } catch {} } break;
         case "openLinkNewTab": {
           const m = window.__flexModel?.current;
           if (m) {
@@ -287,6 +300,22 @@ const BrowserPanel = (props) => {
                 config:{ type:"browser",title:"New Tab",url:result.data?.url },
               }, tabset.getId(), DockLocation.CENTER));
             }
+          }
+          break;
+        }
+        case "openLinkNewWindow": {
+          // Open in a new Browser tab (we don't create a new OS window, keep inside IDE)
+          const m = window.__flexModel?.current;
+          if (m) {
+            const tabset = m.getNodeById(nid)?.getParent();
+            if (tabset) {
+              m.doAction(Actions.addNode({
+                type:"tab",component:"panel3",name:"New Tab",enableClose:true,
+                config:{ type:"browser",title:"New Tab",url:result.data?.url },
+              }, tabset.getId(), DockLocation.CENTER));
+            }
+          } else {
+            try { window.open(result.data?.url, "_blank"); } catch {}
           }
           break;
         }

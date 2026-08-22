@@ -1023,6 +1023,51 @@ function getProcessName(pid) {
   } catch {}
   return "";
 }
+function getProcessCmdline(pid) {
+  if (!pid) return "";
+  try {
+    const { execSync } = require("child_process");
+    if (process.platform === "win32") {
+      try {
+        const out = execSync(`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine" 2>nul`, { timeout: 1500, encoding: "utf8" });
+        return (out || "").trim();
+      } catch {}
+      try {
+        const out2 = execSync(`wmic process where ProcessId=${pid} get CommandLine /value 2>nul`, { timeout: 1500, encoding: "utf8" });
+        const m = out2.match(/CommandLine=(.*)/);
+        if (m) return m[1].trim();
+      } catch {}
+    } else {
+      const out = execSync(`ps -p ${pid} -o args= 2>/dev/null || cat /proc/${pid}/cmdline 2>/dev/null | tr '\\0' ' '`, { timeout: 1500, encoding: "utf8" });
+      return out.trim();
+    }
+  } catch {}
+  return "";
+}
+function getProcessCwd(pid) {
+  if (!pid) return "";
+  try {
+    const { execSync } = require("child_process");
+    if (process.platform !== "win32") {
+      try {
+        const out = execSync(`readlink /proc/${pid}/cwd 2>/dev/null || pwdx ${pid} 2>/dev/null | cut -d: -f2`, { timeout: 1200, encoding: "utf8" });
+        return out.trim();
+      } catch {}
+    } else {
+      // Windows: try to get cwd via PowerShell from process handle (best effort via CommandLine parent dir)
+      // Fallback to executable path's directory
+      try {
+        const out = execSync(`powershell -NoProfile -Command "$p=(Get-Process -Id ${pid} -ErrorAction SilentlyContinue); if($p){ try{(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ExecutablePath}catch{} } " 2>nul`, { timeout: 1500, encoding: "utf8" });
+        const exe = out.trim();
+        if (exe) {
+          const dir = require("path").dirname(exe);
+          return dir;
+        }
+      } catch {}
+    }
+  } catch {}
+  return "";
+}
 async function scanPortsDetailed() {
   const [detailed, viaConnect] = await Promise.all([
     scanPortsViaNetstatDetailed().catch(() => []),
@@ -1035,13 +1080,17 @@ async function scanPortsDetailed() {
   for (const p of viaConnect) {
     if (!map.has(p)) map.set(p, { port: p, pid: null });
   }
-  // Enrich with process names (limit to first 15 to avoid slow)
+  // Enrich with process names/cwd/cmdline (limit to avoid slow)
   const entries = [...map.values()].sort((a, b) => a.port - b.port).slice(0, 30);
   for (const e of entries) {
     if (e.pid) {
       try { e.name = getProcessName(e.pid); } catch { e.name = ""; }
+      try { e.cwd = getProcessCwd(e.pid); } catch { e.cwd = ""; }
+      try { e.cmdline = getProcessCmdline(e.pid); } catch { e.cmdline = ""; }
     } else {
       e.name = "";
+      e.cwd = "";
+      e.cmdline = "";
     }
   }
   // Filter to web range if too many, but keep all if under 30

@@ -4,14 +4,18 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 const PortManager = () => {
   const [ports, setPorts] = useState([]);
   const [scanning, setScanning] = useState(false);
+  const [manualPort, setManualPort] = useState("");
   const ref = useRef(null);
 
   const scanPorts = useCallback(async () => {
     setScanning(true);
     try {
       const result = await window.electronAPI.scanPorts();
-      setPorts(Array.isArray(result) ? result : []);
-    } catch {
+      const list = Array.isArray(result) ? result : [];
+      // Filter out obviously non-web ports if list is huge, keep first 20
+      setPorts(list.slice(0, 30));
+    } catch (e) {
+      console.error("scanPorts failed", e);
       setPorts([]);
     } finally {
       setScanning(false);
@@ -112,6 +116,23 @@ const PortManager = () => {
             </div>
           );
         })}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderTop: "1px solid #2d2d2d", background: "#252526" }}>
+        <input
+          value={manualPort}
+          onChange={(e) => setManualPort(e.target.value.replace(/\D/g, "").slice(0, 5))}
+          onKeyDown={(e) => { if (e.key === "Enter" && manualPort) { openInBrowser(`http://localhost:${manualPort}`); setManualPort(""); } }}
+          placeholder="Port (e.g. 5173)"
+          style={{ flex: 1, background: "#1e1e1e", border: "1px solid #3a3a3a", color: "#ccc", padding: "5px 8px", borderRadius: 3, fontSize: 11, outline: "none" }}
+        />
+        <button
+          onClick={() => { if (manualPort) { openInBrowser(`http://localhost:${manualPort}`); setManualPort(""); } }}
+          disabled={!manualPort}
+          style={{ background: manualPort ? "#0e639c" : "#2d2d2d", border: "none", color: manualPort ? "#fff" : "#666", padding: "5px 12px", borderRadius: 3, cursor: manualPort ? "pointer" : "default", fontSize: 11, opacity: manualPort ? 1 : 0.6 }}
+        >
+          Go
+        </button>
       </div>
 
       <div style={{ padding: "6px 12px", fontSize: 10, color: "#666", borderTop: "1px solid #2d2d2d", background: "#1e1e1e", display: "flex", justifyContent: "space-between" }}>

@@ -954,23 +954,62 @@ ipcMain.handle("terminal:tabContextMenu", (event) => {
 
 // ─── Port scanner ────────────────────────────────────────────────────────────
 const net = require("net");
-const COMMON_PORTS = [3000, 3001, 5000, 5173, 8080, 8081, 4200, 8000, 3005, 3006];
-function scanPorts() {
+const COMMON_PORTS = [3000, 3001, 5000, 5173, 8080, 8081, 4200, 8000, 3005, 3006, 4173, 4321, 9000, 9001];
+function scanPortsViaConnect(ports) {
   return new Promise((resolve) => {
     const active = [];
-    let remaining = COMMON_PORTS.length;
+    let remaining = ports.length;
     if (!remaining) { resolve(active); return; }
-    for (const port of COMMON_PORTS) {
-      const s = net.createConnection({ port, host: "127.0.0.1", timeout: 600 });
-      s.on("connect", () => { s.destroy(); active.push(port); checkDone(); });
-      s.on("error", () => { s.destroy(); checkDone(); });
-      s.on("timeout", () => { s.destroy(); checkDone(); });
-      function checkDone() { if (--remaining <= 0) resolve(active.sort((a, b) => a - b)); }
+    for (const port of ports) {
+      let done = false;
+      const tryHost = (host) => {
+        const s = net.createConnection({ port, host, timeout: 700 });
+        s.on("connect", () => { if (!done) { done = true; s.destroy(); active.push(port); checkDone(); } else s.destroy(); });
+        s.on("error", () => { s.destroy(); if (host === "127.0.0.1") tryHost("::1"); else if (!done) checkDone(); });
+        s.on("timeout", () => { s.destroy(); if (host === "127.0.0.1") tryHost("::1"); else checkDone(); });
+      };
+      tryHost("127.0.0.1");
+      function checkDone() { if (!done) { done = true; if (--remaining <= 0) resolve(active.sort((a, b) => a - b)); } else if (--remaining <= 0) resolve(active.sort((a, b) => a - b)); }
     }
   });
 }
+function scanPortsViaNetstat() {
+  return new Promise((resolve) => {
+    const { exec } = require("child_process");
+    const cmd = process.platform === "win32" ? "netstat -ano | findstr LISTENING" : "ss -tln 2>/dev/null || netstat -tln 2>/dev/null || echo ''";
+    exec(cmd, { timeout: 2500 }, (err, stdout) => {
+      if (err || !stdout) return resolve([]);
+      const ports = new Set();
+      const re = /:(\d+)\b/g;
+      let m;
+      while ((m = re.exec(stdout)) !== null) {
+        const p = parseInt(m[1], 10);
+        if (p >= 1024 && p <= 65535) ports.add(p);
+      }
+      // Prefer web dev range, but return all if no common found
+      const all = [...ports].sort((a, b) => a - b);
+      const web = all.filter((p) => (p >= 3000 && p <= 9999) || [80, 443].includes(p));
+      resolve(web.length ? web : all.slice(0, 20));
+    });
+  });
+}
+async function scanPorts() {
+  try {
+    const [viaNetstat, viaConnect] = await Promise.all([
+      scanPortsViaNetstat().catch(() => []),
+      scanPortsViaConnect(COMMON_PORTS).catch(() => []),
+    ]);
+    const merged = new Set([...viaNetstat, ...viaConnect]);
+    // Also include any common ports that were found via netstat but not in COMMON_PORTS
+    return [...merged].sort((a, b) => a - b);
+  } catch {
+    return scanPortsViaConnect(COMMON_PORTS);
+  }
+}
 
-ipcMain.handle("port:scan", async () => scanPorts());
+ipcMain.handle("port:scan", async () => {
+  try { return await scanPorts(); } catch { return []; }
+});
 
 ipcMain.handle("panel:addMenu", async (event) => {
   const ports = await scanPorts();

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import { Layout, Model, Actions, DockLocation } from "flexlayout-react";
 import "./variables.css";
@@ -134,7 +134,31 @@ const App = () => {
   const readyRef          = useRef(false);
   const currentProjectRef = useRef(null);  // currently open project root path
   const saveTabsTimer     = useRef(null);
+  const lastBrowserTabsetRef = useRef(null); // last group where a Browser was opened
   const [, setTick] = useState(0);
+
+  // Find the biggest tabset (largest area, fallback to most tabs) for fallback when no Browser yet
+  const getBiggestTabsetId = useCallback((m) => {
+    let biggest = null;
+    let maxArea = -1;
+    let maxTabs = -1;
+    const walk = (node) => {
+      if (node.getType() === "tabset") {
+        let area = 0;
+        try { const r = node.getRect(); if (r) area = r.width * r.height; } catch {}
+        const cnt = node.getChildren()?.length || 0;
+        if (area > 0) {
+          if (area > maxArea) { maxArea = area; biggest = node.getId(); }
+        } else if (cnt > maxTabs) {
+          maxTabs = cnt; biggest = node.getId();
+        }
+        if (!biggest) biggest = node.getId();
+      }
+      node.getChildren()?.forEach(walk);
+    };
+    try { walk(m.getRoot()); } catch {}
+    return biggest;
+  }, []);
 
   // Expose layout JSON for main process to grab on close, and model for BrowserPanel to update tabs
   useEffect(() => {
@@ -252,22 +276,36 @@ const App = () => {
       const m = modelRef.current;
       if (!m) return;
       let tabsetId = null;
-      // Prefer the tabset of the currently focused browser tab
-      const nodes = m.getRoot().getChildren();
-      outer: for (const row of nodes) {
-        for (const child of row.getChildren()) {
-          if (child.getType() !== "tabset") continue;
-          for (const tab of child.getChildren()) {
-            const cfg = tab.getConfig();
-            if (cfg?.type === "browser") { tabsetId = child.getId(); break outer; }
+      // 1) Last Browser group
+      const lastId = lastBrowserTabsetRef.current || window.__lastBrowserTabsetId;
+      if (lastId) {
+        try {
+          const n = m.getNodeById(lastId);
+          if (n && n.getType() === "tabset") tabsetId = lastId;
+        } catch {}
+      }
+      // 2) Biggest window
+      if (!tabsetId) tabsetId = getBiggestTabsetId(m);
+      // 3) Fallback: first Browser tabset
+      if (!tabsetId) {
+        const nodes = m.getRoot().getChildren();
+        outer: for (const row of nodes) {
+          for (const child of row.getChildren()) {
+            if (child.getType() !== "tabset") continue;
+            for (const tab of child.getChildren()) {
+              const cfg = tab.getConfig();
+              if (cfg?.type === "browser") { tabsetId = child.getId(); break outer; }
+            }
           }
         }
       }
       if (!tabsetId) {
-        const first = nodes.find((n) => n.getType() === "tabset");
+        const first = m.getRoot().getChildren().find((n) => n.getType() === "tabset");
         tabsetId = first?.getId();
       }
       if (!tabsetId) return;
+      lastBrowserTabsetRef.current = tabsetId;
+      try { window.__lastBrowserTabsetId = tabsetId; } catch {}
       m.doAction(Actions.addNode({
         type: "tab", component: "panel3", name: "New Tab", enableClose: true,
         config: { type: "browser", title: "New Tab", url: url || "https://www.google.com" },
@@ -369,8 +407,27 @@ const App = () => {
     const addPanel = (component, name, config) => {
       const m = modelRef.current;
       if (!m) return;
-      const activeTabset = m.getActiveTabset?.();
-      const parentId = activeTabset ? activeTabset.getId() : m.getRoot().getId();
+      let parentId = null;
+      if (component === "panel3") {
+        // Browser: open in same group as last Browser, else biggest window
+        const lastId = lastBrowserTabsetRef.current || window.__lastBrowserTabsetId;
+        if (lastId) {
+          try {
+            const n = m.getNodeById(lastId);
+            if (n && n.getType() === "tabset") parentId = lastId;
+          } catch {}
+        }
+        if (!parentId) parentId = getBiggestTabsetId(m);
+        if (!parentId) {
+          const activeTabset = m.getActiveTabset?.();
+          parentId = activeTabset ? activeTabset.getId() : m.getRoot().getId();
+        }
+        lastBrowserTabsetRef.current = parentId;
+        try { window.__lastBrowserTabsetId = parentId; } catch {}
+      } else {
+        const activeTabset = m.getActiveTabset?.();
+        parentId = activeTabset ? activeTabset.getId() : m.getRoot().getId();
+      }
       m.doAction(Actions.addNode({
         type: "tab", component, name, enableClose: true, config,
       }, parentId, DockLocation.CENTER, -1, true));
